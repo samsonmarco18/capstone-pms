@@ -53,7 +53,7 @@ workflowEnsureSchema($conn);
 projectWorkflowEnsureSchema($conn);
 
 $taskStmt = $conn->prepare(
-    'SELECT t.id, t.title, t.status, t.project_id, t.assigned_to, t.assigned_by, p.name AS project_name, p.sul_id
+    'SELECT t.id, t.title, t.status, t.project_id, t.assigned_to, t.assigned_by, p.name AS project_name, p.status AS project_status, p.sul_id
      FROM tasks t
      LEFT JOIN projects p ON p.id = t.project_id
      WHERE t.id = ?
@@ -67,6 +67,12 @@ $taskStmt->close();
 if (!$task) {
     http_response_code(404);
     echo json_encode(['error' => 'Task not found']);
+    exit();
+}
+
+if ((string) ($task['project_status'] ?? '') === 'cancelled') {
+    http_response_code(409);
+    echo json_encode(['error' => 'This project is cancelled. Restore the project before adding Git progress.']);
     exit();
 }
 

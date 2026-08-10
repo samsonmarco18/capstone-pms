@@ -294,7 +294,7 @@ function projectEstimationFetchProjects(mysqli|PgsqlMysqliCompatConnection $conn
         LEFT JOIN tasks t ON t.project_id = p.id AND t.assigned_to = {$expertId}
         LEFT JOIN expert_project_estimations e ON e.project_id = p.id
         WHERE (t.id IS NOT NULL OR e.expert_id = {$expertId})
-          AND p.status != 'completed'
+          AND p.status NOT IN ('completed', 'cancelled')
         ORDER BY p.created_at DESC, p.name ASC
     ");
     if ($result) {

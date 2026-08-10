@@ -40,7 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['merge_task'])) {
         SELECT t.id, t.title, t.status, t.project_id, t.assigned_to, p.name AS project_name
         FROM tasks t
         JOIN projects p ON p.id = t.project_id
-        WHERE t.id = ? AND t.status = 'qa_passed'
+        WHERE t.id = ? AND t.status = 'qa_passed' AND p.status != 'cancelled'
         LIMIT 1
     ");
     $taskStmt->bind_param('i', $taskId);

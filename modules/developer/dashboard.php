@@ -8,18 +8,19 @@ $conn = getConnection();
 $user = getCurrentUser();
 
 // Get task statistics
-$totalTasks = $conn->query("SELECT COUNT(*) as count FROM tasks WHERE assigned_to = {$user['id']}")->fetch_assoc()['count'];
-$completedTasks = $conn->query("SELECT COUNT(*) as count FROM tasks WHERE assigned_to = {$user['id']} AND status = 'completed'")->fetch_assoc()['count'];
-$inProgressTasks = $conn->query("SELECT COUNT(*) as count FROM tasks WHERE assigned_to = {$user['id']} AND status = 'in_progress'")->fetch_assoc()['count'];
-$overdueTasks = $conn->query("SELECT COUNT(*) as count FROM tasks WHERE assigned_to = {$user['id']} AND deadline < NOW() AND status != 'completed'")->fetch_assoc()['count'];
+$developerActiveProjectJoin = "JOIN projects p ON p.id = tasks.project_id AND p.status != 'cancelled'";
+$totalTasks = $conn->query("SELECT COUNT(*) as count FROM tasks {$developerActiveProjectJoin} WHERE tasks.assigned_to = {$user['id']}")->fetch_assoc()['count'];
+$completedTasks = $conn->query("SELECT COUNT(*) as count FROM tasks {$developerActiveProjectJoin} WHERE tasks.assigned_to = {$user['id']} AND tasks.status = 'completed'")->fetch_assoc()['count'];
+$inProgressTasks = $conn->query("SELECT COUNT(*) as count FROM tasks {$developerActiveProjectJoin} WHERE tasks.assigned_to = {$user['id']} AND tasks.status = 'in_progress'")->fetch_assoc()['count'];
+$overdueTasks = $conn->query("SELECT COUNT(*) as count FROM tasks {$developerActiveProjectJoin} WHERE tasks.assigned_to = {$user['id']} AND tasks.deadline < NOW() AND tasks.status != 'completed'")->fetch_assoc()['count'];
 
 // Calculate performance percentage
 $performance = $totalTasks > 0 ? round(($completedTasks / $totalTasks) * 100) : 0;
 
 // Get tasks by priority
-$highPriority = $conn->query("SELECT COUNT(*) as count FROM tasks WHERE assigned_to = {$user['id']} AND priority = 'high' AND status != 'completed'")->fetch_assoc()['count'];
-$mediumPriority = $conn->query("SELECT COUNT(*) as count FROM tasks WHERE assigned_to = {$user['id']} AND priority = 'medium' AND status != 'completed'")->fetch_assoc()['count'];
-$lowPriority = $conn->query("SELECT COUNT(*) as count FROM tasks WHERE assigned_to = {$user['id']} AND priority = 'low' AND status != 'completed'")->fetch_assoc()['count'];
+$highPriority = $conn->query("SELECT COUNT(*) as count FROM tasks {$developerActiveProjectJoin} WHERE tasks.assigned_to = {$user['id']} AND tasks.priority = 'high' AND tasks.status != 'completed'")->fetch_assoc()['count'];
+$mediumPriority = $conn->query("SELECT COUNT(*) as count FROM tasks {$developerActiveProjectJoin} WHERE tasks.assigned_to = {$user['id']} AND tasks.priority = 'medium' AND tasks.status != 'completed'")->fetch_assoc()['count'];
+$lowPriority = $conn->query("SELECT COUNT(*) as count FROM tasks {$developerActiveProjectJoin} WHERE tasks.assigned_to = {$user['id']} AND tasks.priority = 'low' AND tasks.status != 'completed'")->fetch_assoc()['count'];
 
 // Get deadline-driven task queue
 $upcomingTasks = $conn->query("
@@ -77,6 +78,7 @@ $attentionTasks = $conn->query("
     JOIN projects p ON t.project_id = p.id
     WHERE t.assigned_to = {$user['id']}
     AND t.status != 'completed'
+    AND p.status != 'cancelled'
     AND (
         t.status IN ('blocked', 'in_review', 'review')
         OR t.deadline < CURDATE()
@@ -95,10 +97,12 @@ $attentionTasks = $conn->query("
 
 // Get recent completed tasks
 $recentCompleted = $conn->query("
-    SELECT * FROM tasks 
+    SELECT tasks.* FROM tasks
+    JOIN projects p ON p.id = tasks.project_id
     WHERE assigned_to = {$user['id']} 
-    AND status = 'completed' 
-    ORDER BY completed_at DESC 
+    AND tasks.status = 'completed'
+    AND p.status != 'cancelled'
+    ORDER BY tasks.completed_at DESC
     LIMIT 5
 ");
 
@@ -106,7 +110,9 @@ $trackedGitTasks = $conn->query("
     SELECT COUNT(DISTINCT tgu.task_id) AS count
     FROM task_git_updates tgu
     INNER JOIN tasks t ON t.id = tgu.task_id
+    INNER JOIN projects p ON p.id = t.project_id
     WHERE t.assigned_to = {$user['id']}
+      AND p.status != 'cancelled'
 ")->fetch_assoc()['count'];
 
 $recentGitActivity = $conn->query("
@@ -115,6 +121,7 @@ $recentGitActivity = $conn->query("
     INNER JOIN tasks t ON t.id = tgu.task_id
     LEFT JOIN projects p ON p.id = t.project_id
     WHERE t.assigned_to = {$user['id']}
+      AND p.status != 'cancelled'
     ORDER BY tgu.created_at DESC, tgu.id DESC
     LIMIT 5
 ");

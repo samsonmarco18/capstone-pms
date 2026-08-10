@@ -63,7 +63,7 @@ if ($externalUrl !== '' && filter_var($externalUrl, FILTER_VALIDATE_URL) === fal
 }
 
 $taskStmt = $conn->prepare(
-    'SELECT t.id, t.project_id, t.title, p.name AS project_name
+    'SELECT t.id, t.project_id, t.title, p.name AS project_name, p.status AS project_status
      FROM tasks t
      LEFT JOIN projects p ON p.id = t.project_id
      WHERE t.id = ? AND t.assigned_to = ?
@@ -83,6 +83,12 @@ $taskStmt->close();
 if (!$task) {
     http_response_code(403);
     echo json_encode(['error' => 'You can only save handoffs for tasks assigned to you.']);
+    exit;
+}
+
+if ((string) ($task['project_status'] ?? '') === 'cancelled') {
+    http_response_code(409);
+    echo json_encode(['error' => 'This project is cancelled. Restore the project before saving handoffs.']);
     exit;
 }
 

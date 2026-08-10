@@ -155,19 +155,19 @@ if (
                 'expert' => [
                     'title' => 'Your expert dashboard snapshot',
                     'metrics' => [
-                        ['icon' => 'fa-list-check', 'label' => 'Assigned Tasks', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM tasks WHERE assigned_to = {$summaryUserId} AND status != 'completed'"), 'meta' => 'Current workload'],
-                        ['icon' => 'fa-calculator', 'label' => 'To Estimate', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM tasks WHERE assigned_to = {$summaryUserId} AND status = 'todo'"), 'meta' => 'Needs estimation'],
-                        ['icon' => 'fa-paper-plane', 'label' => 'In Review', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM tasks WHERE assigned_to = {$summaryUserId} AND status = 'review'"), 'meta' => 'Submitted estimates'],
-                        ['icon' => 'fa-triangle-exclamation', 'label' => 'Overdue', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM tasks WHERE assigned_to = {$summaryUserId} AND deadline < NOW() AND status != 'completed'"), 'meta' => 'Needs attention', 'overdue' => true],
+                        ['icon' => 'fa-list-check', 'label' => 'Assigned Tasks', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM tasks t JOIN projects p ON p.id = t.project_id WHERE t.assigned_to = {$summaryUserId} AND t.status != 'completed' AND p.status != 'cancelled'"), 'meta' => 'Current workload'],
+                        ['icon' => 'fa-calculator', 'label' => 'To Estimate', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM tasks t JOIN projects p ON p.id = t.project_id WHERE t.assigned_to = {$summaryUserId} AND t.status = 'todo' AND p.status != 'cancelled'"), 'meta' => 'Needs estimation'],
+                        ['icon' => 'fa-paper-plane', 'label' => 'In Review', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM tasks t JOIN projects p ON p.id = t.project_id WHERE t.assigned_to = {$summaryUserId} AND t.status = 'review' AND p.status != 'cancelled'"), 'meta' => 'Submitted estimates'],
+                        ['icon' => 'fa-triangle-exclamation', 'label' => 'Overdue', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM tasks t JOIN projects p ON p.id = t.project_id WHERE t.assigned_to = {$summaryUserId} AND t.deadline < NOW() AND t.status != 'completed' AND p.status != 'cancelled'"), 'meta' => 'Needs attention', 'overdue' => true],
                     ],
                 ],
                 'developer' => [
                     'title' => 'Your developer dashboard snapshot',
                     'metrics' => [
-                        ['icon' => 'fa-list-check', 'label' => 'Assigned Tasks', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM tasks WHERE assigned_to = {$summaryUserId}"), 'meta' => 'All assigned work'],
-                        ['icon' => 'fa-play', 'label' => 'In Progress', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM tasks WHERE assigned_to = {$summaryUserId} AND status = 'in_progress'"), 'meta' => 'Currently active'],
-                        ['icon' => 'fa-circle-check', 'label' => 'Completed', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM tasks WHERE assigned_to = {$summaryUserId} AND status = 'completed'"), 'meta' => 'Finished tasks'],
-                        ['icon' => 'fa-triangle-exclamation', 'label' => 'Overdue', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM tasks WHERE assigned_to = {$summaryUserId} AND deadline < NOW() AND status != 'completed'"), 'meta' => 'Needs attention', 'overdue' => true],
+                        ['icon' => 'fa-list-check', 'label' => 'Assigned Tasks', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM tasks t JOIN projects p ON p.id = t.project_id WHERE t.assigned_to = {$summaryUserId} AND p.status != 'cancelled'"), 'meta' => 'All assigned work'],
+                        ['icon' => 'fa-play', 'label' => 'In Progress', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM tasks t JOIN projects p ON p.id = t.project_id WHERE t.assigned_to = {$summaryUserId} AND t.status = 'in_progress' AND p.status != 'cancelled'"), 'meta' => 'Currently active'],
+                        ['icon' => 'fa-circle-check', 'label' => 'Completed', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM tasks t JOIN projects p ON p.id = t.project_id WHERE t.assigned_to = {$summaryUserId} AND t.status = 'completed' AND p.status != 'cancelled'"), 'meta' => 'Finished tasks'],
+                        ['icon' => 'fa-triangle-exclamation', 'label' => 'Overdue', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM tasks t JOIN projects p ON p.id = t.project_id WHERE t.assigned_to = {$summaryUserId} AND t.deadline < NOW() AND t.status != 'completed' AND p.status != 'cancelled'"), 'meta' => 'Needs attention', 'overdue' => true],
                     ],
                 ],
             ];
@@ -221,15 +221,18 @@ if (
                 $compactActionUrl = (string) ($compactActionUrlsByRole[$compactRole] ?? '');
                 if ((int) ($primaryMetric['value'] ?? 0) > 0 && $compactRole === 'expert') {
                     $expertTaskCondition = match ((string) ($primaryMetric['label'] ?? '')) {
-                        'Overdue' => "deadline < NOW() AND status != 'completed'",
-                        'To Estimate' => "status = 'todo'",
-                        default => "status != 'completed'",
+                        'Overdue' => "t.deadline < NOW() AND t.status != 'completed'",
+                        'To Estimate' => "t.status = 'todo'",
+                        default => "t.status != 'completed'",
                     };
                     $expertTaskId = $summaryFirstId(
-                        "SELECT id FROM tasks
-                         WHERE assigned_to = {$summaryUserId}
+                        "SELECT t.id
+                         FROM tasks t
+                         JOIN projects p ON p.id = t.project_id
+                         WHERE t.assigned_to = {$summaryUserId}
                            AND {$expertTaskCondition}
-                         ORDER BY CASE WHEN deadline IS NULL THEN 1 ELSE 0 END, deadline ASC, id ASC
+                           AND p.status != 'cancelled'
+                         ORDER BY CASE WHEN t.deadline IS NULL THEN 1 ELSE 0 END, t.deadline ASC, t.id ASC
                          LIMIT 1"
                     );
                     $compactActionUrl = $expertTaskId > 0
@@ -237,15 +240,18 @@ if (
                         : '';
                 } elseif ((int) ($primaryMetric['value'] ?? 0) > 0 && $compactRole === 'developer') {
                     $developerTaskCondition = match ((string) ($primaryMetric['label'] ?? '')) {
-                        'Overdue' => "deadline < NOW() AND status != 'completed'",
-                        'Completed' => "status = 'completed'",
-                        default => "status = 'in_progress'",
+                        'Overdue' => "t.deadline < NOW() AND t.status != 'completed'",
+                        'Completed' => "t.status = 'completed'",
+                        default => "t.status = 'in_progress'",
                     };
                     $developerTaskId = $summaryFirstId(
-                        "SELECT id FROM tasks
-                         WHERE assigned_to = {$summaryUserId}
+                        "SELECT t.id
+                         FROM tasks t
+                         JOIN projects p ON p.id = t.project_id
+                         WHERE t.assigned_to = {$summaryUserId}
                            AND {$developerTaskCondition}
-                         ORDER BY CASE WHEN deadline IS NULL THEN 1 ELSE 0 END, deadline ASC, id ASC
+                           AND p.status != 'cancelled'
+                         ORDER BY CASE WHEN t.deadline IS NULL THEN 1 ELSE 0 END, t.deadline ASC, t.id ASC
                          LIMIT 1"
                     );
                     $compactActionUrl = $developerTaskId > 0

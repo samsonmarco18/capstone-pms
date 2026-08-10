@@ -82,6 +82,7 @@ $developerTaskAccessSql = "
 $taskBaseQuery = "
     SELECT t.*,
            p.name AS project_name,
+           p.status AS project_status,
            latest_git.branch_name AS git_branch_name,
            latest_git.commit_hash AS git_commit_hash,
            latest_git.status AS git_status,
@@ -179,6 +180,7 @@ $todoTasks = developerTaskQuery(
     $conn,
     $taskBaseQuery . "
         WHERE {$developerTaskAccessSql}
+          AND p.status != 'cancelled'
           AND t.status = 'todo'
           AND {$developerCurrentTaskOwnershipSql}
         ORDER BY t.deadline ASC
@@ -187,6 +189,7 @@ $todoTasks = developerTaskQuery(
 );
 $inProgressTasks = developerTaskQuery($conn, $taskBaseQuery . "
     WHERE {$developerTaskAccessSql}
+      AND p.status != 'cancelled'
       AND {$developerCurrentTaskOwnershipSql}
       AND (
           t.status IN ('in_progress', 'qa_failed')
@@ -213,13 +216,15 @@ $inProgressTasks = developerTaskQuery($conn, $taskBaseQuery . "
 ", 'in_progress');
 $reviewTasks = developerTaskQuery($conn, $taskBaseQuery . "
     WHERE {$developerTaskAccessSql}
+      AND p.status != 'cancelled'
       AND {$developerCurrentTaskOwnershipSql}
       AND t.status IN ('for_review', 'qa_testing', 'qa_passed', 'architect_review', 'merged', 'ready_for_release')
       AND NOT {$developerCompletedRoadmapAssignmentSql}
     ORDER BY t.deadline ASC
 ", 'review');
 $completedTasks = developerTaskQuery($conn, $taskBaseQuery . "
-    WHERE (
+    WHERE p.status != 'cancelled'
+      AND (
           (t.assigned_to = {$user['id']} AND t.status = 'completed')
           OR EXISTS (
               SELECT 1
@@ -271,6 +276,7 @@ $taskBoardProjectsResult = $conn->query("
     FROM tasks t
     INNER JOIN projects p ON p.id = t.project_id
     WHERE {$developerTaskAccessSql}
+      AND p.status != 'cancelled'
     ORDER BY p.name ASC
 ");
 if ($taskBoardProjectsResult && $taskBoardProjectsResult->num_rows > 0) {
@@ -295,6 +301,7 @@ $departmentProjectsResult = $conn->query("
     JOIN tasks t ON t.project_id = p.id
     LEFT JOIN clients c ON c.id = p.client_id
     WHERE t.assigned_to = {$user['id']}
+      AND p.status != 'cancelled'
     GROUP BY p.id, p.name, p.description, p.requested_features, p.timeline_start, p.timeline_end, c.name
     ORDER BY p.name ASC
 ");
@@ -312,6 +319,7 @@ $developerProjects = $conn->query("
     FROM projects p
     JOIN tasks t ON p.id = t.project_id
     WHERE t.assigned_to = {$user['id']}
+      AND p.status != 'cancelled'
     ORDER BY p.name ASC
 ");
 

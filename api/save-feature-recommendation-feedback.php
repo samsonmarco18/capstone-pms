@@ -70,7 +70,13 @@ if ($taskId <= 0 || $sourceId <= 0 || !in_array($sourceType, ['history', 'manual
     exit;
 }
 
-$ownershipStmt = $conn->prepare("SELECT id FROM tasks WHERE id = ? AND assigned_to = ? LIMIT 1");
+$ownershipStmt = $conn->prepare("
+    SELECT t.id
+    FROM tasks t
+    JOIN projects p ON p.id = t.project_id
+    WHERE t.id = ? AND t.assigned_to = ? AND p.status != 'cancelled'
+    LIMIT 1
+");
 $ownershipStmt->bind_param('ii', $taskId, $user['id']);
 $ownershipStmt->execute();
 $ownsTask = $ownershipStmt->get_result()->fetch_assoc();

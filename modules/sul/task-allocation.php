@@ -65,7 +65,7 @@ $taskId = isset($_GET['task_id']) ? intval($_GET['task_id']) : 0;
 function sulTaskAllocationProjectFilter($conn, string $projectAlias, string $department): string
 {
     $departmentClause = projectWorkflowProjectDepartmentClause($conn, $projectAlias, $department);
-    return "({$departmentClause}) AND {$projectAlias}.workflow_status = 'architect_submitted'";
+    return "({$departmentClause}) AND {$projectAlias}.workflow_status = 'architect_submitted' AND {$projectAlias}.status != 'cancelled'";
 }
 
 function sulTaskAllocationFormatDeadline(?string $deadline): string

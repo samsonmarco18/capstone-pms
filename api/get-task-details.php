@@ -84,6 +84,9 @@ $stmt->execute();
 $result = $stmt->get_result();
 
 if ($task = $result->fetch_assoc()) {
+    $projectIsCancelled = (string) ($task['project_status'] ?? '') === 'cancelled';
+    $task['project_is_cancelled'] = $projectIsCancelled;
+
     // Calculate days left
     $deadlineTimestamp = $task['deadline'] ? strtotime($task['deadline']) : false;
     $daysLeft = $deadlineTimestamp ? (int) floor(($deadlineTimestamp - time()) / 86400) : null;
@@ -119,7 +122,7 @@ if ($task = $result->fetch_assoc()) {
     $latestGitStmt->close();
 
     $task['repository_branches'] = [];
-    if (dbTableExists($conn, 'project_repositories') && dbTableExists($conn, 'repository_branches')) {
+    if (!$projectIsCancelled && dbTableExists($conn, 'project_repositories') && dbTableExists($conn, 'repository_branches')) {
         $taskProjectId = (int) ($task['project_id'] ?? 0);
         $branchStmt = $conn->prepare(
             "SELECT rb.id, rb.name, pr.id AS repository_id, pr.name AS repository_name, pr.slug
@@ -145,8 +148,12 @@ if ($task = $result->fetch_assoc()) {
     $task['project_requirements'] = departmentArtifactParseRequirements($task['requested_features'] ?? '');
     $task['additional_requirements'] = departmentArtifactAdditionalRequirements($task['requested_features'] ?? '');
     if (($user['role'] ?? '') === 'developer' && (int) ($task['assigned_to'] ?? 0) === (int) ($user['id'] ?? 0)) {
-        projectWorkflowSyncRoadmap($conn, (int) ($task['project_id'] ?? 0));
-        $task['roadmap_start_block_reason'] = methodologyRoadmapStartBlockReason($conn, $taskId, (int) $user['id']);
+        if ($projectIsCancelled) {
+            $task['roadmap_start_block_reason'] = 'This project is cancelled. Restore the project before updating progress.';
+        } else {
+            projectWorkflowSyncRoadmap($conn, (int) ($task['project_id'] ?? 0));
+            $task['roadmap_start_block_reason'] = methodologyRoadmapStartBlockReason($conn, $taskId, (int) $user['id']);
+        }
     } else {
         $task['roadmap_start_block_reason'] = null;
     }
@@ -213,9 +220,11 @@ if ($task = $result->fetch_assoc()) {
         $nextResult = $conn->query(
             "SELECT DISTINCT t.id, t.title, t.priority, t.status, t.started_at, t.deadline
              FROM tasks t
+             INNER JOIN projects p_next ON p_next.id = t.project_id
              LEFT JOIN methodology_tasks mt ON mt.task_id = t.id
              LEFT JOIN methodology_task_departments mtd ON mtd.workflow_task_id = t.id OR mtd.methodology_task_id = mt.id
              WHERE t.id <> {$taskId}
+               AND p_next.status != 'cancelled'
                AND t.status IN ('todo', 'in_progress', 'sul_revision', 'qa_failed', 'blocked')
                AND (t.assigned_to = {$developerId} OR mt.assigned_developer_id = {$developerId} OR mtd.assigned_developer_id = {$developerId})
              ORDER BY

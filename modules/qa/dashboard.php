@@ -81,6 +81,7 @@ $upcomingTests = qaDashboardQuery($conn, "
     JOIN projects p ON p.id = t.project_id
     LEFT JOIN users u ON u.id = t.assigned_to
     WHERE t.status = 'qa_testing'
+      AND p.status != 'cancelled'
     ORDER BY
         CASE WHEN t.deadline IS NULL THEN 1 ELSE 0 END,
         t.deadline ASC,
@@ -93,8 +94,11 @@ $attentionItems = qaDashboardQuery($conn, "
     FROM tasks t
     JOIN projects p ON p.id = t.project_id
     WHERE
-        (t.status = 'qa_testing' AND t.deadline IS NOT NULL AND t.deadline < CURDATE())
-        OR t.status = 'qa_failed'
+        p.status != 'cancelled'
+        AND (
+            (t.status = 'qa_testing' AND t.deadline IS NOT NULL AND t.deadline < CURDATE())
+            OR t.status = 'qa_failed'
+        )
     ORDER BY
         CASE WHEN t.status = 'qa_testing' THEN 0 ELSE 1 END,
         COALESCE(t.deadline, CURDATE()) ASC,
@@ -108,6 +112,7 @@ $recentResults = qaDashboardQuery($conn, "
     JOIN projects p ON p.id = t.project_id
     LEFT JOIN users u ON u.id = t.assigned_to
     WHERE t.qa_reviewed_at IS NOT NULL
+      AND p.status != 'cancelled'
     ORDER BY t.qa_reviewed_at DESC
     LIMIT 6
 ");

@@ -68,6 +68,7 @@ $stmt = $conn->prepare("
     FROM tasks t
     JOIN projects p ON t.project_id = p.id
     WHERE t.assigned_to = ?
+      AND p.status != 'cancelled'
       {$taskScope}
     ORDER BY t.created_at DESC
     LIMIT 20

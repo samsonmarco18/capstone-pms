@@ -206,7 +206,7 @@ $projectPerformance = $conn->query("
     LEFT JOIN tasks t ON p.id = t.project_id
         AND DATE(t.created_at) BETWEEN '$dateFrom' AND '$dateTo'
         AND {$reportTaskDepartmentClause}
-    WHERE p.status != 'completed'
+    WHERE p.status NOT IN ('completed', 'cancelled')
       AND {$reportProjectDepartmentClause}
     GROUP BY p.id, p.name, p.status, p.timeline_end
     ORDER BY completion_rate ASC

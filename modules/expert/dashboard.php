@@ -33,16 +33,18 @@ $projectStartTimeSql = $hasProjectStartTime ? "COALESCE(p.timeline_start_time, '
 $projectEndTimeSql = $hasProjectEndTime ? "COALESCE(p.timeline_end_time, '17:00:00')" : "'17:00:00'";
 
 // Get estimation statistics
-$totalEstimations = expertDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM feature_estimations WHERE expert_id = {$user['id']}");
-$pendingEstimations = expertDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM feature_estimations WHERE expert_id = {$user['id']} AND status = 'pending'");
-$completedEstimations = expertDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM feature_estimations WHERE expert_id = {$user['id']} AND status = 'completed'");
+$totalEstimations = expertDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM feature_estimations fe JOIN projects p ON p.id = fe.project_id WHERE fe.expert_id = {$user['id']} AND p.status != 'cancelled'");
+$pendingEstimations = expertDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM feature_estimations fe JOIN projects p ON p.id = fe.project_id WHERE fe.expert_id = {$user['id']} AND fe.status = 'pending' AND p.status != 'cancelled'");
+$completedEstimations = expertDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM feature_estimations fe JOIN projects p ON p.id = fe.project_id WHERE fe.expert_id = {$user['id']} AND fe.status = 'completed' AND p.status != 'cancelled'");
 $estimationRangeResult = expertDashboardQuery($conn, "
     SELECT
         COALESCE(AVG(min_days), 0) AS avg_min,
         COALESCE(AVG(likely_days), 0) AS avg_likely,
         COALESCE(AVG(max_days), 0) AS avg_max
-    FROM feature_estimations
-    WHERE expert_id = {$user['id']}
+    FROM feature_estimations fe
+    JOIN projects p ON p.id = fe.project_id
+    WHERE fe.expert_id = {$user['id']}
+      AND p.status != 'cancelled'
 ");
 $estimationRange = $estimationRangeResult ? ($estimationRangeResult->fetch_assoc() ?: []) : [];
 
@@ -53,6 +55,7 @@ $pendingTasks = expertDashboardQuery($conn, "
     JOIN projects p ON t.project_id = p.id
     WHERE t.assigned_to = {$user['id']} 
     AND t.status != 'completed'
+    AND p.status != 'cancelled'
     ORDER BY t.deadline ASC
     LIMIT 5
 ");
@@ -63,6 +66,7 @@ $teamCompositions = expertDashboardQuery($conn, "
     FROM team_compositions tc
     JOIN projects p ON tc.project_id = p.id
     WHERE tc.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+      AND p.status != 'cancelled'
     ORDER BY tc.created_at DESC
     LIMIT 5
 ");
@@ -85,6 +89,7 @@ $recentFeatureEstimates = expertDashboardQuery($conn, "
     JOIN projects p ON fe.project_id = p.id
     WHERE fe.expert_id = {$user['id']}
       AND COALESCE(fe.submitted_at, fe.updated_at) >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+      AND p.status != 'cancelled'
     ORDER BY latest_update DESC
     LIMIT 5
 ");
@@ -111,6 +116,7 @@ $agendaTaskRows = expertDashboardQuery($conn, "
     JOIN projects p ON t.project_id = p.id
     WHERE t.assigned_to = {$user['id']}
       AND t.status != 'completed'
+      AND p.status != 'cancelled'
     ORDER BY COALESCE(t.deadline, NOW()) ASC
     LIMIT 8
 ");

@@ -495,10 +495,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_project_estimati
     $postedAllocations = is_array($_POST['allocations'] ?? null) ? $_POST['allocations'] : [];
 
     $assignedCheck = $projectId > 0
-        ? $conn->query("SELECT id FROM tasks WHERE project_id = {$projectId} AND assigned_to = " . (int) $user['id'] . " LIMIT 1")->fetch_assoc()
+        ? $conn->query("SELECT t.id FROM tasks t JOIN projects p ON p.id = t.project_id WHERE t.project_id = {$projectId} AND t.assigned_to = " . (int) $user['id'] . " AND p.status != 'cancelled' LIMIT 1")->fetch_assoc()
         : null;
 
-    if (!$project || !$assignedCheck) {
+    if (!$project || !$assignedCheck || (string) ($project['status'] ?? '') === 'cancelled') {
         $_SESSION['error'] = 'Please select one of your assigned projects before submitting a project estimation.';
         header('Location: feature-estimation.php');
         exit();
@@ -592,6 +592,7 @@ $tasks = $conn->query("
     WHERE t.assigned_to = {$user['id']} 
       AND t.task_type = 'feature'
       AND t.status IN ('todo', 'in_review')
+      AND p.status != 'cancelled'
     ORDER BY 
         CASE t.status WHEN 'todo' THEN 1 ELSE 2 END,
         t.deadline ASC
@@ -601,7 +602,7 @@ $tasks = $conn->query("
 $expertProjectsResult = $conn->query("
     SELECT p.id, p.name, p.timeline_start, p.timeline_end
     FROM projects p
-    WHERE p.status != 'completed'
+    WHERE p.status NOT IN ('completed', 'cancelled')
     ORDER BY p.name ASC
 ");
 
@@ -641,11 +642,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_save_feature_est
 
         $assignedTaskResult = $conn->query("
             SELECT id
-            FROM tasks
-            WHERE project_id = {$projectId}
-              AND assigned_to = " . (int) $user['id'] . "
-              AND task_type = 'feature'
-              AND status = 'todo'
+            FROM tasks t
+            JOIN projects p ON p.id = t.project_id
+            WHERE t.project_id = {$projectId}
+              AND t.assigned_to = " . (int) $user['id'] . "
+              AND t.task_type = 'feature'
+              AND t.status = 'todo'
+              AND p.status != 'cancelled'
         ");
         $requiredTaskIds = [];
         if ($assignedTaskResult) {
@@ -668,6 +671,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_save_feature_est
               AND t.project_id = {$projectId}
               AND t.assigned_to = " . (int) $user['id'] . "
               AND t.task_type = 'feature'
+              AND p.status != 'cancelled'
         ");
         $taskLookup = [];
         if ($taskResult) {
@@ -878,6 +882,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['task_id']) && !isset($
         FROM tasks t
         JOIN projects p ON p.id = t.project_id
         WHERE t.id = ?
+          AND p.status != 'cancelled'
         LIMIT 1
     ");
     $taskStmt->bind_param('i', $taskId);
