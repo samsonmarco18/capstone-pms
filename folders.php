@@ -1522,7 +1522,7 @@ async function bulkDelete() {
         success: function() {
             bootstrap.Modal.getInstance(document.getElementById('bulkActionsModal'))?.hide();
             loadFolderContents(currentFolderId);
-            showFolderNotice('Folders', `${selectedFiles.length} files deleted`);
+            showFolderNotice('Files deleted', `${selectedFiles.length} selected file(s) were removed from this folder.`);
         },
         error: function(xhr) {
             handleFolderApiError(xhr, 'Unable to delete selected files.');
@@ -1535,10 +1535,11 @@ function bulkDownload() {
         window.open(getFolderDownloadUrl(id), '_blank', 'noopener');
     });
     bootstrap.Modal.getInstance(document.getElementById('bulkActionsModal'))?.hide();
+    showFolderNotice('Download started', `${selectedFiles.length} selected file(s) are opening for download.`, 'info');
 }
 
 function bulkMove() {
-    showFolderNotice('Folders', 'Bulk move functionality coming soon', 'info');
+    showFolderNotice('Move files', 'Bulk move is not available yet for selected files.', 'info');
 }
 
 async function deleteFile(fileId) {
@@ -1563,7 +1564,10 @@ async function deleteFile(fileId) {
         method: 'POST',
         dataType: 'json',
         data: { id: fileId },
-        success: () => loadFolderContents(currentFolderId),
+        success: () => {
+            loadFolderContents(currentFolderId);
+            showFolderNotice('File deleted', 'The file was removed from this folder.');
+        },
         error: xhr => handleFolderApiError(xhr, 'Unable to delete this file.')
     });
 }
@@ -1593,7 +1597,10 @@ async function createFolderInCurrent() {
         method: 'POST',
         dataType: 'json',
         data: { name: name.trim(), parent_id: currentFolderId },
-        success: () => currentFolderId > 0 ? loadFolderContents(currentFolderId) : loadRootFolders(),
+        success: () => {
+            currentFolderId > 0 ? loadFolderContents(currentFolderId) : loadRootFolders();
+            showFolderNotice('Folder created', `"${name.trim()}" was created in the current folder.`);
+        },
         error: xhr => handleFolderApiError(xhr, 'Unable to create this folder.')
     });
 }
@@ -1622,7 +1629,11 @@ function uploadToCurrentFolder() {
             success: data => {
                 loadFolderContents(currentFolderId);
                 if (Array.isArray(data.failed_files) && data.failed_files.length > 0) {
-                    showFolderNotice('Folders', `${data.failed_files.length} file(s) could not be uploaded.`, 'warning');
+                    const uploadedCount = Array.isArray(data.file_ids) ? data.file_ids.length : 0;
+                    showFolderNotice('Upload partially completed', `${uploadedCount} file(s) uploaded; ${data.failed_files.length} file(s) could not be uploaded.`, 'warning');
+                } else {
+                    const uploadedCount = Array.isArray(data.file_ids) ? data.file_ids.length : Array.from(e.target.files).length;
+                    showFolderNotice('Upload complete', `${uploadedCount} file(s) uploaded to this folder.`);
                 }
             },
             error: xhr => handleFolderApiError(xhr, 'Unable to upload the selected files.')
@@ -1632,7 +1643,7 @@ function uploadToCurrentFolder() {
 }
 
 function exportCurrentFolder() {
-    showFolderNotice('Folders', 'ZIP export feature coming soon', 'info');
+    showFolderNotice('Export folder', 'ZIP export is not available yet for this folder.', 'info');
 }
 
 function refreshFolder() {

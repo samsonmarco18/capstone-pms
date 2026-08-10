@@ -12,7 +12,7 @@ if ($fileId <= 0) {
 
 try {
     $conn = getConnection();
-    $stmt = folderApiPrepare($conn, 'SELECT f.*, fo.role AS folder_role, fo.user_id AS folder_user_id FROM files f JOIN folders fo ON fo.id = f.folder_id WHERE f.id = ?');
+    $stmt = folderApiPrepare($conn, 'SELECT f.*, fo.role AS folder_role, fo.user_id AS folder_user_id, fo.project_id AS folder_project_id FROM files f JOIN folders fo ON fo.id = f.folder_id WHERE f.id = ?');
     $stmt->bind_param('i', $fileId);
     folderApiExecute($stmt, $conn);
     $file = $stmt->get_result()->fetch_assoc();
@@ -21,7 +21,7 @@ try {
     if (!$file) {
         folderApiRespond(['success' => false, 'error' => 'File not found.'], 404);
     }
-    if (!folderApiCanAccessFolder(['role' => $file['folder_role'] ?? null, 'user_id' => $file['folder_user_id'] ?? null], $user)) {
+    if (!folderApiCanAccessFolderWithProject($conn, ['role' => $file['folder_role'] ?? null, 'user_id' => $file['folder_user_id'] ?? null, 'project_id' => $file['folder_project_id'] ?? null], $user)) {
         folderApiRespond(['success' => false, 'error' => 'You do not have access to this file.'], 403);
     }
 
