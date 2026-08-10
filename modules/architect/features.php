@@ -564,6 +564,16 @@ include '../../includes/navbar.php';
     padding-top: 1.25rem;
 }
 
+.additional-feature-empty {
+    border: 1px dashed var(--gray-300);
+    border-radius: 14px;
+    color: var(--gray-500);
+    font-size: 0.84rem;
+    font-weight: 600;
+    padding: 0.95rem 1rem;
+    text-align: center;
+}
+
 .feature-action-bar {
     display: flex;
     align-items: center;
@@ -931,6 +941,12 @@ a.progress-step:hover {
     border-color: rgba(31, 99, 146, 0.24);
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .additional-feature-empty {
+    background: rgba(7, 19, 33, 0.62);
+    border-color: rgba(31, 99, 146, 0.32);
+    color: #9db6cf;
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-add {
     border-color: #6f8ba5;
     color: #9db6cf;
@@ -1142,6 +1158,11 @@ html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode)
                 </div>
             </div>
             <div id="featuresContainer">
+                <?php if (count($existingFeatures) > 0 || count($salesRequestedFeatures) > 0): ?>
+                    <div class="additional-feature-empty" data-feature-empty-state>
+                        No extra unsaved feature rows. Use Add Feature only when you need another item.
+                    </div>
+                <?php else: ?>
                 <div class="feature-item">
                     <div class="row g-3 align-items-end">
                         <div class="col-md-5">
@@ -1159,6 +1180,7 @@ html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode)
                         </div>
                     </div>
                 </div>
+                <?php endif; ?>
             </div>
         </div>
 
@@ -1183,6 +1205,7 @@ const hasSavedFeatures = <?php echo count($existingFeatures) > 0 ? 'true' : 'fal
 
 function addFeature() {
     const container = document.getElementById('featuresContainer');
+    container?.querySelector('[data-feature-empty-state]')?.remove();
     const item = document.createElement('div');
     item.className = 'feature-item';
     item.innerHTML = `
