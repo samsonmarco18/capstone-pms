@@ -836,13 +836,57 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $id = (int) $_POST['id'];
         $oldResult = salesClientsQuery($conn, "SELECT * FROM clients WHERE id = $id");
         $oldData = $oldResult ? $oldResult->fetch_assoc() : null;
+
+        if ($oldData) {
+            $relatedProjects = salesClientsFetchRows($conn, "SELECT id, status FROM projects WHERE client_id = $id AND status != 'cancelled'");
+            $oldData['related_projects'] = $relatedProjects;
+        }
         
-        $stmt = $conn->prepare("UPDATE clients SET status = 'inactive' WHERE id=?");
-        $stmt->bind_param("i", $id);
-        
-        if ($stmt->execute()) {
-            logActivity($user['id'], 'delete_client', 'clients', $id, $oldData, null);
-            $_SESSION['success'] = "Client deleted successfully";
+        $conn->begin_transaction();
+        try {
+            $projectStmt = $conn->prepare("UPDATE projects SET status = 'cancelled' WHERE client_id = ? AND status != 'cancelled'");
+            if ($projectStmt === false) {
+                throw new RuntimeException('Unable to prepare related project delete.' . salesClientsDbError($conn));
+            }
+            $projectStmt->bind_param("i", $id);
+            $projectStmt->execute();
+            $projectStmt->close();
+
+            $stmt = $conn->prepare("UPDATE clients SET status = 'inactive' WHERE id=?");
+            if ($stmt === false) {
+                throw new RuntimeException('Unable to prepare client delete.' . salesClientsDbError($conn));
+            }
+            $stmt->bind_param("i", $id);
+            $stmt->execute();
+            $stmt->close();
+
+            $conn->commit();
+            logActivity($user['id'], 'delete_client', 'clients', $id, $oldData, ['status' => 'inactive', 'related_projects_status' => 'cancelled']);
+            $_SESSION['success'] = "Client and related projects deleted successfully";
+        } catch (Throwable $e) {
+            $conn->rollback();
+            error_log('Sales delete client error: ' . $e->getMessage());
+            $_SESSION['error'] = 'Unable to delete client. ' . $e->getMessage();
+        }
+    } elseif (isset($_POST['delete_project'])) {
+        $id = (int) ($_POST['id'] ?? 0);
+        $oldResult = salesClientsQuery($conn, "SELECT * FROM projects WHERE id = $id LIMIT 1");
+        $oldData = $oldResult ? $oldResult->fetch_assoc() : null;
+
+        if (!$oldData) {
+            $_SESSION['error'] = 'Project not found.';
+        } else {
+            $stmt = $conn->prepare("UPDATE projects SET status = 'cancelled' WHERE id = ?");
+            if ($stmt === false) {
+                $_SESSION['error'] = 'Unable to prepare project delete.' . salesClientsDbError($conn);
+            } else {
+                $stmt->bind_param("i", $id);
+                if ($stmt->execute()) {
+                    logActivity($user['id'], 'delete_project', 'projects', $id, $oldData, ['status' => 'cancelled']);
+                    $_SESSION['success'] = "Project deleted successfully";
+                }
+                $stmt->close();
+            }
         }
     }
     
@@ -926,6 +970,7 @@ if ($clientRows) {
             FROM projects p
             LEFT JOIN tasks t ON t.project_id = p.id AND {$featureCondition}
             WHERE p.client_id IN ({$clientIdsSql})
+              AND p.status != 'cancelled'
             GROUP BY p.id, p.client_id, p.name, p.status, p.timeline_end, p.created_at
             ORDER BY p.created_at DESC, p.id DESC
         ");
@@ -1998,7 +2043,7 @@ button.client-pagination__step {
 
 .project-expansion-item {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1.15fr) minmax(180px, 1fr) minmax(220px, 1fr) auto;
     align-items: center;
     gap: 1.25rem;
     padding: 1rem;
@@ -2041,10 +2086,12 @@ button.client-pagination__step {
 .project-team-notify.is-completed { justify-content:flex-end; }
 .project-team-notify input { flex:1 1 auto; width:100%; min-width:0; border:1px solid #cbdde9; border-radius:9px; padding:.55rem .75rem; }
 .project-team-notify button, .project-team-notify .project-download-button { white-space:nowrap; }
+.project-expansion-actions { display:flex; justify-content:flex-end; }
+.project-delete-button { width:34px; height:34px; display:inline-flex; align-items:center; justify-content:center; border-radius:9px; }
 
 @media (max-width: 1100px) {
     .project-expansion-item { grid-template-columns:1fr 1fr; }
-    .project-team-notify { grid-column:1 / -1; }
+    .project-team-notify, .project-expansion-actions { grid-column:1 / -1; }
 }
 
 @media (max-width: 700px) {
@@ -7125,6 +7172,17 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
                                         </a>
                                     <?php endif; ?>
                                 </div>
+                                <div class="project-expansion-actions">
+                                    <button
+                                        type="button"
+                                        class="btn btn-outline-danger btn-sm project-delete-button"
+                                        title="Delete project"
+                                        aria-label="Delete <?php echo htmlspecialchars((string) $project['name']); ?>"
+                                        onclick="openDeleteProjectModal(<?php echo (int) $project['id']; ?>, <?php echo htmlspecialchars(json_encode((string) $project['name'])); ?>)"
+                                    >
+                                        <i class="fas fa-trash" aria-hidden="true"></i>
+                                    </button>
+                                </div>
                             </div>
                         <?php endforeach; ?>
                     </div>
@@ -8022,13 +8080,42 @@ Attendees:</textarea>
                     <i class="fas fa-triangle-exclamation fa-lg"></i>
                     <div>
                         <div class="fw-semibold mb-1" id="deleteClientName">Selected client</div>
-                        <div class="small text-muted">This will remove the client and all related projects, tasks, and files. This action cannot be undone.</div>
+                        <div class="small text-muted">This will hide the client and cancel its projects. You can restore them from the audit log.</div>
                     </div>
                 </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn-delete-cancel" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn-delete-confirm" id="deleteClientConfirmBtn">
+                    <i class="fas fa-trash-alt me-1"></i> Yes, delete it
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Project Modal -->
+<div class="modal fade modal-modern delete-confirm-modal" id="deleteProjectModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-folder-minus me-2"></i> Delete Project
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="delete-confirm-note mb-0">
+                    <i class="fas fa-triangle-exclamation fa-lg"></i>
+                    <div>
+                        <div class="fw-semibold mb-1" id="deleteProjectName">Selected project</div>
+                        <div class="small text-muted">This will cancel the project and hide it from the client list. Files, plans, tasks, and progress are kept for restore.</div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-delete-cancel" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn-delete-confirm" id="deleteProjectConfirmBtn">
                     <i class="fas fa-trash-alt me-1"></i> Yes, delete it
                 </button>
             </div>
@@ -10576,6 +10663,10 @@ let pendingDeleteClientId = null;
 const deleteClientModalElement = document.getElementById('deleteClientModal');
 const deleteClientConfirmBtn = document.getElementById('deleteClientConfirmBtn');
 const deleteClientName = document.getElementById('deleteClientName');
+let pendingDeleteProjectId = null;
+const deleteProjectModalElement = document.getElementById('deleteProjectModal');
+const deleteProjectConfirmBtn = document.getElementById('deleteProjectConfirmBtn');
+const deleteProjectName = document.getElementById('deleteProjectName');
 let pendingDeleteDraftId = null;
 const deleteDraftModalElement = document.getElementById('deleteDraftModal');
 const deleteDraftConfirmBtn = document.getElementById('deleteDraftConfirmBtn');
@@ -10589,6 +10680,16 @@ function openDeleteClientModal(id, name) {
     }
 
     new bootstrap.Modal(deleteClientModalElement).show();
+}
+
+function openDeleteProjectModal(id, name) {
+    pendingDeleteProjectId = Number(id) || null;
+
+    if (deleteProjectName) {
+        deleteProjectName.textContent = name || 'Selected project';
+    }
+
+    new bootstrap.Modal(deleteProjectModalElement).show();
 }
 
 function openDeleteDraftModal(draftId, draftLabel) {
@@ -10645,6 +10746,27 @@ if (deleteClientConfirmBtn) {
         form.innerHTML = `
             <input type="hidden" name="delete_client" value="1">
             <input type="hidden" name="id" value="${pendingDeleteClientId}">
+        `;
+        document.body.appendChild(form);
+        form.submit();
+    });
+}
+
+if (deleteProjectConfirmBtn) {
+    deleteProjectConfirmBtn.addEventListener('click', function () {
+        if (!pendingDeleteProjectId) {
+            return;
+        }
+
+        if (window.appShowLoading) {
+            window.appShowLoading('Deleting project', 'Please wait while the project is cancelled.');
+        }
+
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.innerHTML = `
+            <input type="hidden" name="delete_project" value="1">
+            <input type="hidden" name="id" value="${pendingDeleteProjectId}">
         `;
         document.body.appendChild(form);
         form.submit();

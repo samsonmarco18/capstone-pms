@@ -83,16 +83,66 @@ if (isset($restoreData['id'])) {
     $existingStmt->close();
 
     if ($exists) {
-        if ($tableName === 'clients') {
-            $restoreStatus = (string) ($restoreData['status'] ?? 'active');
-            if (!in_array($restoreStatus, ['active', 'inactive', 'suspended', 'pending'], true)) {
-                $restoreStatus = 'active';
+        $softRestoreStatuses = [
+            'clients' => [
+                'deleted_status' => 'inactive',
+                'fallback_status' => 'active',
+                'allowed_statuses' => ['active', 'inactive', 'suspended', 'pending'],
+            ],
+            'projects' => [
+                'deleted_status' => 'cancelled',
+                'fallback_status' => 'pending',
+                'allowed_statuses' => [
+                    'pending',
+                    'requirements_gathering',
+                    'architectural_review',
+                    'tech_recommendation',
+                    'developer_allocation',
+                    'arch_documentation',
+                    'in_development',
+                    'review',
+                    'in_progress',
+                    'completed',
+                    'cancelled',
+                ],
+            ],
+        ];
+
+        if (isset($softRestoreStatuses[$tableName])) {
+            $softRestoreConfig = $softRestoreStatuses[$tableName];
+            $restoreStatus = (string) ($restoreData['status'] ?? $softRestoreConfig['fallback_status']);
+            if (!in_array($restoreStatus, $softRestoreConfig['allowed_statuses'], true)) {
+                $restoreStatus = $softRestoreConfig['fallback_status'];
             }
 
-            $restoreStmt = $conn->prepare("UPDATE {$quotedTableName} SET status = ? WHERE id = ? AND status = 'inactive'");
-            $restoreStmt->bind_param('si', $restoreStatus, $existingId);
+            $deletedStatus = $softRestoreConfig['deleted_status'];
+            $restoreStmt = $conn->prepare("UPDATE {$quotedTableName} SET status = ? WHERE id = ? AND status = ?");
+            $restoreStmt->bind_param('sis', $restoreStatus, $existingId, $deletedStatus);
             if ($restoreStmt->execute() && $restoreStmt->affected_rows > 0) {
                 $restoreStmt->close();
+                if ($tableName === 'clients' && !empty($oldData['related_projects']) && is_array($oldData['related_projects'])) {
+                    $restoreProjectStmt = $conn->prepare("UPDATE {$quoteIdentifier('projects')} SET status = ? WHERE id = ? AND client_id = ? AND status = 'cancelled'");
+                    if ($restoreProjectStmt !== false) {
+                        foreach ($oldData['related_projects'] as $relatedProject) {
+                            if (!is_array($relatedProject)) {
+                                continue;
+                            }
+
+                            $relatedProjectId = (int) ($relatedProject['id'] ?? 0);
+                            $relatedProjectStatus = (string) ($relatedProject['status'] ?? 'pending');
+                            if (
+                                $relatedProjectId <= 0
+                                || !in_array($relatedProjectStatus, $softRestoreStatuses['projects']['allowed_statuses'], true)
+                            ) {
+                                continue;
+                            }
+
+                            $restoreProjectStmt->bind_param('sii', $relatedProjectStatus, $relatedProjectId, $existingId);
+                            $restoreProjectStmt->execute();
+                        }
+                        $restoreProjectStmt->close();
+                    }
+                }
                 logActivity(
                     (int) $admin['id'],
                     'restore_deleted_item',

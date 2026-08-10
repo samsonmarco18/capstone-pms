@@ -177,7 +177,15 @@ $auditLogCanRestore = static function (array $log) use ($conn, $auditQuoteIdenti
         return true;
     }
 
-    return $tableName === 'clients' && (string) ($exists['status'] ?? '') === 'inactive';
+    if ($tableName === 'clients') {
+        return (string) ($exists['status'] ?? '') === 'inactive';
+    }
+
+    if ($tableName === 'projects') {
+        return (string) ($exists['status'] ?? '') === 'cancelled';
+    }
+
+    return false;
 };
 
 // Get unique actions for filter
