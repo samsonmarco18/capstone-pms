@@ -20,7 +20,7 @@ try {
     if (!$folderExists) {
         folderApiRespond(['success' => false, 'error' => 'Upload folder not found.'], 404);
     }
-    if (!folderApiCanAccessFolder($folderExists, $user)) {
+    if (!folderApiCanAccessFolderWithProject($conn, $folderExists, $user)) {
         folderApiRespond(['success' => false, 'error' => 'You do not have access to this folder.'], 403);
     }
 

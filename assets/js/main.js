@@ -321,17 +321,11 @@ function initFormSubmitConfirmations() {
 
             const submitter = event.originalEvent?.submitter
                 || form.querySelector('button[type="submit"]:not([disabled]), input[type="submit"]:not([disabled])');
+            const confirmOptions = getFormSubmitConfirmOptions(form, submitter);
 
             event.preventDefault();
             const confirmed = typeof window.appConfirm === 'function'
-                ? await window.appConfirm({
-                    title: 'Confirm Submission',
-                    subject: 'Submit this form?',
-                    message: 'The workflow will continue after this action is saved.',
-                    icon: 'fas fa-circle-check fa-lg',
-                    confirmIcon: 'fas fa-check',
-                    confirmText: 'Submit'
-                })
+                ? await window.appConfirm(confirmOptions)
                 : false;
 
             if (confirmed) {
@@ -344,6 +338,126 @@ function initFormSubmitConfirmations() {
             }
         });
     });
+}
+
+function getFormSubmitConfirmOptions(form, submitter) {
+    const source = submitter || form;
+    const visibleAction = (
+        source?.textContent
+        || source?.getAttribute?.('aria-label')
+        || source?.getAttribute?.('title')
+        || ''
+    ).replace(/\s+/g, ' ').trim();
+    const rawAction = (
+        source?.getAttribute?.('data-confirm-action')
+        || visibleAction
+        || source?.getAttribute?.('data-action')
+        || source?.getAttribute?.('value')
+        || source?.getAttribute?.('name')
+        || source?.textContent
+        || form?.getAttribute?.('aria-label')
+        || ''
+    ).replace(/\s+/g, ' ').trim();
+
+    const action = humanizeActionLabel(rawAction || 'Submit');
+    const normalized = action.toLowerCase();
+    const formLabel = (
+        form?.getAttribute?.('data-confirm-item')
+        || form?.getAttribute?.('data-form-label')
+        || form?.querySelector?.('h1, h2, h3, h4, h5, legend, .modal-title')?.textContent
+        || 'this form'
+    ).replace(/\s+/g, ' ').trim();
+
+    const presets = [
+        {
+            match: /delete|remove|cancel|void|archive|restore/i,
+            title: 'Confirm Removal',
+            subject: `${action} ${formLabel}?`,
+            message: 'This action changes or removes saved system data. Please confirm before continuing.',
+            icon: 'fas fa-trash-alt fa-lg',
+            confirmIcon: 'fas fa-trash-alt',
+            variant: 'danger'
+        },
+        {
+            match: /reject|decline|return|reopen/i,
+            title: 'Confirm Review Action',
+            subject: `${action} ${formLabel}?`,
+            message: 'The item will be sent back with this review decision.',
+            icon: 'fas fa-reply fa-lg',
+            confirmIcon: 'fas fa-reply',
+            variant: /reject|decline/i.test(normalized) ? 'danger' : ''
+        },
+        {
+            match: /approve|accept|pass|complete|merge|release/i,
+            title: 'Confirm Approval',
+            subject: `${action} ${formLabel}?`,
+            message: 'This will move the workflow forward using the details currently shown.',
+            icon: 'fas fa-circle-check fa-lg',
+            confirmIcon: 'fas fa-check'
+        },
+        {
+            match: /upload|attach|import/i,
+            title: 'Confirm Upload',
+            subject: `${action} files for ${formLabel}?`,
+            message: 'Selected files will be uploaded and linked to this record.',
+            icon: 'fas fa-cloud-arrow-up fa-lg',
+            confirmIcon: 'fas fa-upload'
+        },
+        {
+            match: /assign|allocate/i,
+            title: 'Confirm Assignment',
+            subject: `${action} ${formLabel}?`,
+            message: 'The selected person or team will receive this responsibility.',
+            icon: 'fas fa-user-check fa-lg',
+            confirmIcon: 'fas fa-user-check'
+        },
+        {
+            match: /generate|export|print|download/i,
+            title: 'Confirm Output',
+            subject: `${action} ${formLabel}?`,
+            message: 'The system will prepare the requested output from the current details.',
+            icon: 'fas fa-file-export fa-lg',
+            confirmIcon: 'fas fa-file-export'
+        },
+        {
+            match: /save|update|edit|change|create|add|submit/i,
+            title: /create|add/i.test(normalized) ? 'Confirm Creation' : 'Confirm Save',
+            subject: `${action} ${formLabel}?`,
+            message: 'Your current entries will be saved and used by the related workflow.',
+            icon: /create|add/i.test(normalized) ? 'fas fa-plus-circle fa-lg' : 'fas fa-floppy-disk fa-lg',
+            confirmIcon: /create|add/i.test(normalized) ? 'fas fa-plus' : 'fas fa-save'
+        }
+    ];
+
+    const preset = presets.find(item => item.match.test(normalized)) || {
+        title: 'Confirm Action',
+        subject: `${action} ${formLabel}?`,
+        message: 'Please confirm that you want to continue with this action.',
+        icon: 'fas fa-circle-info fa-lg',
+        confirmIcon: 'fas fa-check'
+    };
+
+    return {
+        ...preset,
+        title: source?.getAttribute?.('data-confirm-title') || form?.getAttribute?.('data-confirm-title') || preset.title,
+        subject: source?.getAttribute?.('data-confirm-subject') || form?.getAttribute?.('data-confirm-subject') || preset.subject,
+        message: source?.getAttribute?.('data-confirm-message') || form?.getAttribute?.('data-confirm-message') || preset.message,
+        confirmText: source?.getAttribute?.('data-confirm-text') || action,
+        cancelText: source?.getAttribute?.('data-cancel-text') || form?.getAttribute?.('data-cancel-text') || 'Cancel'
+    };
+}
+
+function humanizeActionLabel(value) {
+    const text = String(value || '')
+        .replace(/[_-]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    if (!text) {
+        return 'Submit';
+    }
+
+    return text.replace(/\b\w/g, letter => letter.toUpperCase());
 }
 
 function initSidebar() {

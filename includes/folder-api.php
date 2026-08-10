@@ -94,4 +94,92 @@ function folderApiCanAccessFolder(array $folder, array $user): bool
         || $folderRole === (string) ($user['role'] ?? '')
         || ($folderUserId > 0 && $folderUserId === (int) ($user['id'] ?? 0));
 }
+
+function folderApiCanAccessProject(mysqli|PgsqlMysqliCompatConnection $conn, int $projectId, array $user): bool
+{
+    if ($projectId <= 0) {
+        return false;
+    }
+
+    $userId = (int) ($user['id'] ?? 0);
+    $role = (string) ($user['role'] ?? '');
+    if ($role === 'admin') {
+        return true;
+    }
+    if ($userId <= 0) {
+        return false;
+    }
+
+    $sql = '
+        SELECT p.id
+        FROM projects p
+        LEFT JOIN clients c ON c.id = p.client_id
+        WHERE p.id = ?
+          AND (
+              p.created_by = ?
+              OR c.created_by = ?
+              OR p.architect_id = ?
+              OR p.sul_id = ?
+              OR EXISTS (
+                  SELECT 1
+                  FROM tasks t
+                  WHERE t.project_id = p.id
+                    AND (t.assigned_to = ? OR t.assigned_by = ?)
+                  LIMIT 1
+              )
+              OR EXISTS (
+                  SELECT 1
+                  FROM methodology_tasks mt
+                  WHERE mt.project_id = p.id
+                    AND mt.assigned_developer_id = ?
+                  LIMIT 1
+              )
+              OR EXISTS (
+                  SELECT 1
+                  FROM methodology_task_departments mtd
+                  WHERE mtd.project_id = p.id
+                    AND mtd.assigned_developer_id = ?
+                  LIMIT 1
+              )
+              OR EXISTS (
+                  SELECT 1
+                  FROM developer_allocations da
+                  INNER JOIN developer_allocation_assignments daa ON daa.allocation_id = da.id
+                  WHERE da.project_id = p.id
+                    AND daa.developer_id = ?
+                  LIMIT 1
+              )
+              OR EXISTS (
+                  SELECT 1
+                  FROM feature_estimations fe
+                  WHERE fe.project_id = p.id
+                    AND fe.expert_id = ?
+                  LIMIT 1
+              )
+          )
+        LIMIT 1';
+
+    $stmt = $conn->prepare($sql);
+    if ($stmt === false) {
+        error_log('Project folder access prepare failed: ' . ($conn->error ?? 'unknown error'));
+        return false;
+    }
+
+    $stmt->bind_param('iiiiiiiiiii', $projectId, $userId, $userId, $userId, $userId, $userId, $userId, $userId, $userId, $userId, $userId);
+    $stmt->execute();
+    $canAccess = (bool) $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    return $canAccess;
+}
+
+function folderApiCanAccessFolderWithProject(mysqli|PgsqlMysqliCompatConnection $conn, array $folder, array $user): bool
+{
+    $projectId = (int) ($folder['project_id'] ?? 0);
+    if ($projectId > 0) {
+        return folderApiCanAccessProject($conn, $projectId, $user);
+    }
+
+    return folderApiCanAccessFolder($folder, $user);
+}
 ?>
