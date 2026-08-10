@@ -65,6 +65,13 @@ function restoreItemIsDeleteAction(string $action): bool
         || str_starts_with($normalized, 'deleted_');
 }
 
+function restoreItemAffectedRows(mysqli_stmt|PgsqlMysqliCompatStatement $stmt, mysqli|PgsqlMysqliCompatConnection $conn): int
+{
+    return property_exists($stmt, 'affected_rows')
+        ? (int) $stmt->affected_rows
+        : (int) $conn->affected_rows;
+}
+
 function restoreItemSoftRestoreConfig(): array
 {
     return [
@@ -192,7 +199,8 @@ if (!$restoreData && isset($softRestoreStatuses[$tableName])) {
         $restoreStmt = $conn->prepare("UPDATE {$quotedTableName} SET status = ? WHERE id = ? AND status = ?");
         if ($restoreStmt !== false) {
             $restoreStmt->bind_param('sis', $restoreStatus, $fallbackId, $deletedStatus);
-            if ($restoreStmt->execute() && $restoreStmt->affected_rows > 0) {
+            $restoreExecuted = $restoreStmt->execute();
+            if ($restoreExecuted && restoreItemAffectedRows($restoreStmt, $conn) > 0) {
                 $restoreStmt->close();
                 if ($tableName === 'clients') {
                     restoreItemRelatedClientProjects($conn, $quoteIdentifier, $fallbackId, $oldData, $softRestoreStatuses);
@@ -244,7 +252,8 @@ if (isset($restoreData['id'])) {
             $deletedStatus = $softRestoreConfig['deleted_status'];
             $restoreStmt = $conn->prepare("UPDATE {$quotedTableName} SET status = ? WHERE id = ? AND status = ?");
             $restoreStmt->bind_param('sis', $restoreStatus, $existingId, $deletedStatus);
-            if ($restoreStmt->execute() && $restoreStmt->affected_rows > 0) {
+            $restoreExecuted = $restoreStmt->execute();
+            if ($restoreExecuted && restoreItemAffectedRows($restoreStmt, $conn) > 0) {
                 $restoreStmt->close();
                 if ($tableName === 'clients') {
                     restoreItemRelatedClientProjects($conn, $quoteIdentifier, $existingId, $oldData, $softRestoreStatuses);
