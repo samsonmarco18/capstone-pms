@@ -57,6 +57,78 @@ function restoreItemNormalizeRowKeys(array $row): array
     return $normalized;
 }
 
+function restoreItemSoftRestoreConfig(): array
+{
+    return [
+        'clients' => [
+            'deleted_status' => 'inactive',
+            'fallback_status' => 'active',
+            'allowed_statuses' => ['active', 'inactive', 'suspended', 'pending'],
+        ],
+        'projects' => [
+            'deleted_status' => 'cancelled',
+            'fallback_status' => 'pending',
+            'allowed_statuses' => [
+                'pending',
+                'requirements_gathering',
+                'architectural_review',
+                'tech_recommendation',
+                'developer_allocation',
+                'arch_documentation',
+                'in_development',
+                'review',
+                'in_progress',
+                'completed',
+                'cancelled',
+            ],
+        ],
+    ];
+}
+
+function restoreItemRelatedClientProjects(
+    mysqli|PgsqlMysqliCompatConnection $conn,
+    callable $quoteIdentifier,
+    int $clientId,
+    array $oldData,
+    array $softRestoreStatuses
+): void {
+    if (!empty($oldData['related_projects']) && is_array($oldData['related_projects'])) {
+        $restoreProjectStmt = $conn->prepare("UPDATE {$quoteIdentifier('projects')} SET status = ? WHERE id = ? AND client_id = ? AND status = 'cancelled'");
+        if ($restoreProjectStmt === false) {
+            return;
+        }
+
+        foreach ($oldData['related_projects'] as $relatedProject) {
+            if (!is_array($relatedProject)) {
+                continue;
+            }
+
+            $relatedProject = restoreItemNormalizeRowKeys($relatedProject);
+            $relatedProjectId = (int) ($relatedProject['id'] ?? 0);
+            $relatedProjectStatus = (string) ($relatedProject['status'] ?? 'pending');
+            if (
+                $relatedProjectId <= 0
+                || !in_array($relatedProjectStatus, $softRestoreStatuses['projects']['allowed_statuses'], true)
+            ) {
+                continue;
+            }
+
+            $restoreProjectStmt->bind_param('sii', $relatedProjectStatus, $relatedProjectId, $clientId);
+            $restoreProjectStmt->execute();
+        }
+        $restoreProjectStmt->close();
+        return;
+    }
+
+    $fallbackStatus = $softRestoreStatuses['projects']['fallback_status'];
+    $restoreAllStmt = $conn->prepare("UPDATE {$quoteIdentifier('projects')} SET status = ? WHERE client_id = ? AND status = 'cancelled'");
+    if ($restoreAllStmt !== false) {
+        $restoreAllStmt->bind_param('si', $fallbackStatus, $clientId);
+        $restoreAllStmt->execute();
+        $restoreAllStmt->close();
+    }
+}
+
 $tableName = restoreItemNormalizeTableName((string) ($log['table_name'] ?? ''));
 if (!preg_match('/^[a-zA-Z0-9_]+$/', $tableName)) {
     http_response_code(400);
@@ -88,18 +160,59 @@ while ($column = $columnsResult->fetch_assoc()) {
     $columns[] = (string) $column['Field'];
 }
 
-$restoreData = array_intersect_key($oldData, array_flip($columns));
-if (!$restoreData) {
-    http_response_code(400);
-    echo json_encode(['success' => false, 'error' => 'No matching columns were found to restore']);
-    exit();
-}
-
 $identifierQuote = DB_DRIVER === 'pgsql' ? '"' : '`';
 $quoteIdentifier = static function (string $identifier) use ($identifierQuote): string {
     return $identifierQuote . str_replace($identifierQuote, $identifierQuote . $identifierQuote, $identifier) . $identifierQuote;
 };
 $quotedTableName = $quoteIdentifier($tableName);
+$softRestoreStatuses = restoreItemSoftRestoreConfig();
+
+$restoreData = array_intersect_key($oldData, array_flip($columns));
+if (!$restoreData && isset($softRestoreStatuses[$tableName])) {
+    $fallbackId = (int) ($oldData['id'] ?? $log['record_id'] ?? 0);
+    $softRestoreConfig = $softRestoreStatuses[$tableName];
+    $restoreStatus = (string) ($oldData['status'] ?? $softRestoreConfig['fallback_status']);
+    if (!in_array($restoreStatus, $softRestoreConfig['allowed_statuses'], true)) {
+        $restoreStatus = $softRestoreConfig['fallback_status'];
+    }
+
+    if ($fallbackId > 0) {
+        $deletedStatus = $softRestoreConfig['deleted_status'];
+        $restoreStmt = $conn->prepare("UPDATE {$quotedTableName} SET status = ? WHERE id = ? AND status = ?");
+        if ($restoreStmt !== false) {
+            $restoreStmt->bind_param('sis', $restoreStatus, $fallbackId, $deletedStatus);
+            if ($restoreStmt->execute() && $restoreStmt->affected_rows > 0) {
+                $restoreStmt->close();
+                if ($tableName === 'clients') {
+                    restoreItemRelatedClientProjects($conn, $quoteIdentifier, $fallbackId, $oldData, $softRestoreStatuses);
+                }
+                logActivity(
+                    (int) $admin['id'],
+                    'restore_deleted_item',
+                    $tableName,
+                    $fallbackId,
+                    null,
+                    [
+                        'id' => $fallbackId,
+                        'status' => $restoreStatus,
+                        'restored_from_log_id' => $logId,
+                        'soft_restored' => true,
+                        'fallback_restore' => true,
+                    ]
+                );
+                echo json_encode(['success' => true, 'id' => $fallbackId]);
+                exit();
+            }
+            $restoreStmt->close();
+        }
+    }
+}
+
+if (!$restoreData) {
+    http_response_code(400);
+    echo json_encode(['success' => false, 'error' => 'No matching columns were found to restore']);
+    exit();
+}
 
 if (isset($restoreData['id'])) {
     $existingStmt = $conn->prepare("SELECT id FROM {$quotedTableName} WHERE id = ? LIMIT 1");
@@ -110,31 +223,6 @@ if (isset($restoreData['id'])) {
     $existingStmt->close();
 
     if ($exists) {
-        $softRestoreStatuses = [
-            'clients' => [
-                'deleted_status' => 'inactive',
-                'fallback_status' => 'active',
-                'allowed_statuses' => ['active', 'inactive', 'suspended', 'pending'],
-            ],
-            'projects' => [
-                'deleted_status' => 'cancelled',
-                'fallback_status' => 'pending',
-                'allowed_statuses' => [
-                    'pending',
-                    'requirements_gathering',
-                    'architectural_review',
-                    'tech_recommendation',
-                    'developer_allocation',
-                    'arch_documentation',
-                    'in_development',
-                    'review',
-                    'in_progress',
-                    'completed',
-                    'cancelled',
-                ],
-            ],
-        ];
-
         if (isset($softRestoreStatuses[$tableName])) {
             $softRestoreConfig = $softRestoreStatuses[$tableName];
             $restoreStatus = (string) ($restoreData['status'] ?? $softRestoreConfig['fallback_status']);
@@ -147,28 +235,8 @@ if (isset($restoreData['id'])) {
             $restoreStmt->bind_param('sis', $restoreStatus, $existingId, $deletedStatus);
             if ($restoreStmt->execute() && $restoreStmt->affected_rows > 0) {
                 $restoreStmt->close();
-                if ($tableName === 'clients' && !empty($oldData['related_projects']) && is_array($oldData['related_projects'])) {
-                    $restoreProjectStmt = $conn->prepare("UPDATE {$quoteIdentifier('projects')} SET status = ? WHERE id = ? AND client_id = ? AND status = 'cancelled'");
-                    if ($restoreProjectStmt !== false) {
-                        foreach ($oldData['related_projects'] as $relatedProject) {
-                            if (!is_array($relatedProject)) {
-                                continue;
-                            }
-
-                            $relatedProjectId = (int) ($relatedProject['id'] ?? 0);
-                            $relatedProjectStatus = (string) ($relatedProject['status'] ?? 'pending');
-                            if (
-                                $relatedProjectId <= 0
-                                || !in_array($relatedProjectStatus, $softRestoreStatuses['projects']['allowed_statuses'], true)
-                            ) {
-                                continue;
-                            }
-
-                            $restoreProjectStmt->bind_param('sii', $relatedProjectStatus, $relatedProjectId, $existingId);
-                            $restoreProjectStmt->execute();
-                        }
-                        $restoreProjectStmt->close();
-                    }
+                if ($tableName === 'clients') {
+                    restoreItemRelatedClientProjects($conn, $quoteIdentifier, $existingId, $oldData, $softRestoreStatuses);
                 }
                 logActivity(
                     (int) $admin['id'],
