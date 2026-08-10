@@ -151,7 +151,7 @@ $auditLogCanRestore = static function (array $log) use ($conn, $auditQuoteIdenti
         return false;
     }
 
-    $tableName = (string) ($log['table_name'] ?? '');
+    $tableName = strtolower((string) ($log['table_name'] ?? ''));
     if (!preg_match('/^[a-zA-Z0-9_]+$/', $tableName)) {
         return false;
     }

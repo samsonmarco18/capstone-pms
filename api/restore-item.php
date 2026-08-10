@@ -31,7 +31,7 @@ if (!$log) {
     exit();
 }
 
-$tableName = (string) ($log['table_name'] ?? '');
+$tableName = strtolower((string) ($log['table_name'] ?? ''));
 if (!preg_match('/^[a-zA-Z0-9_]+$/', $tableName)) {
     http_response_code(400);
     echo json_encode(['success' => false, 'error' => 'Invalid table name']);
