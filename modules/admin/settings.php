@@ -1500,7 +1500,12 @@ input:checked + .switch-slider:before {
                     </div>
                     <div class="form-group">
                         <label class="form-label">Google App Password</label>
-                        <input type="password" name="mail_password" class="form-control-modern" placeholder="Leave blank to keep current saved password">
+                        <div class="password-field">
+                            <input type="password" name="mail_password" class="form-control-modern" placeholder="Leave blank to keep current saved password">
+                            <button type="button" class="password-toggle-btn" data-password-toggle title="Show password">
+                                <i class="fas fa-eye" aria-hidden="true"></i>
+                            </button>
+                        </div>
                         <span class="form-text">Use a Google App Password, not your normal Gmail password.</span>
                     </div>
                     <div class="form-group">
@@ -1520,11 +1525,21 @@ input:checked + .switch-slider:before {
                     </div>
                     <div class="form-group">
                         <label class="form-label">Gmail API Client Secret</label>
-                        <input type="password" name="gmail_client_secret" class="form-control-modern" placeholder="Leave blank to keep current saved secret">
+                        <div class="password-field">
+                            <input type="password" name="gmail_client_secret" class="form-control-modern" placeholder="Leave blank to keep current saved secret">
+                            <button type="button" class="password-toggle-btn" data-password-toggle title="Show password">
+                                <i class="fas fa-eye" aria-hidden="true"></i>
+                            </button>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Gmail API Refresh Token</label>
-                        <input type="password" name="gmail_refresh_token" class="form-control-modern" placeholder="Leave blank to keep current saved token">
+                        <div class="password-field">
+                            <input type="password" name="gmail_refresh_token" class="form-control-modern" placeholder="Leave blank to keep current saved token">
+                            <button type="button" class="password-toggle-btn" data-password-toggle title="Show password">
+                                <i class="fas fa-eye" aria-hidden="true"></i>
+                            </button>
+                        </div>
                         <span class="form-text">Must be generated with the Gmail send scope.</span>
                     </div>
                     <div class="form-group">

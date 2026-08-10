@@ -1521,15 +1521,30 @@ include 'includes/navbar.php';
                         <div class="settings-security-grid">
                             <div>
                                 <label class="form-label">Current password</label>
-                                <input type="password" name="current_password" class="form-control" required autocomplete="current-password">
+                                <div class="password-field">
+                                    <input type="password" name="current_password" class="form-control" required autocomplete="current-password">
+                                    <button type="button" class="password-toggle-btn" data-password-toggle title="Show password">
+                                        <i class="fas fa-eye" aria-hidden="true"></i>
+                                    </button>
+                                </div>
                             </div>
                             <div>
                                 <label class="form-label">New password</label>
-                                <input type="password" name="password" class="form-control" minlength="6" required autocomplete="new-password">
+                                <div class="password-field">
+                                    <input type="password" name="password" class="form-control" minlength="6" required autocomplete="new-password">
+                                    <button type="button" class="password-toggle-btn" data-password-toggle title="Show password">
+                                        <i class="fas fa-eye" aria-hidden="true"></i>
+                                    </button>
+                                </div>
                             </div>
                             <div>
                                 <label class="form-label">Confirm new password</label>
-                                <input type="password" name="confirm_password" class="form-control" minlength="6" required autocomplete="new-password">
+                                <div class="password-field">
+                                    <input type="password" name="confirm_password" class="form-control" minlength="6" required autocomplete="new-password">
+                                    <button type="button" class="password-toggle-btn" data-password-toggle title="Show password">
+                                        <i class="fas fa-eye" aria-hidden="true"></i>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                         <div class="settings-security-actions">

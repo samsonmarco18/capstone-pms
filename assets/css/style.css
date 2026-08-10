@@ -45,6 +45,43 @@ body {
     line-height: 1.6;
 }
 
+.password-field {
+    position: relative;
+}
+
+.password-field .form-control,
+.password-field .form-control-modern {
+    padding-right: 3rem;
+}
+
+.password-toggle-btn {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    color: var(--text-muted);
+    display: inline-flex;
+    height: 2.5rem;
+    justify-content: center;
+    position: absolute;
+    right: 0.35rem;
+    top: 50%;
+    transform: translateY(-50%);
+    transition: color 0.2s ease, background-color 0.2s ease;
+    width: 2.5rem;
+    z-index: 2;
+}
+
+.password-toggle-btn:hover,
+.password-toggle-btn:focus-visible {
+    color: var(--primary-color);
+}
+
+.password-toggle-btn:focus-visible {
+    border-radius: 0.5rem;
+    box-shadow: 0 0 0 0.2rem rgba(13, 85, 107, 0.16);
+    outline: none;
+}
+
 /* =====================================================
    SIDEBAR STYLES
    ===================================================== */
