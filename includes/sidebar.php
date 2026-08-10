@@ -146,7 +146,7 @@ function isSidebarItemActive(array $item, string $currentPage, string $currentPa
             <img src="<?php echo BASE_URL; ?>assets/img/logoInside.png?v=<?php echo rawurlencode($sidebarLogoVersion); ?>" alt="ERNI logo">
         </div>
         <div class="brand-copy sidebar-label">
-            <div class="brand-title">ERNI</div>
+            <div class="brand-title">EVORTIX</div>
             <small>Development Center Philippines, Inc.</small>
         </div>
     </div>
