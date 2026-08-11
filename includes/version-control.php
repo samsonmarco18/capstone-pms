@@ -216,6 +216,26 @@ function vcGenerateRepositoryHttpCloneUrl(string $slug): string
     return rtrim(BASE_URL, '/') . '/git/' . rawurlencode(vcGenerateSlug($slug)) . '.git';
 }
 
+function vcBuildRepositoryBrowserUrl(int $projectId = 0, int $repositoryId = 0, int $branchId = 0, int $commitId = 0): string
+{
+    $params = [];
+    if ($projectId > 0) {
+        $params['project_id'] = $projectId;
+    }
+    if ($repositoryId > 0) {
+        $params['repository_id'] = $repositoryId;
+    }
+    if ($commitId > 0) {
+        $params['commit_id'] = $commitId;
+    }
+    if ($branchId > 0) {
+        $params['branch_id'] = $branchId;
+    }
+
+    return rtrim(BASE_URL, '/') . '/modules/version-control/repositories.php'
+        . ($params ? '?' . http_build_query($params) : '');
+}
+
 function vcGetManagedRepositoryPushUsername(): string
 {
     $username = trim((string) (getenv('GIT_HTTP_PUSH_USERNAME') ?: 'git'));
@@ -451,6 +471,14 @@ function vcIsInternalManagedRepositoryUrl(string $url): bool
         $host = (string) $parts['host'];
         $port = isset($parts['port']) ? ':' . (int) $parts['port'] : '';
         $path = (string) ($parts['path'] ?? '');
+        $baseParts = parse_url(BASE_URL);
+        $baseHost = strtolower((string) ($baseParts['host'] ?? ''));
+        $normalizedHost = strtolower($host);
+        $sameHost = $baseHost !== '' && $normalizedHost === $baseHost;
+        $isLocalHost = in_array($normalizedHost, ['localhost', '127.0.0.1', '::1'], true);
+        if (($sameHost || $isLocalHost) && preg_match('#/(?:[^/]+/)?git/[^/?#]+\.git(?:/.*)?$#i', $path) === 1) {
+            return true;
+        }
         $normalized = $scheme . '://' . $host . $port . $path;
     }
 

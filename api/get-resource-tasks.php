@@ -20,6 +20,9 @@ $isSul = ($viewer['role'] ?? '') === 'sul';
 $sulDepartment = $isSul
     ? projectWorkflowDepartmentLabel((string) ($viewer['department'] ?? ''))
     : '';
+$isExpertDepartmentSul = $isSul && $sulDepartment === 'Expert Department';
+$managedResourceRole = $isExpertDepartmentSul ? 'expert' : 'developer';
+$managedResourceRoleSql = $conn->real_escape_string($managedResourceRole);
 
 if ($isSul && $sulDepartment === '') {
     http_response_code(403);
@@ -27,10 +30,10 @@ if ($isSul && $sulDepartment === '') {
     exit();
 }
 
-// SULs can inspect only active developers in their own department.
+// SULs can inspect only active resources in their own department.
 $resourceScope = '';
 if ($isSul) {
-    $resourceScope = " AND u.role = 'developer' AND "
+    $resourceScope = " AND u.role = '{$managedResourceRoleSql}' AND "
         . projectWorkflowUserDepartmentClause($conn, 'u', $sulDepartment);
 } else {
     $resourceScope = " AND u.role IN ('developer', 'expert')";
@@ -56,8 +59,11 @@ if (!$user) {
 
 $taskScope = '';
 if ($isSul) {
+    $taskDepartmentScope = $isExpertDepartmentSul
+        ? "t.task_type = 'feature'"
+        : projectWorkflowTaskDepartmentClause($conn, 't', $sulDepartment, true);
     $taskScope = ' AND '
-        . projectWorkflowTaskDepartmentClause($conn, 't', $sulDepartment, true)
+        . $taskDepartmentScope
         . ' AND '
         . projectWorkflowProjectDepartmentClause($conn, 'p', $sulDepartment);
 }
