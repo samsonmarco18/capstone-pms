@@ -3522,7 +3522,7 @@ textarea.form-control-custom {
                     ? date('M d, Y', strtotime($architectDeadlineValue))
                     : 'not set';
             ?>
-            <?php $isReadonly = $task['status'] !== 'todo'; ?>
+            <?php $isReadonly = in_array((string) ($task['status'] ?? ''), ['completed', 'cancelled'], true); ?>
             <div id="estimate-task-<?php echo (int) $task['id']; ?>" class="feature-row estimation-card <?php echo $isEstimated ? 'complete' : 'incomplete'; ?>" data-project-id="<?php echo (int) $task['project_id']; ?>" data-task-id="<?php echo (int) $task['id']; ?>" data-task-title="<?php echo htmlspecialchars((string) $task['title'], ENT_QUOTES, 'UTF-8'); ?>" data-readonly="<?php echo $isReadonly ? '1' : '0'; ?>" data-estimated="<?php echo $isEstimated ? '1' : '0'; ?>" data-saved-estimated="<?php echo $isEstimated ? '1' : '0'; ?>" data-architect-deadline="<?php echo htmlspecialchars($architectDeadlineValue, ENT_QUOTES, 'UTF-8'); ?>" data-project-start="<?php echo htmlspecialchars($featureWindowStart, ENT_QUOTES, 'UTF-8'); ?>" data-project-end="<?php echo htmlspecialchars($featureWindowEnd, ENT_QUOTES, 'UTF-8'); ?>" data-duration-label="<?php echo htmlspecialchars($featureWindowLabel, ENT_QUOTES, 'UTF-8'); ?>" data-estimate-duration-days="<?php echo (int) $featureEstimateDurationDays; ?>" data-evortix-estimate="<?php echo htmlspecialchars(json_encode($evortixEstimatePayload, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8'); ?>" style="display:none;">
                 <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
                     <div>
