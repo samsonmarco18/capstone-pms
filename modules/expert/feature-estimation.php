@@ -14,6 +14,30 @@ $user = getCurrentUser();
 methodologyRoadmapEnsureSchema($conn);
 projectEstimationEnsureSchema($conn);
 
+// Older Expert dashboard links opened a feature task. The cost-estimate picker
+// works at project level, so resolve those links to their assigned project.
+$legacyTaskId = max(0, (int) ($_GET['task_id'] ?? 0));
+$requestedProjectId = max(0, (int) ($_GET['project_estimation_id'] ?? 0));
+if ($requestedProjectId === 0 && $legacyTaskId > 0) {
+    $legacyTaskStmt = $conn->prepare("\n        SELECT t.project_id\n        FROM tasks t\n        JOIN projects p ON p.id = t.project_id\n        WHERE t.id = ?\n          AND t.assigned_to = ?\n          AND t.status != 'cancelled'\n          AND p.status != 'cancelled'\n        LIMIT 1\n    ");
+    if ($legacyTaskStmt) {
+        $expertId = (int) ($user['id'] ?? 0);
+        $legacyTaskStmt->bind_param('ii', $legacyTaskId, $expertId);
+        $legacyTaskStmt->execute();
+        $legacyProject = $legacyTaskStmt->get_result()->fetch_assoc() ?: [];
+        $legacyTaskStmt->close();
+        $requestedProjectId = max(0, (int) ($legacyProject['project_id'] ?? 0));
+    }
+
+    if ($requestedProjectId > 0) {
+        $redirectParameters = $_GET;
+        unset($redirectParameters['task_id']);
+        $redirectParameters['project_estimation_id'] = $requestedProjectId;
+        header('Location: feature-estimation.php?' . http_build_query($redirectParameters));
+        exit();
+    }
+}
+
 $availableDepartments = array_values(array_unique(array_merge(array_keys(projectWorkflowDepartments()), [
     'Frontend Developer',
     'Backend Developer',

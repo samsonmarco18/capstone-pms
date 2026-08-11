@@ -1120,7 +1120,17 @@ $chatScriptLoaded = true;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-color: #071321;
+    border-color: rgba(31, 99, 146, 0.28);
+    color: #d7e4f2;
+    color-scheme: dark;
     background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%238fd3ff' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e") !important;
+    background-repeat: no-repeat !important;
+    background-position: right 0.75rem center !important;
+    background-size: 16px 12px !important;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-secondary-modern {

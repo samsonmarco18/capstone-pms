@@ -225,8 +225,8 @@ if (
                         'To Estimate' => "t.status = 'todo'",
                         default => "t.status != 'completed'",
                     };
-                    $expertTaskId = $summaryFirstId(
-                        "SELECT t.id
+                    $expertProjectId = $summaryFirstId(
+                        "SELECT p.id
                          FROM tasks t
                          JOIN projects p ON p.id = t.project_id
                          WHERE t.assigned_to = {$summaryUserId}
@@ -235,8 +235,8 @@ if (
                          ORDER BY CASE WHEN t.deadline IS NULL THEN 1 ELSE 0 END, t.deadline ASC, t.id ASC
                          LIMIT 1"
                     );
-                    $compactActionUrl = $expertTaskId > 0
-                        ? BASE_URL . 'modules/expert/feature-estimation.php?task_id=' . $expertTaskId
+                    $compactActionUrl = $expertProjectId > 0
+                        ? BASE_URL . 'modules/expert/feature-estimation.php?project_estimation_id=' . $expertProjectId
                         : '';
                 } elseif ((int) ($primaryMetric['value'] ?? 0) > 0 && $compactRole === 'developer') {
                     $developerTaskCondition = match ((string) ($primaryMetric['label'] ?? '')) {

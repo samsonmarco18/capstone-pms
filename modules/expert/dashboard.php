@@ -111,7 +111,7 @@ $schedules = expertDashboardQuery($conn, "
 $expertAgenda = [];
 
 $agendaTaskRows = expertDashboardQuery($conn, "
-    SELECT t.id, t.title, t.description, t.deadline, t.status, p.name AS project_name
+    SELECT t.id, t.project_id, t.title, t.description, t.deadline, t.status, p.name AS project_name
     FROM tasks t
     JOIN projects p ON t.project_id = p.id
     WHERE t.assigned_to = {$user['id']}
@@ -129,7 +129,7 @@ if ($agendaTaskRows) {
             'date' => $hasDeadline ? (string) $task['deadline'] : date('Y-m-d H:i:s'),
             'type' => ((string) ($task['status'] ?? '') === 'todo') ? 'Estimate Needed' : 'Assigned Task',
             'icon' => ((string) ($task['status'] ?? '') === 'todo') ? 'calculator' : 'flag-checkered',
-            'url' => 'feature-estimation.php?task_id=' . (int) ($task['id'] ?? 0),
+            'url' => 'feature-estimation.php?project_estimation_id=' . (int) ($task['project_id'] ?? 0),
         ];
     }
 }
@@ -955,7 +955,7 @@ include '../../includes/navbar.php';
                                     </div>
                                     <p class="small text-muted mb-0"><?php echo htmlspecialchars(substr((string) ($task['description'] ?? ''), 0, 100)); ?></p>
                                 </div>
-                                <a href="feature-estimation.php?task_id=<?php echo $task['id']; ?>" class="btn-estimate ms-3">
+                                <a href="feature-estimation.php?project_estimation_id=<?php echo (int) $task['project_id']; ?>" class="btn-estimate ms-3">
                                     <i class="fas fa-calculator"></i> Estimate
                                 </a>
                             </div>
@@ -1057,7 +1057,7 @@ include '../../includes/navbar.php';
                                     <span class="recent-estimate-value">Min <?php echo $minDays; ?>d &bull; Likely <?php echo $likelyDays; ?>d &bull; Max <?php echo $maxDays; ?>d</span>
                                 </div>
                                 <span class="recent-estimate-pert"><?php echo number_format($pertDays, 1); ?>d PERT</span>
-                                <a href="feature-estimation.php?task_id=<?php echo (int) $estimate['task_id']; ?>" class="btn-estimate recent-estimate-action">
+                                <a href="feature-estimation.php?project_estimation_id=<?php echo (int) $estimate['project_id']; ?>" class="btn-estimate recent-estimate-action">
                                     Review Estimate
                                 </a>
                             </article>
