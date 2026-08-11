@@ -791,6 +791,13 @@ function projectTemplateCaptureProject(mysqli|PgsqlMysqliCompatConnection $conn,
                 $usageStmt->execute();
                 $usageStmt->close();
             }
+            $templateSnapshot = json_encode(projectTemplateFindById($conn, $templateId), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            $projectTemplateStmt = $conn->prepare('UPDATE projects SET project_template_id = ?, project_template_snapshot = ? WHERE id = ?');
+            if ($projectTemplateStmt !== false && $templateSnapshot !== false) {
+                $projectTemplateStmt->bind_param('isi', $templateId, $templateSnapshot, $projectId);
+                $projectTemplateStmt->execute();
+                $projectTemplateStmt->close();
+            }
             return;
         }
     }
@@ -860,5 +867,15 @@ function projectTemplateCaptureProject(mysqli|PgsqlMysqliCompatConnection $conn,
             $projectId
         );
     $stmt->execute();
+    $templateId = (int) ($stmt->insert_id ?? 0);
     $stmt->close();
+    if ($templateId > 0) {
+        $templateSnapshot = json_encode(projectTemplateFindById($conn, $templateId), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        $projectTemplateStmt = $conn->prepare('UPDATE projects SET project_template_id = ?, project_template_snapshot = ? WHERE id = ?');
+        if ($projectTemplateStmt !== false && $templateSnapshot !== false) {
+            $projectTemplateStmt->bind_param('isi', $templateId, $templateSnapshot, $projectId);
+            $projectTemplateStmt->execute();
+            $projectTemplateStmt->close();
+        }
+    }
 }

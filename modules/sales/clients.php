@@ -11093,6 +11093,32 @@ if (addClientModalElement && addClientForm) {
         return input;
     }
 
+    function splitRequestedFeatureInput(value) {
+        const rawValue = String(value || '').trim();
+        if (rawValue === '') {
+            return [];
+        }
+
+        const delimited = rawValue
+            .split(/[\r\n,;|]+/)
+            .map((feature) => feature.trim().replace(/\s+/g, ' '))
+            .filter(Boolean);
+        if (delimited.length > 1) {
+            return delimited;
+        }
+
+        const words = rawValue.replace(/\s+/g, ' ').split(' ').filter(Boolean);
+        const firstCompactIndex = words.findIndex((word, index) => index > 0 && /^[a-z]+[\w-]*\d+$/i.test(word));
+        if (firstCompactIndex > 0) {
+            return [
+                words.slice(0, firstCompactIndex).join(' '),
+                ...words.slice(firstCompactIndex)
+            ].filter(Boolean);
+        }
+
+        return [rawValue.replace(/\s+/g, ' ')];
+    }
+
     function getRequestedFeatureValues() {
         if (!requestedFeatureList) {
             return [];
@@ -11111,7 +11137,20 @@ if (addClientModalElement && addClientForm) {
 
     function addRequestedFeatureValue(value, focusInput = true) {
         const input = requestedFeatureList?.querySelector('[data-requested-feature-input]');
-        const normalizedValue = String(value || '').trim().replace(/\s+/g, ' ');
+        const parts = splitRequestedFeatureInput(value);
+        if (parts.length > 1) {
+            let addedAny = false;
+            parts.forEach((part) => {
+                addedAny = addRequestedFeatureValue(part, false) || addedAny;
+            });
+            input && (input.value = '');
+            if (focusInput) {
+                setClientFeatureEditorExpanded(true, true);
+            }
+            return addedAny;
+        }
+
+        const normalizedValue = parts[0] || '';
         if (!requestedFeatureList || !input || !normalizedValue) {
             return false;
         }
@@ -11741,9 +11780,7 @@ if (addClientModalElement && addClientForm) {
         }
 
         const seen = new Set();
-        const features = String(rawValue || '')
-            .split(/\r?\n/)
-            .map((feature) => feature.trim())
+        const features = splitRequestedFeatureInput(rawValue)
             .filter((feature) => {
                 const normalized = normalizeTemplateType(feature);
                 if (!normalized || seen.has(normalized)) {
@@ -12716,6 +12753,32 @@ if (addClientModalElement && addClientForm) {
         requestedFeatureList.addEventListener('input', (event) => {
             if (event.target.matches('[data-requested-feature-input]')) {
                 event.target.setCustomValidity('');
+            }
+        });
+
+        requestedFeatureList.addEventListener('paste', (event) => {
+            const input = event.target.closest('[data-requested-feature-input]');
+            if (!input) {
+                return;
+            }
+
+            const pastedText = event.clipboardData?.getData('text') || '';
+            const parts = splitRequestedFeatureInput(pastedText);
+            if (parts.length <= 1) {
+                return;
+            }
+
+            event.preventDefault();
+            let addedAny = false;
+            parts.forEach((part) => {
+                addedAny = addRequestedFeatureValue(part, false) || addedAny;
+            });
+            input.value = '';
+            if (addedAny) {
+                formTouched = true;
+                hideUnsavedClosePanel();
+                updateDraftStatus(false);
+                setClientFeatureEditorExpanded(true, true);
             }
         });
 
