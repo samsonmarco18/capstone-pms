@@ -610,6 +610,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     ]);
 
                     salesClientsCreateSharedProjectFolder($conn, (int) $clientId, (int) $projectId, (int) $clientFolderId, $projectName, (int) $user['id']);
+                    projectTemplateCaptureProject($conn, (int) $projectId);
+                    $learnedProjectTemplate = projectTemplateFindByType($conn, $projectType);
+                    if ($learnedProjectTemplate) {
+                        $learnedTemplateId = (int) ($learnedProjectTemplate['id'] ?? 0);
+                        $learnedTemplateSnapshot = json_encode($learnedProjectTemplate, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+                        $templateUpdateStmt = $conn->prepare('UPDATE projects SET project_template_id = ?, project_template_snapshot = ? WHERE id = ?');
+                        if ($templateUpdateStmt !== false) {
+                            $templateUpdateStmt->bind_param('isi', $learnedTemplateId, $learnedTemplateSnapshot, $projectId);
+                            $templateUpdateStmt->execute();
+                            $templateUpdateStmt->close();
+                        }
+                    }
                 }
 
                 $conn->commit();
@@ -765,6 +777,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         (int) $user['id']
                     );
                     salesClientsCreateSharedProjectFolder($conn, $clientId, $projectId, $clientFolderId, $projectName, (int) $user['id']);
+                    projectTemplateCaptureProject($conn, (int) $projectId);
+                    $learnedProjectTemplate = projectTemplateFindByType($conn, $projectType);
+                    if ($learnedProjectTemplate) {
+                        $learnedTemplateId = (int) ($learnedProjectTemplate['id'] ?? 0);
+                        $learnedTemplateSnapshot = json_encode($learnedProjectTemplate, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+                        $templateUpdateStmt = $conn->prepare('UPDATE projects SET project_template_id = ?, project_template_snapshot = ? WHERE id = ?');
+                        if ($templateUpdateStmt !== false) {
+                            $templateUpdateStmt->bind_param('isi', $learnedTemplateId, $learnedTemplateSnapshot, $projectId);
+                            $templateUpdateStmt->execute();
+                            $templateUpdateStmt->close();
+                        }
+                    }
 
                     if ($timelineEnd !== null) {
                         $deadlineStmt = $conn->prepare('UPDATE clients SET deadline = COALESCE(deadline, ?) WHERE id = ?');
@@ -8688,7 +8712,7 @@ const salesTemplateAssistant = (() => {
         const choices = matches.map(template => ({
             label:template.project_type,
             field:'project_type',
-            version:`V${Number(template.template_version || 1)}${Number(template.template_version || 1) === Math.max(...projectTemplates.filter(item => item.project_type === template.project_type).map(item => Number(item.template_version || 1))) ? ' · Latest' : ''}`,
+            version:formatTemplateVersionLabel(template),
             apply:async () => {
                 const changed = await setField('project_type', template.project_type);
                 if (changed === false) return false;
@@ -9082,6 +9106,19 @@ function normalizeSalesTemplateType(value) {
         .toLowerCase();
 }
 
+function latestTemplateVersionForType(projectType) {
+    const normalizedType = normalizeSalesTemplateType(projectType);
+    const versions = projectTemplates
+        .filter((template) => normalizeSalesTemplateType(template.project_type) === normalizedType)
+        .map((template) => Number(template.template_version || 1));
+    return versions.length ? Math.max(...versions) : 1;
+}
+
+function formatTemplateVersionLabel(template, latestSuffix = ' · Latest') {
+    const version = Number(template?.template_version || 1);
+    return `V${version}${version === latestTemplateVersionForType(template?.project_type) ? latestSuffix : ''}`;
+}
+
 function escapeClientHtml(value) {
     const div = document.createElement('div');
     div.textContent = String(value ?? '');
@@ -9243,7 +9280,7 @@ function initProjectTemplatePicker(picker) {
             .filter((template) => normalizeSalesTemplateType(template.project_type) === needle)
             .sort((a, b) => Number(b.template_version || 1) - Number(a.template_version || 1));
         versionSelect.innerHTML = versions.map((template) =>
-            `<option value="${Number(template.id || 0)}">V${Number(template.template_version || 1)}${Number(template.template_version || 1) === Math.max(...versions.map(item => Number(item.template_version || 1))) ? ' (Latest)' : ''}</option>`
+            `<option value="${Number(template.id || 0)}">${formatTemplateVersionLabel(template, ' (Latest)')}</option>`
         ).join('');
         versionSelect.hidden = versions.length < 2;
         if (versions.length === 1) versionSelect.value = String(versions[0].id || '');
@@ -10835,7 +10872,7 @@ if (addClientModalElement && addClientForm) {
     }
 
     function normalizeTemplateType(value) {
-        return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+        return normalizeSalesTemplateType(value);
     }
 
     function formatPeso(value) {

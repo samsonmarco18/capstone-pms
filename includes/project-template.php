@@ -663,6 +663,17 @@ function projectTemplateFindByType(mysqli|PgsqlMysqliCompatConnection $conn, str
         return null;
     }
 
+    $stmt = $conn->prepare('SELECT * FROM project_templates WHERE normalized_type = ? ORDER BY template_version DESC, usage_count DESC, id DESC LIMIT 1');
+    if ($stmt !== false) {
+        $stmt->bind_param('s', $needle);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc() ?: null;
+        $stmt->close();
+        if ($row) {
+            return projectTemplatePayload($row);
+        }
+    }
+
     $best = null;
     foreach (projectTemplateAll($conn) as $template) {
         $candidate = projectTemplateNormalizeType((string) $template['project_type']);
@@ -734,7 +745,6 @@ function projectTemplateCaptureProject(mysqli|PgsqlMysqliCompatConnection $conn,
     }
 
     $features = trim((string) ($project['requested_features'] ?? ''));
-    $features = preg_replace('/\R{2,}Additional Requirements:.*/is', '', $features) ?: $features;
     $methodology = trim((string) ($project['methodology_template'] ?? '')) ?: 'Agile';
     $budget = (float) ($project['sales_budget'] ?? 0);
     $timelineWeeks = 0;
@@ -787,9 +797,9 @@ function projectTemplateCaptureProject(mysqli|PgsqlMysqliCompatConnection $conn,
 
     $nextVersion = 1;
     if ($existing) {
-        $versionStmt = $conn->prepare('SELECT MAX(template_version) AS max_version FROM project_templates WHERE project_type = ?');
+        $versionStmt = $conn->prepare('SELECT MAX(template_version) AS max_version FROM project_templates WHERE normalized_type = ?');
         if ($versionStmt !== false) {
-            $versionStmt->bind_param('s', $projectType);
+            $versionStmt->bind_param('s', $normalized);
             $versionStmt->execute();
             $versionRow = $versionStmt->get_result()->fetch_assoc();
             $nextVersion = max(2, (int) ($versionRow['max_version'] ?? 1) + 1);
