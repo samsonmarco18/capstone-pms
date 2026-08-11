@@ -1116,6 +1116,54 @@ unset($_SESSION['success'], $_SESSION['error']);
     transform: none !important;
 }
 
+#addDeveloperModal .modal-content {
+    background: #ffffff;
+    color: #0f2a40;
+}
+
+#addDeveloperModal .modal-header {
+    background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-dark) 100%);
+    color: #ffffff;
+}
+
+#addDeveloperModal .modal-title,
+#addDeveloperModal .modal-title i {
+    color: #ffffff !important;
+}
+
+#addDeveloperModal .modal-body,
+#addDeveloperModal .modal-footer {
+    background: #ffffff;
+    color: #0f2a40;
+}
+
+#addDeveloperModal .form-label {
+    color: #0f2a40;
+    font-weight: 700;
+}
+
+#addDeveloperModal .form-select,
+#addDeveloperModal #reallocation_task_list {
+    background-color: #ffffff;
+    border-color: #cfe0ee;
+    color: #14304a;
+}
+
+#addDeveloperModal .text-muted,
+#addDeveloperModal small {
+    color: #526f8a !important;
+}
+
+#addDeveloperModal .btn-secondary-modern {
+    background: #eef3f8;
+    color: #14304a;
+}
+
+#addDeveloperModal .btn-secondary-modern:disabled,
+#addDeveloperModal .btn-primary-modern:disabled {
+    opacity: 0.65;
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .container-fluid {
     background: #06111e;
