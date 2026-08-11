@@ -4279,9 +4279,9 @@ body.artifact-drawer-open {
                         <?php endif; ?>
                         <div class="kanban-card-footer">
                             <div class="kanban-card-actions">
-                                <button class="btn-action" onclick="openPullRequestModal(<?php echo $task['id']; ?>)" data-bs-toggle="tooltip" title="<?php echo $userDepartmentCanonical === 'UI/UX' ? 'Submit the saved design handoff for workflow review.' : 'Submit this task\'s pull request for workflow review.'; ?>">
-                                    <i class="fas <?php echo $userDepartmentCanonical === 'UI/UX' ? 'fa-paper-plane' : 'fa-code-pull-request'; ?>"></i>
-                                    <?php echo $userDepartmentCanonical === 'UI/UX' ? 'Submit Design' : 'Submit PR'; ?>
+                                <button class="btn-action" onclick="<?php echo $isQaDepartmentDeveloper ? 'openQaTestingSubmissionModal' : 'openPullRequestModal'; ?>(<?php echo $task['id']; ?>)" data-bs-toggle="tooltip" title="<?php echo $isQaDepartmentDeveloper ? 'Submit testing evidence and remarks to the QA SUL.' : ($userDepartmentCanonical === 'UI/UX' ? 'Submit the saved design handoff for workflow review.' : 'Submit this task\'s pull request for workflow review.'); ?>">
+                                    <i class="fas <?php echo $isQaDepartmentDeveloper ? 'fa-vial-circle-check' : ($userDepartmentCanonical === 'UI/UX' ? 'fa-paper-plane' : 'fa-code-pull-request'); ?>"></i>
+                                    <?php echo $isQaDepartmentDeveloper ? 'Submit Testing' : ($userDepartmentCanonical === 'UI/UX' ? 'Submit Design' : 'Submit PR'); ?>
                                 </button>
                                 <button class="btn-action" onclick="reviewTask(<?php echo $task['id']; ?>)" data-bs-toggle="tooltip" title="<?php echo $isQaDepartmentDeveloper ? 'Move this task back to Ready for Testing.' : 'Move this task back to To Do if work has not started cleanly.'; ?>">
                                     <i class="fas fa-undo"></i> Back
@@ -4736,9 +4736,9 @@ function transformKanbanCardForProgressColumn(card, taskId) {
     footer.innerHTML = `
         ${dueHtml}
         <div class="kanban-card-actions">
-            <button class="btn-action" onclick="openPullRequestModal(${taskId})" data-bs-toggle="tooltip" title="${currentDepartmentCanonical === 'UI/UX' ? "Submit the saved design handoff for workflow review." : "Submit this task's pull request for workflow review."}">
-                <i class="fas ${currentDepartmentCanonical === 'UI/UX' ? 'fa-paper-plane' : 'fa-code-pull-request'}"></i>
-                ${currentDepartmentCanonical === 'UI/UX' ? 'Submit Design' : 'Submit PR'}
+            <button class="btn-action" onclick="${isQaDepartment ? 'openQaTestingSubmissionModal' : 'openPullRequestModal'}(${taskId})" data-bs-toggle="tooltip" title="${isQaDepartment ? 'Submit testing evidence and remarks to the QA SUL.' : (currentDepartmentCanonical === 'UI/UX' ? "Submit the saved design handoff for workflow review." : "Submit this task's pull request for workflow review.")}">
+                <i class="fas ${isQaDepartment ? 'fa-vial-circle-check' : (currentDepartmentCanonical === 'UI/UX' ? 'fa-paper-plane' : 'fa-code-pull-request')}"></i>
+                ${isQaDepartment ? 'Submit Testing' : (currentDepartmentCanonical === 'UI/UX' ? 'Submit Design' : 'Submit PR')}
             </button>
             <button class="btn-action" onclick="reviewTask(${taskId})" data-bs-toggle="tooltip" title="${isQaDepartment ? 'Move this task back to Ready for Testing.' : 'Move this task back to To Do if work has not started cleanly.'}">
                 <i class="fas fa-undo"></i> Back
@@ -5261,6 +5261,142 @@ function openPullRequestModal(taskId) {
             const message = xhr.responseJSON?.error || 'Unable to prepare the pull request form';
             modalBody.innerHTML = `<div class="alert alert-danger mb-0">${escapeHtml(message)}</div>`;
         }
+    });
+}
+
+function openQaTestingSubmissionModal(taskId) {
+    const modalElement = document.getElementById('pullRequestModal');
+    const modalBody = document.getElementById('pullRequestModalBody');
+    const modalTitle = document.getElementById('pullRequestModalTitle');
+    const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
+
+    modalTitle.innerHTML = '<i class="fas fa-vial-circle-check me-2"></i>Submit Testing';
+    modalBody.innerHTML = `
+        <div class="text-center py-4">
+            <div class="spinner-border text-primary" role="status" aria-hidden="true"></div>
+            <p class="text-muted mt-3 mb-0">Preparing testing submission...</p>
+        </div>
+    `;
+    modal.show();
+
+    $.ajax({
+        url: '../../api/get-task-details.php',
+        method: 'GET',
+        data: { id: taskId },
+        success: function(response) {
+            const task = typeof response === 'string' ? JSON.parse(response) : response;
+            const latestGit = task.latest_git_update || {};
+            const branchValue = latestGit.branch_name || '';
+            const repositoryValue = latestGit.repository_url || '';
+            const pullRequestValue = latestGit.pull_request_url || '';
+            const repositoryBranches = Array.isArray(task.repository_branches) ? task.repository_branches : [];
+            const branchOptions = repositoryBranches.map(branch => `
+                <option
+                    value="${escapeAttribute(branch.name || '')}"
+                    data-repository-url="${escapeAttribute(branch.repository_url || '')}"
+                    ${String(branch.name || '') === String(branchValue) ? 'selected' : ''}
+                >${escapeHtml(branch.name || 'Unnamed branch')}${repositoryBranches.some(other => other.repository_id !== branch.repository_id) ? ` - ${escapeHtml(branch.repository_name || 'Repository')}` : ''}</option>
+            `).join('');
+            const statusLabel = String(task.status || 'testing').replaceAll('_', ' ');
+            modalTitle.innerHTML = '<i class="fas fa-vial-circle-check me-2"></i>Submit Testing';
+            modalBody.innerHTML = `
+                <div class="pr-task-context">
+                    <span class="pr-task-context__icon"><i class="fas fa-flask"></i></span>
+                    <div class="pr-task-context__copy">
+                        <h6>${escapeHtml(task.title || 'QA task')}</h6>
+                        <p>${escapeHtml(task.project_name || 'Project')} &middot; ${escapeHtml(statusLabel)}</p>
+                    </div>
+                </div>
+                <form class="pr-form-sheet" id="qaTestingSubmissionForm" onsubmit="submitQaTestingSubmission(event, ${Number(taskId)})">
+                    <div class="pr-form-body">
+                        <div class="pr-form-intro">
+                            <strong>Send testing results for QA SUL review</strong>
+                            <span>Attach screenshots or pictures, then add the evidence details and remarks.</span>
+                        </div>
+                        <div class="pr-section-divider">
+                            <strong>Pull request</strong>
+                            <span>Connect the implementation branch and pull request used during testing.</span>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label" for="qaBranchName">Branch name</label>
+                                <select id="qaBranchName" class="form-select" required ${repositoryBranches.length ? '' : 'disabled'}>
+                                    <option value="">${repositoryBranches.length ? 'Select an available feature branch' : 'No feature branches available'}</option>
+                                    ${branchOptions}
+                                </select>
+                                <small class="pr-field-help">${repositoryBranches.length ? 'Choose a branch prepared for this project.' : 'Ask the Architect to prepare the project repository and feature branches.'}</small>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="qaPullRequestUrl">Pull request URL</label>
+                                <input id="qaPullRequestUrl" class="form-control" type="url" value="${escapeAttribute(pullRequestValue)}" placeholder="https://github.com/.../pull/..." autocomplete="url" required>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label" for="qaRepositoryUrl">Repository URL</label>
+                                <input id="qaRepositoryUrl" class="form-control" type="url" value="${escapeAttribute(repositoryValue)}" placeholder="https://github.com/organization/repository" autocomplete="url">
+                            </div>
+                        </div>
+                        <div class="pr-section-divider">
+                            <strong>Testing Evidence</strong>
+                            <span>Upload one or more screenshots when the result needs multiple proof images.</span>
+                        </div>
+                        <div>
+                            <label class="form-label" for="qaEvidencePictures">Upload picture</label>
+                            <div class="developer-upload-field">
+                                <label class="developer-upload-button" for="qaEvidencePictures">
+                                    <i class="fas fa-images" aria-hidden="true"></i>
+                                    <span>Choose Pictures</span>
+                                </label>
+                                <span class="developer-upload-summary" data-qa-evidence-summary aria-live="polite">No pictures chosen</span>
+                                <input id="qaEvidencePictures" class="visually-hidden" type="file" accept="image/*" multiple>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="form-label" for="qaEvidenceDetails">Evidence details</label>
+                            <textarea id="qaEvidenceDetails" class="form-control" rows="4" placeholder="Describe the tested scenarios, expected result, actual result, and screenshot context." required></textarea>
+                        </div>
+                        <div>
+                            <label class="form-label" for="qaEvidenceRemarks">Remarks</label>
+                            <textarea id="qaEvidenceRemarks" class="form-control" rows="3" placeholder="Add final QA remarks, issues found, blockers, or approval notes." required></textarea>
+                            <small class="pr-field-help">Submitting moves this task to QA SUL Review and notifies the QA Service Unit Leader.</small>
+                        </div>
+                    </div>
+                    <div class="pr-form-footer">
+                        <span class="pr-form-footer__notice"><i class="fas fa-circle-info"></i> Multiple pictures are saved as separate QA evidence items.</span>
+                        <div class="pr-form-footer__actions">
+                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-primary" id="submitQaTestingButton" ${!repositoryBranches.length ? 'disabled' : ''}>
+                                <i class="fas fa-paper-plane"></i> Submit Testing
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            `;
+            const branchSelect = document.getElementById('qaBranchName');
+            const syncSelectedRepository = () => {
+                const selectedOption = branchSelect?.selectedOptions?.[0];
+                const selectedRepositoryUrl = selectedOption?.dataset?.repositoryUrl || repositoryValue;
+                const repositoryInput = document.getElementById('qaRepositoryUrl');
+                if (repositoryInput) repositoryInput.value = selectedRepositoryUrl;
+            };
+            branchSelect?.addEventListener('change', syncSelectedRepository);
+            syncSelectedRepository();
+            bindQaEvidencePictureSummary();
+        },
+        error: function(xhr) {
+            const message = xhr.responseJSON?.error || 'Unable to prepare the testing submission form';
+            modalBody.innerHTML = `<div class="alert alert-danger mb-0">${escapeHtml(message)}</div>`;
+        }
+    });
+}
+
+function bindQaEvidencePictureSummary() {
+    const input = document.getElementById('qaEvidencePictures');
+    const summary = document.querySelector('[data-qa-evidence-summary]');
+    input?.addEventListener('change', () => {
+        const files = Array.from(input.files || []);
+        summary.textContent = files.length
+            ? `${files.length} ${files.length === 1 ? 'picture' : 'pictures'} chosen`
+            : 'No pictures chosen';
     });
 }
 
@@ -6245,6 +6381,27 @@ function saveDepartmentArtifact(taskId, options = {}) {
     });
 }
 
+function saveQaEvidenceArtifact(taskId, payload = {}) {
+    const formData = new FormData();
+    formData.append('task_id', String(taskId));
+    formData.append('artifact_type', 'qa_note');
+    formData.append('title', payload.title || 'QA Testing Evidence');
+    formData.append('external_url', '');
+    formData.append('notes', payload.notes || '');
+    if (payload.file) {
+        formData.append('artifact_file', payload.file);
+    }
+
+    return $.ajax({
+        url: '../../api/add-department-artifact.php',
+        method: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        dataType: 'json'
+    });
+}
+
 async function submitDesignForReview(taskId) {
     const confirmed = typeof window.appConfirm === 'function'
         ? await window.appConfirm({
@@ -6268,6 +6425,108 @@ async function submitDesignForReview(taskId) {
     }
 
     await updateTaskStatus(taskId, 'for_review', { skipConfirm: true, openDetails: true });
+}
+
+async function submitQaTestingSubmission(event, taskId) {
+    event.preventDefault();
+
+    const form = event.currentTarget;
+    if (!form.reportValidity()) {
+        return;
+    }
+
+    const detailsInput = document.getElementById('qaEvidenceDetails');
+    const remarksInput = document.getElementById('qaEvidenceRemarks');
+    const fileInput = document.getElementById('qaEvidencePictures');
+    const branchName = String(document.getElementById('qaBranchName')?.value || '').trim();
+    const pullRequestUrl = String(document.getElementById('qaPullRequestUrl')?.value || '').trim();
+    const repositoryUrl = String(document.getElementById('qaRepositoryUrl')?.value || '').trim();
+    const details = String(detailsInput?.value || '').trim();
+    const remarks = String(remarksInput?.value || '').trim();
+    const files = Array.from(fileInput?.files || []);
+
+    if (!details) {
+        showTaskNotice('Submit Testing', 'Evidence details are required.', 'error');
+        detailsInput?.focus();
+        return;
+    }
+    if (!remarks) {
+        showTaskNotice('Submit Testing', 'Remarks are required.', 'error');
+        remarksInput?.focus();
+        return;
+    }
+    if (!branchName) {
+        showTaskNotice('Submit Testing', 'Branch name is required.', 'error');
+        document.getElementById('qaBranchName')?.focus();
+        return;
+    }
+    if (!pullRequestUrl) {
+        showTaskNotice('Submit Testing', 'Pull request URL is required.', 'error');
+        document.getElementById('qaPullRequestUrl')?.focus();
+        return;
+    }
+
+    const confirmed = typeof window.appConfirm === 'function'
+        ? await window.appConfirm({
+            title: 'Submit Testing',
+            subject: 'Send testing results to the QA SUL?',
+            message: 'Your evidence details, remarks, and selected pictures will be saved before the task moves to QA SUL Review.',
+            icon: 'fas fa-vial-circle-check fa-lg',
+            confirmIcon: 'fas fa-paper-plane',
+            confirmText: 'Submit Testing'
+        })
+        : window.confirm('Send testing results to the QA SUL?');
+    if (!confirmed) {
+        return;
+    }
+
+    const submitButton = document.getElementById('submitQaTestingButton');
+    const originalButtonHtml = submitButton?.innerHTML || '';
+    if (submitButton) {
+        submitButton.disabled = true;
+        submitButton.innerHTML = '<span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Submitting...';
+    }
+
+    try {
+        await $.ajax({
+            url: '../../api/add-task-git-update.php',
+            method: 'POST',
+            dataType: 'json',
+            data: {
+                task_id: taskId,
+                git_action: 'note',
+                branch_name: branchName,
+                pull_request_url: pullRequestUrl,
+                repository_url: repositoryUrl,
+                status: 'active',
+                notes: `QA testing reference.\n\nEvidence details:\n${details}\n\nRemarks:\n${remarks}`
+            }
+        });
+
+        await saveQaEvidenceArtifact(taskId, {
+            title: 'QA Testing Details and Remarks',
+            notes: `Evidence details:\n${details}\n\nRemarks:\n${remarks}`
+        });
+
+        for (const [index, file] of files.entries()) {
+            await saveQaEvidenceArtifact(taskId, {
+                title: files.length > 1 ? `QA Evidence Picture ${index + 1}` : 'QA Evidence Picture',
+                notes: `Evidence details:\n${details}\n\nRemarks:\n${remarks}`,
+                file
+            });
+        }
+
+        await updateTaskStatus(taskId, 'for_review', { skipConfirm: true, skipDetails: true });
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('pullRequestModal')).hide();
+        moveKanbanTaskToReview(taskId);
+        showTaskNotice('Submit Testing', 'Testing results submitted to the QA SUL for review.');
+    } catch (xhr) {
+        showTaskNotice('Submit Testing', xhr.responseJSON?.error || 'Unable to submit testing evidence.', 'error');
+        if (submitButton) {
+            submitButton.disabled = false;
+            submitButton.innerHTML = originalButtonHtml;
+        }
+    }
 }
 
 async function submitQaResultsForReview(taskId) {

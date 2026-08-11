@@ -167,7 +167,36 @@ $approvalProjects = $conn->query("
 
 $readyTasks = $conn->query("
     SELECT t.*, p.name AS project_name, u.full_name AS developer_name,
-           latest_git.branch_name, latest_git.commit_hash, latest_git.pull_request_url, latest_git.repository_url
+           latest_git.branch_name, latest_git.commit_hash, latest_git.pull_request_url, latest_git.repository_url,
+           COALESCE((
+               SELECT pr.id
+               FROM project_repositories pr
+               INNER JOIN repository_branches rb ON rb.repository_id = pr.id
+               WHERE pr.project_id = t.project_id
+                 AND pr.repository_status = 'active'
+                 AND rb.branch_status != 'deleted'
+                 AND rb.name = latest_git.branch_name
+               ORDER BY pr.id ASC, rb.id ASC
+               LIMIT 1
+           ), (
+               SELECT pr.id
+               FROM project_repositories pr
+               WHERE pr.project_id = t.project_id
+                 AND pr.repository_status = 'active'
+               ORDER BY COALESCE(pr.last_activity_at, pr.updated_at) DESC, pr.id ASC
+               LIMIT 1
+           )) AS review_repository_id,
+           (
+               SELECT rb.id
+               FROM project_repositories pr
+               INNER JOIN repository_branches rb ON rb.repository_id = pr.id
+               WHERE pr.project_id = t.project_id
+                 AND pr.repository_status = 'active'
+                 AND rb.branch_status != 'deleted'
+                 AND rb.name = latest_git.branch_name
+               ORDER BY pr.id ASC, rb.id ASC
+               LIMIT 1
+           ) AS review_branch_id
     FROM tasks t
     JOIN projects p ON p.id = t.project_id
     LEFT JOIN users u ON u.id = t.assigned_to
@@ -1145,6 +1174,17 @@ body.reopen-drawer-open {
         <?php elseif($readyTasks && $readyTaskCount > 0): ?>
             <div class="merge-task-list">
                 <?php while($task = $readyTasks->fetch_assoc()): ?>
+                    <?php
+                        $taskProjectId = (int) ($task['project_id'] ?? $selectedProjectId);
+                        $reviewRepositoryId = (int) ($task['review_repository_id'] ?? 0);
+                        $reviewBranchId = (int) ($task['review_branch_id'] ?? 0);
+                        $branchBrowserUrl = $reviewRepositoryId > 0 && $reviewBranchId > 0
+                            ? vcBuildRepositoryBrowserUrl($taskProjectId, $reviewRepositoryId, $reviewBranchId)
+                            : '';
+                        $repositoryBrowserUrl = $reviewRepositoryId > 0
+                            ? vcBuildRepositoryBrowserUrl($taskProjectId, $reviewRepositoryId)
+                            : '';
+                    ?>
                     <form
                         method="POST"
                         class="merge-task-card"
@@ -1164,10 +1204,22 @@ body.reopen-drawer-open {
                                 <span class="qa-ready-badge"><i class="fas fa-shield-check" aria-hidden="true"></i> QA passed</span>
                             </div>
                             <div class="git-reference-list">
-                                <?php if (!empty($task['branch_name'])): ?><span class="git-reference"><i class="fas fa-code-branch"></i> Branch: <?php echo htmlspecialchars((string) $task['branch_name']); ?></span><?php endif; ?>
+                                <?php if (!empty($task['branch_name'])): ?>
+                                    <?php if ($branchBrowserUrl !== ''): ?>
+                                        <a class="git-reference" href="<?php echo htmlspecialchars($branchBrowserUrl); ?>"><i class="fas fa-code-branch"></i> Branch: <?php echo htmlspecialchars((string) $task['branch_name']); ?></a>
+                                    <?php else: ?>
+                                        <span class="git-reference"><i class="fas fa-code-branch"></i> Branch: <?php echo htmlspecialchars((string) $task['branch_name']); ?></span>
+                                    <?php endif; ?>
+                                <?php endif; ?>
                                 <?php if (!empty($task['commit_hash'])): ?><span class="git-reference"><i class="fas fa-code-commit"></i> Commit: <?php echo htmlspecialchars(substr((string) $task['commit_hash'], 0, 7)); ?></span><?php endif; ?>
-                                <?php if (!empty($task['pull_request_url'])): ?><a class="git-reference" href="<?php echo htmlspecialchars((string) $task['pull_request_url']); ?>" target="_blank" rel="noopener"><i class="fas fa-arrow-up-right-from-square"></i> Pull Request</a><?php endif; ?>
-                                <?php if (!empty($task['repository_url'])): ?><a class="git-reference" href="<?php echo htmlspecialchars((string) $task['repository_url']); ?>" target="_blank" rel="noopener"><i class="fas fa-database"></i> Repository</a><?php endif; ?>
+                                <?php if (empty($task['branch_name']) && !empty($task['pull_request_url']) && $branchBrowserUrl !== ''): ?><a class="git-reference" href="<?php echo htmlspecialchars($branchBrowserUrl); ?>"><i class="fas fa-code-branch"></i> Branch</a><?php endif; ?>
+                                <?php if (!empty($task['repository_url']) || $repositoryBrowserUrl !== ''): ?>
+                                    <?php if ($repositoryBrowserUrl !== ''): ?>
+                                        <a class="git-reference" href="<?php echo htmlspecialchars($repositoryBrowserUrl); ?>"><i class="fas fa-database"></i> Repository</a>
+                                    <?php else: ?>
+                                        <span class="git-reference"><i class="fas fa-database"></i> Repository</span>
+                                    <?php endif; ?>
+                                <?php endif; ?>
                             </div>
                         </div>
                         <div class="merge-task-action">
