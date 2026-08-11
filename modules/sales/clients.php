@@ -5626,6 +5626,18 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
     background: #071321;
     border-color: rgba(31, 99, 146, 0.24);
     color: #d7e4f2;
+    color-scheme: dark;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern input[type="date"]::-webkit-calendar-picker-indicator,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern input[type="time"]::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 0.9;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern input[type="date"]::-webkit-calendar-picker-indicator:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern input[type="time"]::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-input input:focus,
