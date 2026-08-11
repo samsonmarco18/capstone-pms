@@ -983,6 +983,54 @@ unset($_SESSION['success'], $_SESSION['error']);
     border-top: 1px solid var(--gray-200);
 }
 
+#addDeveloperModal .modal-content {
+    background: #ffffff;
+    color: #0f2a40;
+}
+
+#addDeveloperModal .modal-header {
+    background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-dark) 100%);
+    color: #ffffff;
+}
+
+#addDeveloperModal .modal-title,
+#addDeveloperModal .modal-title i {
+    color: #ffffff !important;
+}
+
+#addDeveloperModal .modal-body,
+#addDeveloperModal .modal-footer {
+    background: #ffffff;
+    color: #0f2a40;
+}
+
+#addDeveloperModal .form-label {
+    color: #0f2a40;
+    font-weight: 700;
+}
+
+#addDeveloperModal .form-select,
+#addDeveloperModal #reallocation_task_list {
+    background-color: #ffffff;
+    border-color: #cfe0ee;
+    color: #14304a;
+}
+
+#addDeveloperModal .text-muted,
+#addDeveloperModal small {
+    color: #526f8a !important;
+}
+
+#addDeveloperModal .btn-secondary-modern {
+    background: #eef3f8;
+    color: #14304a;
+}
+
+#addDeveloperModal .btn-secondary-modern:disabled,
+#addDeveloperModal .btn-primary-modern:disabled {
+    opacity: 0.65;
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .container-fluid {
     background: #06111e;
@@ -1105,6 +1153,57 @@ unset($_SESSION['success'], $_SESSION['error']);
     background-color: #071321;
     border-color: rgba(31, 99, 146, 0.28);
     color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addDeveloperModal .modal-content {
+    background: #071321 !important;
+    border: 1px solid rgba(125, 211, 252, 0.22) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addDeveloperModal .modal-header {
+    background: #0b2235 !important;
+    border-bottom: 1px solid rgba(125, 211, 252, 0.18) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addDeveloperModal .modal-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addDeveloperModal .modal-title i,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addDeveloperModal .form-label {
+    color: #e8f4ff !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addDeveloperModal .modal-body,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addDeveloperModal .modal-footer {
+    background: #071321 !important;
+    color: #d7e4f2 !important;
+    border-color: rgba(125, 211, 252, 0.18) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addDeveloperModal .form-select,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addDeveloperModal #reallocation_task_list {
+    background-color: #0a1b2c !important;
+    border-color: rgba(125, 211, 252, 0.28) !important;
+    color: #e8f4ff !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addDeveloperModal .form-select:disabled {
+    background-color: #102236 !important;
+    color: #9db6cf !important;
+    opacity: 1;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addDeveloperModal .text-muted,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addDeveloperModal small {
+    color: #a8bed5 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addDeveloperModal .btn-secondary-modern {
+    background: #e8edf3 !important;
+    color: #14304a !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addDeveloperModal .btn-primary-modern {
+    background: linear-gradient(135deg, #38bdf8 0%, #0ea5e9 100%) !important;
+    color: #031626 !important;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .nav-tabs {
