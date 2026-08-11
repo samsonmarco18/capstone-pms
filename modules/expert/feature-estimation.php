@@ -536,7 +536,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_project_estimati
                    THEN t.id ELSE NULL END) AS completed_features
         FROM tasks t
         LEFT JOIN feature_estimations fe
-          ON fe.task_id = t.id AND fe.expert_id = " . (int) $user['id'] . "
+          ON fe.task_id = t.id
+         AND (fe.expert_id = " . (int) $user['id'] . " OR fe.expert_id IS NULL OR fe.expert_id = t.assigned_to)
         WHERE t.project_id = {$projectId}
           AND t.assigned_to = " . (int) $user['id'] . "
           AND t.task_type = 'feature'
@@ -640,29 +641,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_save_feature_est
             throw new RuntimeException('No feature estimates were provided.');
         }
 
-        $assignedTaskResult = $conn->query("
-            SELECT id
-            FROM tasks t
-            JOIN projects p ON p.id = t.project_id
-            WHERE t.project_id = {$projectId}
-              AND t.assigned_to = " . (int) $user['id'] . "
-              AND t.task_type = 'feature'
-              AND t.status NOT IN ('completed', 'cancelled')
-              AND p.status != 'cancelled'
-        ");
-        $requiredTaskIds = [];
-        if ($assignedTaskResult) {
-            while ($assignedTask = $assignedTaskResult->fetch_assoc()) {
-                $requiredTaskIds[] = (int) $assignedTask['id'];
-            }
-        }
-        sort($requiredTaskIds);
-        $submittedTaskIds = $taskIds;
-        sort($submittedTaskIds);
-        if ($requiredTaskIds !== $submittedTaskIds) {
-            throw new RuntimeException('All assigned feature tasks must be completed and included in the final submission.');
-        }
-
         $taskResult = $conn->query("
             SELECT t.id, t.project_id, t.title, p.timeline_start, p.timeline_end
             FROM tasks t
@@ -671,6 +649,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_save_feature_est
               AND t.project_id = {$projectId}
               AND t.assigned_to = " . (int) $user['id'] . "
               AND t.task_type = 'feature'
+              AND t.status NOT IN ('completed', 'cancelled')
               AND p.status != 'cancelled'
         ");
         $taskLookup = [];
@@ -3949,12 +3928,7 @@ function mountFeatureEstimationEditors() {
 
     bulkForm.addEventListener('input', updateBulkSummary);
     bulkForm.addEventListener('change', updateBulkSummary);
-    bulkForm.addEventListener('submit', async (event) => {
-        if (bulkForm.dataset.featureConfirmed === '1') {
-            delete bulkForm.dataset.featureConfirmed;
-            return;
-        }
-
+    bulkForm.addEventListener('submit', (event) => {
         updateBulkSummary();
         const firstIncomplete = bulkForm.querySelector('[data-feature-bulk-row].is-incomplete');
         if (firstIncomplete) {
@@ -3962,69 +3936,6 @@ function mountFeatureEstimationEditors() {
             firstIncomplete.querySelector('textarea:invalid, input:invalid, textarea, input')?.focus();
             return;
         }
-
-        event.preventDefault();
-        const saveButton = bulkForm.querySelector('.feature-bulk-save-button');
-        const rows = Array.from(bulkForm.querySelectorAll('[data-feature-bulk-row]'));
-        const totalPert = Number(saveButton?.dataset.totalPert || 0);
-        const changedCount = Number(saveButton?.dataset.changedCount || 0);
-        const detailRows = rows.map((row) => {
-            const title = row.querySelector('.feature-bulk-name')?.textContent?.trim() || 'Feature';
-            const phase = row.querySelector('.feature-bulk-phase')?.textContent?.trim() || 'Roadmap phase';
-            const expectation = row.querySelector('textarea')?.value.trim() || 'No expectation';
-            const numberInputs = Array.from(row.querySelectorAll('input[type="number"]'));
-            const minDays = numberInputs[0]?.value || '—';
-            const likelyDays = numberInputs[1]?.value || '—';
-            const maxDays = numberInputs[2]?.value || '—';
-            const schedule = row.querySelector('.feature-bulk-schedule')?.textContent?.replace(/\s+/g, ' ').trim() || 'Not scheduled';
-            const pert = row.querySelector('[data-feature-bulk-pert]')?.textContent?.trim() || '—';
-            return `
-                <tr>
-                    <td><strong>${escapeHtml(title)}</strong><small>${escapeHtml(phase)}</small></td>
-                    <td>${escapeHtml(expectation)}</td>
-                    <td><strong>${escapeHtml(`${minDays} / ${likelyDays} / ${maxDays} days`)}</strong><small>Min / likely / max · PERT ${escapeHtml(pert)}</small></td>
-                    <td>${escapeHtml(schedule)}</td>
-                </tr>
-            `;
-        }).join('');
-
-        let confirmed = true;
-        if (typeof window.appConfirm === 'function') {
-            const confirmModal = document.getElementById('appConfirmModal');
-            confirmModal?.classList.add('feature-estimate-confirm-modal');
-            const confirmation = window.appConfirm({
-                title: 'Save Feature Estimates',
-                titleIcon: 'fas fa-list-check',
-                subject: `Save all ${rows.length} completed feature estimates?`,
-                message: 'These estimates will be validated and saved. Use the Project Cost Summary for the final submission to Sales.',
-                icon: 'fas fa-table-list',
-                confirmIcon: 'fas fa-paper-plane',
-                confirmText: 'Save Estimates',
-                cancelText: 'Continue Editing'
-            });
-            const message = document.getElementById('appConfirmMessage');
-            if (message) {
-                message.innerHTML = `
-                    <div class="feature-save-confirm-overview">
-                        <span>${rows.length} features · ${changedCount} edited</span>
-                        <strong>${totalPert.toFixed(1)} total PERT days</strong>
-                    </div>
-                    <div class="feature-save-confirm-table-wrap">
-                        <table class="feature-save-confirm-table">
-                            <thead>
-                                <tr><th>Feature</th><th>Expectation</th><th>Estimate</th><th>Schedule</th></tr>
-                            </thead>
-                            <tbody>${detailRows}</tbody>
-                        </table>
-                    </div>
-                `;
-            }
-            confirmed = await confirmation;
-            confirmModal?.classList.remove('feature-estimate-confirm-modal');
-        } else {
-            confirmed = window.confirm(`Save all ${rows.length} feature estimates?`);
-        }
-        if (!confirmed) return;
 
         try {
             window.sessionStorage.setItem('evortix.expert.estimation.scroll', JSON.stringify({
@@ -4034,8 +3945,12 @@ function mountFeatureEstimationEditors() {
         } catch (error) {
             // Saving remains available when browser storage is unavailable.
         }
-        bulkForm.dataset.featureConfirmed = '1';
-        bulkForm.requestSubmit(saveButton || undefined);
+
+        const saveButton = bulkForm.querySelector('.feature-bulk-save-button');
+        if (saveButton) {
+            saveButton.disabled = true;
+            saveButton.innerHTML = '<i class="fas fa-circle-notch fa-spin" aria-hidden="true"></i><span>Saving Estimates...</span>';
+        }
     });
     updateBulkSummary();
     scheduleEvortixFeatureReview(projectId);
@@ -5688,3 +5603,5 @@ document.body.classList.add('expert-feature-estimation-page');
 </script>
 
 <?php include '../../includes/footer.php'; ?>
+
+

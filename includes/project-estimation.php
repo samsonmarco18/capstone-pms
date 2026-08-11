@@ -623,7 +623,7 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
             FROM tasks t
             LEFT JOIN feature_estimations fe
                 ON fe.task_id = t.id
-               AND fe.expert_id = " . (int) $user['id'] . "
+               AND (fe.expert_id = " . (int) $user['id'] . " OR fe.expert_id IS NULL OR fe.expert_id = t.assigned_to)
             WHERE t.project_id = {$selectedProjectId}
               AND t.assigned_to = " . (int) $user['id'] . "
               AND t.task_type = 'feature'
