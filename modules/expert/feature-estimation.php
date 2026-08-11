@@ -540,7 +540,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_project_estimati
         WHERE t.project_id = {$projectId}
           AND t.assigned_to = " . (int) $user['id'] . "
           AND t.task_type = 'feature'
-          AND t.status IN ('todo', 'in_review')
+          AND t.status NOT IN ('completed', 'cancelled')
     ")->fetch_assoc() ?: [];
     $requiredFeatureCount = (int) ($featureCompletion['total_features'] ?? 0);
     $completedFeatureCount = (int) ($featureCompletion['completed_features'] ?? 0);
@@ -591,7 +591,7 @@ $tasks = $conn->query("
     JOIN projects p ON t.project_id = p.id
     WHERE t.assigned_to = {$user['id']} 
       AND t.task_type = 'feature'
-      AND t.status IN ('todo', 'in_review')
+      AND t.status NOT IN ('completed', 'cancelled')
       AND p.status != 'cancelled'
     ORDER BY 
         CASE t.status WHEN 'todo' THEN 1 ELSE 2 END,
@@ -647,7 +647,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_save_feature_est
             WHERE t.project_id = {$projectId}
               AND t.assigned_to = " . (int) $user['id'] . "
               AND t.task_type = 'feature'
-              AND t.status = 'todo'
+              AND t.status NOT IN ('completed', 'cancelled')
               AND p.status != 'cancelled'
         ");
         $requiredTaskIds = [];

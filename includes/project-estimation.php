@@ -627,7 +627,7 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
             WHERE t.project_id = {$selectedProjectId}
               AND t.assigned_to = " . (int) $user['id'] . "
               AND t.task_type = 'feature'
-              AND t.status IN ('todo', 'in_review')
+              AND t.status NOT IN ('completed', 'cancelled')
         ");
         if ($featureProgressResult) {
             $featureProgressRow = $featureProgressResult->fetch_assoc() ?: [];
