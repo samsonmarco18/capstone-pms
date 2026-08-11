@@ -10795,6 +10795,7 @@ if (addClientModalElement && addClientForm) {
     const previousButton = addClientModalElement.querySelector('[data-client-prev]');
     const nextButton = addClientModalElement.querySelector('[data-client-next]');
     const submitButton = addClientModalElement.querySelector('[data-client-submit]');
+    const saveDraftButton = addClientModalElement.querySelector('[data-save-draft]');
     const generatedComplexityField = addClientModalElement.querySelector('[data-generated-complexity]');
     const closeButtons = Array.from(addClientModalElement.querySelectorAll('.add-client-close'));
     const draftStatus = addClientModalElement.querySelector('[data-draft-status]');
@@ -12098,6 +12099,7 @@ if (addClientModalElement && addClientForm) {
         recommendedFeatureTitles = new Set();
         templateApplyMessage = '';
         updateDraftStatus(true);
+        showClientStep(0);
     }
 
     function clearAddClientDraft() {
