@@ -9301,10 +9301,6 @@ function initProjectTemplatePicker(picker) {
     if (!input || !menu) {
         return;
     }
-    if (salesEvortixEnabled) {
-        menu.hidden = true;
-        return;
-    }
 
     let selectingTemplate = false;
     const syncVersions = () => {
@@ -9324,6 +9320,17 @@ function initProjectTemplatePicker(picker) {
             versionSelect.value = String(versions[0].id || '');
         }
     };
+    syncVersions();
+
+    if (salesEvortixEnabled) {
+        menu.hidden = true;
+        input.addEventListener('input', syncVersions);
+        input.addEventListener('change', syncVersions);
+        versionSelect?.addEventListener('change', () => {
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        return;
+    }
     const renderMenu = () => {
         if (selectingTemplate) {
             return;
