@@ -1087,6 +1087,31 @@ a.progress-step:hover {
     border-color: #0a1b2c;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .submission-checklist-trigger {
+    background: rgba(85, 181, 232, 0.12);
+    border-color: rgba(143, 211, 255, 0.26);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+    color: #8fd3ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .submission-checklist-trigger:hover {
+    background: rgba(85, 181, 232, 0.2);
+    border-color: rgba(143, 211, 255, 0.46);
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .submission-checklist-trigger.needs-attention {
+    background: rgba(217, 146, 17, 0.16);
+    border-color: rgba(250, 204, 21, 0.42);
+    color: #f7d878;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .submission-checklist-trigger.is-complete {
+    background: rgba(18, 149, 104, 0.16);
+    border-color: rgba(74, 222, 128, 0.34);
+    color: #8ee6b8;
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .document-item:hover {
     background: #0b1d2e !important;
     border-color: rgba(113, 178, 224, 0.35) !important;

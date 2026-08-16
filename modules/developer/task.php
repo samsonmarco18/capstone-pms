@@ -4817,8 +4817,7 @@ function moveKanbanTaskToReview(taskId) {
 
 function startTask(taskId) {
     updateTaskStatus(taskId, 'in_progress', {
-        openDetails: true,
-        skipConfirm: true
+        openDetails: true
     });
 }
 
@@ -4838,6 +4837,21 @@ function showTaskNotice(title, message, type = 'success') {
     }
 
     console[type === 'error' ? 'error' : 'log'](`${title}: ${message}`);
+}
+
+async function confirmDeveloperSubmission(options = {}) {
+    const confirmOptions = {
+        title: options.title || 'Confirm Submission',
+        subject: options.subject || 'Submit this task?',
+        message: options.message || 'Please confirm before this task is sent to the next review step.',
+        icon: options.icon || 'fas fa-circle-info fa-lg',
+        confirmIcon: options.confirmIcon || 'fas fa-paper-plane',
+        confirmText: options.confirmText || 'Submit'
+    };
+
+    return typeof window.appConfirm === 'function'
+        ? window.appConfirm(confirmOptions)
+        : window.confirm(`${confirmOptions.subject}\n\n${confirmOptions.message}`);
 }
 
 async function updateTaskStatus(taskId, status, options = {}) {
@@ -5408,6 +5422,18 @@ async function submitPullRequest(event, taskId) {
         return;
     }
 
+    const confirmed = await confirmDeveloperSubmission({
+        title: 'Confirm Pull Request',
+        subject: 'Submit this pull request for review?',
+        message: 'Your pull request details and reviewer comment will be saved, then the task will move to Workflow Review.',
+        icon: 'fas fa-code-pull-request fa-lg',
+        confirmIcon: 'fas fa-paper-plane',
+        confirmText: 'Submit PR'
+    });
+    if (!confirmed) {
+        return;
+    }
+
     const submitButton = document.getElementById('submitPullRequestButton');
     const originalButtonHtml = submitButton.innerHTML;
     submitButton.disabled = true;
@@ -5473,6 +5499,18 @@ async function submitDesignSubmission(event, taskId) {
 
     const form = event.currentTarget;
     if (!form.reportValidity()) {
+        return;
+    }
+
+    const confirmed = await confirmDeveloperSubmission({
+        title: 'Confirm Design Submission',
+        subject: 'Submit this design handoff for review?',
+        message: 'Your design handoff will be saved first, then the task will move to SUL review.',
+        icon: 'fas fa-pen-ruler fa-lg',
+        confirmIcon: 'fas fa-paper-plane',
+        confirmText: 'Submit Design'
+    });
+    if (!confirmed) {
         return;
     }
 
@@ -5772,8 +5810,20 @@ function openReopenRequestModal(taskId, taskTitle) {
     bootstrap.Modal.getOrCreateInstance(document.getElementById('reopenRequestModal')).show();
 }
 
-$('#reopenRequestForm').on('submit', function(event) {
+$('#reopenRequestForm').on('submit', async function(event) {
     event.preventDefault();
+
+    const confirmed = await confirmDeveloperSubmission({
+        title: 'Confirm Reopen Request',
+        subject: 'Send this reopen request to SUL?',
+        message: 'Your reason and severity will be submitted for review before any task work is reopened.',
+        icon: 'fas fa-rotate-left fa-lg',
+        confirmIcon: 'fas fa-paper-plane',
+        confirmText: 'Send Request'
+    });
+    if (!confirmed) {
+        return;
+    }
 
     const submitButton = this.querySelector('button[type="submit"]');
     const originalText = submitButton ? submitButton.innerHTML : '';
@@ -6516,7 +6566,7 @@ async function submitQaTestingSubmission(event, taskId) {
             });
         }
 
-        await updateTaskStatus(taskId, 'for_review', { skipConfirm: true, skipDetails: true });
+        await updateTaskStatus(taskId, 'for_review', { skipConfirm: true, suppressDetails: true });
         bootstrap.Modal.getOrCreateInstance(document.getElementById('pullRequestModal')).hide();
         moveKanbanTaskToReview(taskId);
         showTaskNotice('Submit Testing', 'Testing results submitted to the QA SUL for review.');
@@ -6561,7 +6611,7 @@ async function submitQaResultsForReview(taskId) {
         return;
     }
 
-    await updateTaskStatus(taskId, 'for_review', { skipConfirm: true, skipDetails: true });
+    await updateTaskStatus(taskId, 'for_review', { skipConfirm: true, suppressDetails: true });
     showTaskNotice('QA Test Results', 'Testing results submitted to the QA SUL for review.');
     window.setTimeout(() => window.location.reload(), 350);
 }
@@ -6642,11 +6692,27 @@ function addComment(taskId) {
     });
 }
 
-function addGitUpdate(taskId) {
+async function addGitUpdate(taskId) {
     const branchName = $('#gitBranchName').val().trim();
 
     if(!branchName) {
         showTaskNotice('Git Update', 'Branch name is required for Git updates.', 'error');
+        return;
+    }
+
+    const gitAction = $('#gitAction').val();
+    const isPullRequest = gitAction === 'pull_request_opened';
+    const confirmed = await confirmDeveloperSubmission({
+        title: isPullRequest ? 'Confirm Pull Request' : 'Confirm Git Update',
+        subject: isPullRequest ? 'Submit this pull request for review?' : 'Save this Git update?',
+        message: isPullRequest
+            ? 'Your pull request details will be saved and the task will move to Workflow Review.'
+            : 'This Git activity will be attached to the task history.',
+        icon: isPullRequest ? 'fas fa-code-pull-request fa-lg' : 'fas fa-code-branch fa-lg',
+        confirmIcon: isPullRequest ? 'fas fa-paper-plane' : 'fas fa-save',
+        confirmText: isPullRequest ? 'Submit PR' : 'Save Update'
+    });
+    if (!confirmed) {
         return;
     }
 
@@ -6656,7 +6722,7 @@ function addGitUpdate(taskId) {
         dataType: 'json',
         data: {
             task_id: taskId,
-            git_action: $('#gitAction').val(),
+            git_action: gitAction,
             branch_name: branchName,
             commit_hash: $('#gitCommitHash').val().trim(),
             commit_message: $('#gitCommitMessage').val().trim(),
