@@ -295,7 +295,7 @@ if ($selectedRepository) {
 
     $syncEndpointUrl = BASE_URL . 'api/version-control/sync.php?token=' . urlencode((string) $selectedRepository['webhook_token']);
     $hookConfigUrl = preg_replace('#/api/version-control/sync\.php\?token=.*$#', '', $syncEndpointUrl) ?: BASE_URL;
-    $gitHookScript = vcGenerateLocalSyncHookScript($syncEndpointUrl);
+    $gitHookScript = vcGenerateLocalSyncHookScript($syncEndpointUrl, (string) ($user['username'] ?? ''));
     $selectedRepositoryHttpCloneUrl = vcGenerateRepositoryHttpCloneUrl((string) $selectedRepository['slug']);
     $selectedRepositoryLocalClonePath = vcGenerateRepositoryLocalClonePath((string) $selectedRepository['slug']);
     $selectedRepositoryFileCloneUrl = vcGenerateRepositoryFileCloneUrl((string) $selectedRepository['slug']);
