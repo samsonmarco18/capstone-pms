@@ -33,16 +33,18 @@ $projectStartTimeSql = $hasProjectStartTime ? "COALESCE(p.timeline_start_time, '
 $projectEndTimeSql = $hasProjectEndTime ? "COALESCE(p.timeline_end_time, '17:00:00')" : "'17:00:00'";
 
 // Get estimation statistics
-$totalEstimations = expertDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM feature_estimations WHERE expert_id = {$user['id']}");
-$pendingEstimations = expertDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM feature_estimations WHERE expert_id = {$user['id']} AND status = 'pending'");
-$completedEstimations = expertDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM feature_estimations WHERE expert_id = {$user['id']} AND status = 'completed'");
+$totalEstimations = expertDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM feature_estimations fe JOIN projects p ON p.id = fe.project_id WHERE fe.expert_id = {$user['id']} AND p.status != 'cancelled'");
+$pendingEstimations = expertDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM feature_estimations fe JOIN projects p ON p.id = fe.project_id WHERE fe.expert_id = {$user['id']} AND fe.status = 'pending' AND p.status != 'cancelled'");
+$completedEstimations = expertDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM feature_estimations fe JOIN projects p ON p.id = fe.project_id WHERE fe.expert_id = {$user['id']} AND fe.status = 'completed' AND p.status != 'cancelled'");
 $estimationRangeResult = expertDashboardQuery($conn, "
     SELECT
         COALESCE(AVG(min_days), 0) AS avg_min,
         COALESCE(AVG(likely_days), 0) AS avg_likely,
         COALESCE(AVG(max_days), 0) AS avg_max
-    FROM feature_estimations
-    WHERE expert_id = {$user['id']}
+    FROM feature_estimations fe
+    JOIN projects p ON p.id = fe.project_id
+    WHERE fe.expert_id = {$user['id']}
+      AND p.status != 'cancelled'
 ");
 $estimationRange = $estimationRangeResult ? ($estimationRangeResult->fetch_assoc() ?: []) : [];
 
@@ -53,6 +55,7 @@ $pendingTasks = expertDashboardQuery($conn, "
     JOIN projects p ON t.project_id = p.id
     WHERE t.assigned_to = {$user['id']} 
     AND t.status != 'completed'
+    AND p.status != 'cancelled'
     ORDER BY t.deadline ASC
     LIMIT 5
 ");
@@ -63,6 +66,7 @@ $teamCompositions = expertDashboardQuery($conn, "
     FROM team_compositions tc
     JOIN projects p ON tc.project_id = p.id
     WHERE tc.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+      AND p.status != 'cancelled'
     ORDER BY tc.created_at DESC
     LIMIT 5
 ");
@@ -85,6 +89,7 @@ $recentFeatureEstimates = expertDashboardQuery($conn, "
     JOIN projects p ON fe.project_id = p.id
     WHERE fe.expert_id = {$user['id']}
       AND COALESCE(fe.submitted_at, fe.updated_at) >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+      AND p.status != 'cancelled'
     ORDER BY latest_update DESC
     LIMIT 5
 ");
@@ -106,11 +111,12 @@ $schedules = expertDashboardQuery($conn, "
 $expertAgenda = [];
 
 $agendaTaskRows = expertDashboardQuery($conn, "
-    SELECT t.id, t.title, t.description, t.deadline, t.status, p.name AS project_name
+    SELECT t.id, t.project_id, t.title, t.description, t.deadline, t.status, p.name AS project_name
     FROM tasks t
     JOIN projects p ON t.project_id = p.id
     WHERE t.assigned_to = {$user['id']}
       AND t.status != 'completed'
+      AND p.status != 'cancelled'
     ORDER BY COALESCE(t.deadline, NOW()) ASC
     LIMIT 8
 ");
@@ -123,7 +129,7 @@ if ($agendaTaskRows) {
             'date' => $hasDeadline ? (string) $task['deadline'] : date('Y-m-d H:i:s'),
             'type' => ((string) ($task['status'] ?? '') === 'todo') ? 'Estimate Needed' : 'Assigned Task',
             'icon' => ((string) ($task['status'] ?? '') === 'todo') ? 'calculator' : 'flag-checkered',
-            'url' => 'feature-estimation.php?task_id=' . (int) ($task['id'] ?? 0),
+            'url' => 'feature-estimation.php?project_estimation_id=' . (int) ($task['project_id'] ?? 0),
         ];
     }
 }
@@ -949,7 +955,7 @@ include '../../includes/navbar.php';
                                     </div>
                                     <p class="small text-muted mb-0"><?php echo htmlspecialchars(substr((string) ($task['description'] ?? ''), 0, 100)); ?></p>
                                 </div>
-                                <a href="feature-estimation.php?task_id=<?php echo $task['id']; ?>" class="btn-estimate ms-3">
+                                <a href="feature-estimation.php?project_estimation_id=<?php echo (int) $task['project_id']; ?>" class="btn-estimate ms-3">
                                     <i class="fas fa-calculator"></i> Estimate
                                 </a>
                             </div>
@@ -1051,7 +1057,7 @@ include '../../includes/navbar.php';
                                     <span class="recent-estimate-value">Min <?php echo $minDays; ?>d &bull; Likely <?php echo $likelyDays; ?>d &bull; Max <?php echo $maxDays; ?>d</span>
                                 </div>
                                 <span class="recent-estimate-pert"><?php echo number_format($pertDays, 1); ?>d PERT</span>
-                                <a href="feature-estimation.php?task_id=<?php echo (int) $estimate['task_id']; ?>" class="btn-estimate recent-estimate-action">
+                                <a href="feature-estimation.php?project_estimation_id=<?php echo (int) $estimate['project_id']; ?>" class="btn-estimate recent-estimate-action">
                                     Review Estimate
                                 </a>
                             </article>

@@ -1618,7 +1618,12 @@ include '../../includes/navbar.php';
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Password</label>
-                            <input type="password" name="password" class="form-control" placeholder="Create a secure password" autocomplete="new-password" required>
+                            <div class="password-field">
+                                <input type="password" name="password" class="form-control" placeholder="Create a secure password" autocomplete="new-password" required>
+                                <button type="button" class="password-toggle-btn" data-password-toggle title="Show password">
+                                    <i class="fas fa-eye" aria-hidden="true"></i>
+                                </button>
+                            </div>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Full Name</label>

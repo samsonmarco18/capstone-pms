@@ -19,13 +19,13 @@ $sulUserDepartmentClause = $sulDepartment !== ''
     ? projectWorkflowUserDepartmentClause($conn, 'u', $sulDepartment)
     : '1 = 0';
 $sulProjectDepartmentClause = $sulDepartment !== ''
-    ? projectWorkflowProjectDepartmentClause($conn, 'p', $sulDepartment)
+    ? '(' . projectWorkflowProjectDepartmentClause($conn, 'p', $sulDepartment) . ") AND p.workflow_status = 'architect_submitted'"
     : '1 = 0';
 $sulTaskDepartmentClause = $sulDepartment !== ''
     ? projectWorkflowTaskDepartmentClause($conn, 't', $sulDepartment, true)
     : '1 = 0';
 $sulResourceProjectDepartmentClause = $sulDepartment !== ''
-    ? projectWorkflowProjectDepartmentClause($conn, 'p_resource', $sulDepartment)
+    ? '(' . projectWorkflowProjectDepartmentClause($conn, 'p_resource', $sulDepartment) . ") AND p_resource.workflow_status = 'architect_submitted'"
     : '1 = 0';
 $sulAssignableRoleSql = $isExpertDepartmentSul ? "'expert'" : "'developer'";
 
@@ -122,12 +122,13 @@ $bulkEntityCountSelect = sulDashboardBulkEntityCountSelect('t');
 // Get statistics
 $totalExperts = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM users u WHERE u.role IN ({$sulAssignableRoleSql}) AND {$sulUserDepartmentClause}");
 $availableExperts = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM users u WHERE u.role IN ({$sulAssignableRoleSql}) AND u.status = 'active' AND {$sulUserDepartmentClause}");
-$totalTasks = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM tasks");
-$overdueTasks = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM tasks WHERE deadline < NOW() AND status != 'completed'");
-$unassignedTasks = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM tasks WHERE assigned_to IS NULL OR assigned_to = 0");
-$inProgressTasks = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM tasks WHERE status = 'in_progress'");
-$completedTasks = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM tasks WHERE status = 'completed'");
-$todoTasks = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM tasks WHERE status = 'todo'");
+$sulActiveTaskJoin = "JOIN projects p ON p.id = tasks.project_id AND p.status != 'cancelled'";
+$totalTasks = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM tasks {$sulActiveTaskJoin}");
+$overdueTasks = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM tasks {$sulActiveTaskJoin} WHERE tasks.deadline < NOW() AND tasks.status != 'completed'");
+$unassignedTasks = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM tasks {$sulActiveTaskJoin} WHERE tasks.assigned_to IS NULL OR tasks.assigned_to = 0");
+$inProgressTasks = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM tasks {$sulActiveTaskJoin} WHERE tasks.status = 'in_progress'");
+$completedTasks = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM tasks {$sulActiveTaskJoin} WHERE tasks.status = 'completed'");
+$todoTasks = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM tasks {$sulActiveTaskJoin} WHERE tasks.status = 'todo'");
 $activeProjects = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM projects WHERE status NOT IN ('completed', 'cancelled')");
 
 $evortixSulProjectGroups = [
@@ -153,6 +154,7 @@ $evortixSulProjectRows = sulDashboardQuery($conn, "
     LEFT JOIN clients c ON c.id = p.client_id
     WHERE {$sulProjectDepartmentClause}
       AND {$sulTaskDepartmentClause}
+      AND p.status != 'cancelled'
     GROUP BY p.id, p.name, c.name
     HAVING
         SUM(CASE WHEN t.deadline < NOW() AND t.status != 'completed' THEN 1 ELSE 0 END) > 0
@@ -199,6 +201,7 @@ $evortixSulOverloadedRows = sulDashboardQuery($conn, "
            FROM projects p_resource
            WHERE p_resource.id = t.project_id
              AND {$sulResourceProjectDepartmentClause}
+             AND p_resource.status != 'cancelled'
        )
     WHERE u.role = 'developer'
       AND u.status = 'active'
@@ -239,9 +242,9 @@ $evortixSulStatusTotals = [
 ];
 
 // Get tasks by priority
-$highPriority = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM tasks WHERE priority = 'high' AND status != 'completed'");
-$mediumPriority = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM tasks WHERE priority = 'medium' AND status != 'completed'");
-$lowPriority = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM tasks WHERE priority = 'low' AND status != 'completed'");
+$highPriority = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM tasks {$sulActiveTaskJoin} WHERE tasks.priority = 'high' AND tasks.status != 'completed'");
+$mediumPriority = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM tasks {$sulActiveTaskJoin} WHERE tasks.priority = 'medium' AND tasks.status != 'completed'");
+$lowPriority = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM tasks {$sulActiveTaskJoin} WHERE tasks.priority = 'low' AND tasks.status != 'completed'");
 
 // Get expert/developer availability
 $expertAvailability = sulDashboardQuery($conn, "
@@ -257,6 +260,7 @@ $expertAvailability = sulDashboardQuery($conn, "
            FROM projects p_resource
            WHERE p_resource.id = t.project_id
              AND {$sulResourceProjectDepartmentClause}
+             AND p_resource.status != 'cancelled'
        )
     WHERE u.role IN ({$sulAssignableRoleSql})
       AND u.status = 'active'
@@ -304,7 +308,7 @@ $projectsNeedingAllocation = sulDashboardQuery($conn, "
         FROM tasks t
         GROUP BY t.project_id
     ) ta ON ta.project_id = p.id
-    WHERE p.status != 'completed'
+    WHERE p.status NOT IN ('completed', 'cancelled')
       AND (
         COALESCE(ta.total_tasks, 0) = 0
         OR COALESCE(ta.needs_expert_count, 0) > 0
@@ -328,6 +332,7 @@ $recentTasks = sulDashboardQuery($conn, "
     LEFT JOIN users u ON t.assigned_to = u.id
     WHERE {$sulProjectDepartmentClause}
       AND {$sulTaskDepartmentClause}
+      AND p.status != 'cancelled'
     ORDER BY t.created_at DESC
     LIMIT 10
 ");
@@ -349,6 +354,7 @@ $resourceOverviewResult = sulDashboardQuery($conn, "
             FROM projects p_resource
             WHERE p_resource.id = t.project_id
               AND {$sulResourceProjectDepartmentClause}
+              AND p_resource.status != 'cancelled'
        )
     WHERE u.role = 'developer'
       AND u.status = 'active'

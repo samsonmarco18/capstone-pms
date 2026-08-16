@@ -624,6 +624,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     ]);
 
                     salesClientsCreateSharedProjectFolder($conn, (int) $clientId, (int) $projectId, (int) $clientFolderId, $projectName, (int) $user['id']);
+                    projectTemplateCaptureProject($conn, (int) $projectId);
+                    $learnedProjectTemplate = projectTemplateFindByType($conn, $projectType);
+                    if ($learnedProjectTemplate) {
+                        $learnedTemplateId = (int) ($learnedProjectTemplate['id'] ?? 0);
+                        $learnedTemplateSnapshot = json_encode($learnedProjectTemplate, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+                        $templateUpdateStmt = $conn->prepare('UPDATE projects SET project_template_id = ?, project_template_snapshot = ? WHERE id = ?');
+                        if ($templateUpdateStmt !== false) {
+                            $templateUpdateStmt->bind_param('isi', $learnedTemplateId, $learnedTemplateSnapshot, $projectId);
+                            $templateUpdateStmt->execute();
+                            $templateUpdateStmt->close();
+                        }
+                    }
                 }
 
                 $conn->commit();
@@ -776,6 +788,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         (int) $user['id']
                     );
                     salesClientsCreateSharedProjectFolder($conn, $clientId, $projectId, $clientFolderId, $projectName, (int) $user['id']);
+                    projectTemplateCaptureProject($conn, (int) $projectId);
+                    $learnedProjectTemplate = projectTemplateFindByType($conn, $projectType);
+                    if ($learnedProjectTemplate) {
+                        $learnedTemplateId = (int) ($learnedProjectTemplate['id'] ?? 0);
+                        $learnedTemplateSnapshot = json_encode($learnedProjectTemplate, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+                        $templateUpdateStmt = $conn->prepare('UPDATE projects SET project_template_id = ?, project_template_snapshot = ? WHERE id = ?');
+                        if ($templateUpdateStmt !== false) {
+                            $templateUpdateStmt->bind_param('isi', $learnedTemplateId, $learnedTemplateSnapshot, $projectId);
+                            $templateUpdateStmt->execute();
+                            $templateUpdateStmt->close();
+                        }
+                    }
 
                     if ($timelineEnd !== null) {
                         $deadlineStmt = $conn->prepare('UPDATE clients SET deadline = COALESCE(deadline, ?) WHERE id = ?');
@@ -5613,6 +5637,18 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
     background: #071321;
     border-color: rgba(31, 99, 146, 0.24);
     color: #d7e4f2;
+    color-scheme: dark;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern input[type="date"]::-webkit-calendar-picker-indicator,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern input[type="time"]::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 0.9;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern input[type="date"]::-webkit-calendar-picker-indicator:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern input[type="time"]::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-input input:focus,
@@ -8695,7 +8731,7 @@ const salesTemplateAssistant = (() => {
         const choices = matches.map(template => ({
             label:template.project_type,
             field:'project_type',
-            version:`V${Number(template.template_version || 1)}${Number(template.template_version || 1) === Math.max(...projectTemplates.filter(item => item.project_type === template.project_type).map(item => Number(item.template_version || 1))) ? ' · Latest' : ''}`,
+            version:formatTemplateVersionLabel(template),
             apply:async () => {
                 const changed = await setField('project_type', template.project_type);
                 if (changed === false) return false;
@@ -9089,6 +9125,19 @@ function normalizeSalesTemplateType(value) {
         .toLowerCase();
 }
 
+function latestTemplateVersionForType(projectType) {
+    const normalizedType = normalizeSalesTemplateType(projectType);
+    const versions = projectTemplates
+        .filter((template) => normalizeSalesTemplateType(template.project_type) === normalizedType)
+        .map((template) => Number(template.template_version || 1));
+    return versions.length ? Math.max(...versions) : 1;
+}
+
+function formatTemplateVersionLabel(template, latestSuffix = ' · Latest') {
+    const version = Number(template?.template_version || 1);
+    return `V${version}${version === latestTemplateVersionForType(template?.project_type) ? latestSuffix : ''}`;
+}
+
 function escapeClientHtml(value) {
     const div = document.createElement('div');
     div.textContent = String(value ?? '');
@@ -9266,7 +9315,7 @@ function initProjectTemplatePicker(picker) {
             .filter((template) => normalizeSalesTemplateType(template.project_type) === needle)
             .sort((a, b) => Number(b.template_version || 1) - Number(a.template_version || 1));
         versionSelect.innerHTML = versions.map((template) =>
-            `<option value="${Number(template.id || 0)}">V${Number(template.template_version || 1)}${Number(template.template_version || 1) === Math.max(...versions.map(item => Number(item.template_version || 1))) ? ' (Latest)' : ''}</option>`
+            `<option value="${Number(template.id || 0)}">${formatTemplateVersionLabel(template, ' (Latest)')}</option>`
         ).join('');
         versionSelect.hidden = versions.length < 2;
         if (versions.some((template) => String(template.id || '') === previousValue)) {
@@ -10821,6 +10870,7 @@ if (addClientModalElement && addClientForm) {
     const previousButton = addClientModalElement.querySelector('[data-client-prev]');
     const nextButton = addClientModalElement.querySelector('[data-client-next]');
     const submitButton = addClientModalElement.querySelector('[data-client-submit]');
+    const saveDraftButton = addClientModalElement.querySelector('[data-save-draft]');
     const generatedComplexityField = addClientModalElement.querySelector('[data-generated-complexity]');
     const closeButtons = Array.from(addClientModalElement.querySelectorAll('.add-client-close'));
     const draftStatus = addClientModalElement.querySelector('[data-draft-status]');
@@ -10860,7 +10910,7 @@ if (addClientModalElement && addClientForm) {
     }
 
     function normalizeTemplateType(value) {
-        return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+        return normalizeSalesTemplateType(value);
     }
 
     function formatPeso(value) {
@@ -11079,6 +11129,32 @@ if (addClientModalElement && addClientForm) {
         return input;
     }
 
+    function splitRequestedFeatureInput(value) {
+        const rawValue = String(value || '').trim();
+        if (rawValue === '') {
+            return [];
+        }
+
+        const delimited = rawValue
+            .split(/[\r\n,;|]+/)
+            .map((feature) => feature.trim().replace(/\s+/g, ' '))
+            .filter(Boolean);
+        if (delimited.length > 1) {
+            return delimited;
+        }
+
+        const words = rawValue.replace(/\s+/g, ' ').split(' ').filter(Boolean);
+        const firstCompactIndex = words.findIndex((word, index) => index > 0 && /^[a-z]+[\w-]*\d+$/i.test(word));
+        if (firstCompactIndex > 0) {
+            return [
+                words.slice(0, firstCompactIndex).join(' '),
+                ...words.slice(firstCompactIndex)
+            ].filter(Boolean);
+        }
+
+        return [rawValue.replace(/\s+/g, ' ')];
+    }
+
     function getRequestedFeatureValues() {
         if (!requestedFeatureList) {
             return [];
@@ -11097,7 +11173,20 @@ if (addClientModalElement && addClientForm) {
 
     function addRequestedFeatureValue(value, focusInput = true) {
         const input = requestedFeatureList?.querySelector('[data-requested-feature-input]');
-        const normalizedValue = String(value || '').trim().replace(/\s+/g, ' ');
+        const parts = splitRequestedFeatureInput(value);
+        if (parts.length > 1) {
+            let addedAny = false;
+            parts.forEach((part) => {
+                addedAny = addRequestedFeatureValue(part, false) || addedAny;
+            });
+            input && (input.value = '');
+            if (focusInput) {
+                setClientFeatureEditorExpanded(true, true);
+            }
+            return addedAny;
+        }
+
+        const normalizedValue = parts[0] || '';
         if (!requestedFeatureList || !input || !normalizedValue) {
             return false;
         }
@@ -11727,9 +11816,7 @@ if (addClientModalElement && addClientForm) {
         }
 
         const seen = new Set();
-        const features = String(rawValue || '')
-            .split(/\r?\n/)
-            .map((feature) => feature.trim())
+        const features = splitRequestedFeatureInput(rawValue)
             .filter((feature) => {
                 const normalized = normalizeTemplateType(feature);
                 if (!normalized || seen.has(normalized)) {
@@ -12122,6 +12209,7 @@ if (addClientModalElement && addClientForm) {
         recommendedFeatureTitles = new Set();
         templateApplyMessage = '';
         updateDraftStatus(true);
+        showClientStep(0);
     }
 
     function clearAddClientDraft() {
@@ -12701,6 +12789,32 @@ if (addClientModalElement && addClientForm) {
         requestedFeatureList.addEventListener('input', (event) => {
             if (event.target.matches('[data-requested-feature-input]')) {
                 event.target.setCustomValidity('');
+            }
+        });
+
+        requestedFeatureList.addEventListener('paste', (event) => {
+            const input = event.target.closest('[data-requested-feature-input]');
+            if (!input) {
+                return;
+            }
+
+            const pastedText = event.clipboardData?.getData('text') || '';
+            const parts = splitRequestedFeatureInput(pastedText);
+            if (parts.length <= 1) {
+                return;
+            }
+
+            event.preventDefault();
+            let addedAny = false;
+            parts.forEach((part) => {
+                addedAny = addRequestedFeatureValue(part, false) || addedAny;
+            });
+            input.value = '';
+            if (addedAny) {
+                formTouched = true;
+                hideUnsavedClosePanel();
+                updateDraftStatus(false);
+                setClientFeatureEditorExpanded(true, true);
             }
         });
 

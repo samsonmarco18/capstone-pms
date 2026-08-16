@@ -57,6 +57,7 @@ $salesApprovedSelect = $hasSalesApproval ? "t.sales_approved" : "0 AS sales_appr
 $salesEstimateDaysSelect = $hasSalesChoice ? "t.sales_estimate_days" : "0 AS sales_estimate_days";
 $taskStmt = $conn->prepare("
     SELECT t.id, t.title, t.project_id, t.assigned_to, t.status, t.architect_reviewed_at, t.merged_at,
+           p.status AS project_status,
            current_assignee.role AS current_assignee_role,
            {$salesApprovedSelect}, {$salesEstimateDaysSelect},
            CASE WHEN EXISTS (
@@ -78,6 +79,12 @@ $taskStmt->close();
 if (!$task) {
     http_response_code(404);
     echo json_encode(['success' => false, 'error' => 'Task not found.']);
+    exit();
+}
+
+if ((string) ($task['project_status'] ?? '') === 'cancelled') {
+    http_response_code(409);
+    echo json_encode(['success' => false, 'error' => 'This project is cancelled. Restore the project before assigning work.']);
     exit();
 }
 
@@ -198,6 +205,7 @@ if ($assignee['role'] === 'expert') {
             JOIN projects p ON p.id = t.project_id
             LEFT JOIN users current_assignee ON current_assignee.id = t.assigned_to
             WHERE t.id IN ({$assignmentTaskIdList})
+              AND p.status != 'cancelled'
               AND (
                   (t.status = 'todo' AND (t.assigned_to IS NULL OR current_assignee.role = 'expert'))
                   OR (t.status = 'completed' AND t.architect_reviewed_at IS NULL AND t.merged_at IS NULL)

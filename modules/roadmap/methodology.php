@@ -600,6 +600,9 @@ if (!$selectedProject && count($projects) > 0) {
     $selectedProjectId = (int) $projects[0]['id'];
     $selectedProject = roadmapGetProject($conn, $selectedProjectId, $user);
 }
+if ($selectedProject && $canEditArchitecture) {
+    projectWorkflowNormalizePreSubmitFeatureTasks($conn, $selectedProjectId);
+}
 $selectedProjectTemplate = null;
 $suggestedMethodologyLabel = '';
 $suggestedMethodologyKey = '';

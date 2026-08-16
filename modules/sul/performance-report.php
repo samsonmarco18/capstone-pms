@@ -206,7 +206,7 @@ $projectPerformance = $conn->query("
     LEFT JOIN tasks t ON p.id = t.project_id
         AND DATE(t.created_at) BETWEEN '$dateFrom' AND '$dateTo'
         AND {$reportTaskDepartmentClause}
-    WHERE p.status != 'completed'
+    WHERE p.status NOT IN ('completed', 'cancelled')
       AND {$reportProjectDepartmentClause}
     GROUP BY p.id, p.name, p.status, p.timeline_end
     ORDER BY completion_rate ASC
@@ -1107,6 +1107,30 @@ $chatScriptLoaded = true;
     background-color: #071321;
     border-color: rgba(31, 99, 146, 0.28);
     color: #d7e4f2;
+    color-scheme: dark;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 0.9;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-color: #071321;
+    border-color: rgba(31, 99, 146, 0.28);
+    color: #d7e4f2;
+    color-scheme: dark;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%238fd3ff' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e") !important;
+    background-repeat: no-repeat !important;
+    background-position: right 0.75rem center !important;
+    background-size: 16px 12px !important;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-secondary-modern {

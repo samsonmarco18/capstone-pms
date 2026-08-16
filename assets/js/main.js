@@ -11,7 +11,33 @@ $(function () {
     initSystemLoadAnimations();
     initGenericFormDrafts();
     initFormSubmitConfirmations();
+    initPasswordToggles();
 });
+
+function initPasswordToggles() {
+    document.querySelectorAll('[data-password-toggle]').forEach((button) => {
+        if (button.dataset.passwordToggleInitialized === '1') {
+            return;
+        }
+
+        const input = button.closest('.password-field')?.querySelector('input[type="password"], input[type="text"]');
+        if (!input) {
+            return;
+        }
+
+        button.dataset.passwordToggleInitialized = '1';
+        button.setAttribute('aria-label', 'Show password');
+
+        button.addEventListener('click', () => {
+            const isHidden = input.type === 'password';
+            input.type = isHidden ? 'text' : 'password';
+            button.setAttribute('aria-label', isHidden ? 'Hide password' : 'Show password');
+            button.setAttribute('title', isHidden ? 'Hide password' : 'Show password');
+            button.querySelector('i')?.classList.toggle('fa-eye', !isHidden);
+            button.querySelector('i')?.classList.toggle('fa-eye-slash', isHidden);
+        });
+    });
+}
 
 function initRoleDashboard3d() {
     const canTilt = window.matchMedia('(hover: hover) and (pointer: fine)').matches

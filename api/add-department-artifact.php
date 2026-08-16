@@ -63,7 +63,7 @@ if ($externalUrl !== '' && filter_var($externalUrl, FILTER_VALIDATE_URL) === fal
 }
 
 $taskStmt = $conn->prepare(
-    'SELECT t.id, t.project_id, t.title, p.name AS project_name
+    'SELECT t.id, t.project_id, t.title, p.name AS project_name, p.status AS project_status
      FROM tasks t
      LEFT JOIN projects p ON p.id = t.project_id
      WHERE t.id = ? AND t.assigned_to = ?
@@ -86,6 +86,12 @@ if (!$task) {
     exit;
 }
 
+if ((string) ($task['project_status'] ?? '') === 'cancelled') {
+    http_response_code(409);
+    echo json_encode(['error' => 'This project is cancelled. Restore the project before saving handoffs.']);
+    exit;
+}
+
 $target = [
     'relative_path' => '',
     'original_name' => '',
@@ -103,7 +109,7 @@ if ($file && (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE
     $fileSize = (int) ($file['size'] ?? 0);
     if ($fileSize > 10 * 1024 * 1024) {
         http_response_code(400);
-        echo json_encode(['error' => 'Design upload must be 10MB or smaller.']);
+        echo json_encode(['error' => 'Image upload must be 10MB or smaller.']);
         exit;
     }
 
@@ -111,7 +117,7 @@ if ($file && (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE
     $allowedImageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
     if (!in_array($extension, $allowedImageExtensions, true)) {
         http_response_code(400);
-        echo json_encode(['error' => 'Please upload a design image: JPG, PNG, GIF, or WEBP.']);
+        echo json_encode(['error' => 'Please upload an image: JPG, PNG, GIF, or WEBP.']);
         exit;
     }
 
@@ -125,7 +131,7 @@ if ($file && (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE
 
     if (!move_uploaded_file((string) $file['tmp_name'], $target['absolute_path'])) {
         http_response_code(500);
-        echo json_encode(['error' => 'Unable to save uploaded design.']);
+        echo json_encode(['error' => 'Unable to save uploaded image.']);
         exit;
     }
 
@@ -134,7 +140,7 @@ if ($file && (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE
     } catch (Throwable $e) {
         @unlink($target['absolute_path']);
         http_response_code(500);
-        echo json_encode(['error' => 'Unable to save uploaded design permanently.']);
+        echo json_encode(['error' => 'Unable to save uploaded image permanently.']);
         exit;
     }
 

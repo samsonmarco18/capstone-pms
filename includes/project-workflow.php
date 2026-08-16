@@ -458,6 +458,16 @@ function projectWorkflowNotifyDepartmentSuls(
     string $actionUrl,
     int $projectId
 ): void {
+    if ($projectId <= 0 || !dbColumnExists($conn, 'projects', 'workflow_status')) {
+        return;
+    }
+
+    $projectStatus = $conn->query("SELECT COALESCE(workflow_status, '') AS workflow_status FROM projects WHERE id = {$projectId} LIMIT 1");
+    $projectStatusRow = $projectStatus ? $projectStatus->fetch_assoc() : [];
+    if (trim((string) ($projectStatusRow['workflow_status'] ?? '')) !== 'architect_submitted') {
+        return;
+    }
+
     $where = projectWorkflowUserDepartmentClause($conn, 'u', $department);
     $result = $conn->query("SELECT u.id FROM users u WHERE u.role = 'sul' AND u.status = 'active' AND {$where}");
     if (!$result) {
@@ -481,6 +491,33 @@ function projectWorkflowNotifySelectedSuls(mysqli|PgsqlMysqliCompatConnection $c
             $projectId
         );
     }
+}
+
+function projectWorkflowNormalizePreSubmitFeatureTasks(mysqli|PgsqlMysqliCompatConnection $conn, int $projectId): void
+{
+    if (
+        $projectId <= 0
+        || !dbTableExists($conn, 'tasks')
+        || !dbTableExists($conn, 'projects')
+        || !dbColumnExists($conn, 'projects', 'workflow_status')
+    ) {
+        return;
+    }
+
+    $projectRow = $conn->query("SELECT COALESCE(workflow_status, '') AS workflow_status FROM projects WHERE id = {$projectId} LIMIT 1");
+    $project = $projectRow ? $projectRow->fetch_assoc() : [];
+    if (trim((string) ($project['workflow_status'] ?? '')) === 'architect_submitted') {
+        return;
+    }
+
+    $conn->query("
+        UPDATE tasks
+        SET task_type = 'feature'
+        WHERE project_id = {$projectId}
+          AND task_type = 'enhancement'
+          AND status = 'todo'
+          AND (assigned_to IS NULL OR assigned_to = 0)
+    ");
 }
 
 function projectWorkflowTaskDepartment(mysqli|PgsqlMysqliCompatConnection $conn, int $taskId): string

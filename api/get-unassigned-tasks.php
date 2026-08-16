@@ -27,6 +27,7 @@ $result = $conn->query("
     WHERE (t.assigned_to IS NULL OR t.assigned_to = 0)
       AND t.status = 'todo'
       AND {$projectFilter}
+      AND p.status != 'cancelled'
     ORDER BY t.deadline ASC, t.created_at DESC
     LIMIT 50
 ");

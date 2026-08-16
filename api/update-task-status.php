@@ -36,7 +36,7 @@ if ($taskId <= 0 || !in_array($newStatus, $allowedStatuses, true)) {
 }
 
 $taskCheck = $conn->prepare(
-    'SELECT t.id, t.title, t.status, t.assigned_by, t.project_id, p.name AS project_name, p.sul_id
+    'SELECT t.id, t.title, t.status, t.assigned_by, t.project_id, p.name AS project_name, p.status AS project_status, p.sul_id
      FROM tasks t
      LEFT JOIN projects p ON p.id = t.project_id
      WHERE t.id = ? AND t.assigned_to = ?
@@ -57,6 +57,12 @@ $taskCheck->close();
 if (!$task) {
     http_response_code(403);
     echo json_encode(['error' => 'You can only update tasks assigned to you.']);
+    exit;
+}
+
+if ((string) ($task['project_status'] ?? '') === 'cancelled') {
+    http_response_code(409);
+    echo json_encode(['error' => 'This project is cancelled. Restore the project before updating task progress.']);
     exit;
 }
 

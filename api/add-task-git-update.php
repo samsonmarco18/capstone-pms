@@ -51,9 +51,10 @@ if ($user['role'] === 'developer' && (in_array($gitAction, ['merged', 'deployed'
 $conn = getConnection();
 workflowEnsureSchema($conn);
 projectWorkflowEnsureSchema($conn);
+$submitterDepartment = projectWorkflowDepartmentLabel((string) ($user['department'] ?? ''));
 
 $taskStmt = $conn->prepare(
-    'SELECT t.id, t.title, t.status, t.project_id, t.assigned_to, t.assigned_by, p.name AS project_name, p.sul_id
+    'SELECT t.id, t.title, t.status, t.project_id, t.assigned_to, t.assigned_by, p.name AS project_name, p.status AS project_status, p.sul_id
      FROM tasks t
      LEFT JOIN projects p ON p.id = t.project_id
      WHERE t.id = ?
@@ -70,13 +71,24 @@ if (!$task) {
     exit();
 }
 
+if ((string) ($task['project_status'] ?? '') === 'cancelled') {
+    http_response_code(409);
+    echo json_encode(['error' => 'This project is cancelled. Restore the project before adding Git progress.']);
+    exit();
+}
+
 if ($user['role'] === 'developer' && (int) ($task['assigned_to'] ?? 0) !== (int) $user['id']) {
     http_response_code(403);
     echo json_encode(['error' => 'You can only update Git activity for your assigned tasks']);
     exit();
 }
 
-$isPullRequestSubmission = $gitAction === 'pull_request_opened' || $pullRequestUrl !== '' || $status === 'in_review';
+$isQaTestingReference = $user['role'] === 'developer'
+    && $submitterDepartment === 'QA'
+    && $gitAction === 'note'
+    && $status === 'active';
+$isPullRequestSubmission = !$isQaTestingReference
+    && ($gitAction === 'pull_request_opened' || $pullRequestUrl !== '' || $status === 'in_review');
 if ($isPullRequestSubmission) {
     $taskProjectId = (int) ($task['project_id'] ?? 0);
     $branchStmt = $conn->prepare(
@@ -174,7 +186,6 @@ if ($isPullRequestSubmission) {
     } elseif (!empty($task['sul_id'])) {
         $recipientIds[] = (int) $task['sul_id'];
     }
-    $submitterDepartment = projectWorkflowDepartmentLabel((string) ($user['department'] ?? ''));
     if ($submitterDepartment !== '') {
         $departmentSulWhere = projectWorkflowUserDepartmentClause($conn, 'u', $submitterDepartment);
         $departmentSulRows = $conn->query("SELECT u.id FROM users u WHERE u.role = 'sul' AND u.status = 'active' AND {$departmentSulWhere}");
