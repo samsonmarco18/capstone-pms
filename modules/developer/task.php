@@ -5589,12 +5589,14 @@ function viewTask(taskId) {
                     detailParts.push(`<span class="git-activity-note"><i class="far fa-note-sticky me-1"></i>${escapeHtml(update.notes)}</span>`);
                 }
 
+                const repositoryActionUrl = update.branch_review_url || update.repository_review_url || update.repository_url || '';
+                const pullRequestActionUrl = update.branch_review_url || update.pull_request_review_url || update.pull_request_url || '';
                 const actions = [
-                    update.repository_url
-                        ? `<a href="${escapeAttribute(update.repository_url)}" target="_blank" rel="noopener" class="git-activity-action"><i class="fas fa-arrow-up-right-from-square"></i>Repository</a>`
+                    repositoryActionUrl
+                        ? `<a href="${escapeAttribute(repositoryActionUrl)}" class="git-activity-action"><i class="fas fa-code-branch"></i>Repository</a>`
                         : '',
-                    update.pull_request_url
-                        ? `<a href="${escapeAttribute(update.pull_request_url)}" target="_blank" rel="noopener" class="git-activity-action"><i class="fas fa-code-pull-request"></i>Pull Request</a>`
+                    pullRequestActionUrl
+                        ? `<a href="${escapeAttribute(pullRequestActionUrl)}" class="git-activity-action"><i class="fas fa-code-pull-request"></i>Pull Request</a>`
                         : ''
                 ].filter(Boolean).join('');
 
@@ -6661,8 +6663,8 @@ function loadGitUpdates(taskId) {
                         ${update.commit_message ? `<div class="small mb-2">${escapeHtml(update.commit_message)}</div>` : ''}
                         ${update.notes ? `<div class="small mb-2 text-muted">${escapeHtml(update.notes)}</div>` : ''}
                         <div class="d-flex gap-2 flex-wrap">
-                            ${update.repository_url ? `<a href="${escapeAttribute(update.repository_url)}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary">Repository</a>` : ''}
-                            ${update.pull_request_url ? `<a href="${escapeAttribute(update.pull_request_url)}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary">Pull Request</a>` : ''}
+                            ${update.branch_review_url || update.repository_review_url || update.repository_url ? `<a href="${escapeAttribute(update.branch_review_url || update.repository_review_url || update.repository_url)}" class="btn btn-sm btn-outline-primary">Repository</a>` : ''}
+                            ${update.branch_review_url || update.pull_request_review_url || update.pull_request_url ? `<a href="${escapeAttribute(update.branch_review_url || update.pull_request_review_url || update.pull_request_url)}" class="btn btn-sm btn-outline-primary">Pull Request</a>` : ''}
                         </div>
                     </div>
                 `;

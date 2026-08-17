@@ -34,6 +34,7 @@ $menuItems = [
         ['label' => 'Dashboard', 'url' => '/modules/architect/dashboard.php', 'icon' => 'drafting-compass'],
         ['label' => 'Calendar', 'url' => '/calendar.php', 'icon' => 'calendar-alt'],
         ['label' => 'Project Insights', 'url' => '/modules/insights/decision-center.php', 'icon' => 'lightbulb', 'attention' => true],
+        ['label' => 'QA Revisions', 'url' => '/modules/architect/qa-revisions.php', 'icon' => 'bell', 'attention_key' => 'qa_revisions'],
         ['label' => 'Process History', 'url' => '/modules/insights/process-history.php', 'icon' => 'clock-rotate-left'],
         [
             'label' => 'Projects',
@@ -101,6 +102,8 @@ $sidebarLogoPath = __DIR__ . '/../assets/img/logoInside.png';
 $sidebarLogoVersion = file_exists($sidebarLogoPath) ? (string) filemtime($sidebarLogoPath) : '1';
 $projectInsightsAttentionCount = 0;
 $projectInsightsAttentionTitle = '';
+$qaRevisionNotificationCount = 0;
+$qaRevisionNotificationTitle = '';
 try {
     if (isset($attentionProjectSummaries) && is_array($attentionProjectSummaries)) {
         $projectInsightsAttentionCount = count($attentionProjectSummaries);
@@ -122,6 +125,52 @@ try {
 } catch (Throwable $exception) {
     $projectInsightsAttentionCount = 0;
     $projectInsightsAttentionTitle = '';
+}
+
+try {
+    if ($role === 'architect') {
+        $sidebarConn = isset($sidebarConn) && $sidebarConn ? $sidebarConn : getConnection();
+        $architectId = (int) ($user['id'] ?? 0);
+        $hasMethodologyTaskDepartments = dbTableExists($sidebarConn, 'methodology_task_departments');
+        $hasMethodologyTasks = dbTableExists($sidebarConn, 'methodology_tasks');
+        $qaRevisionWhere = "t.status = 'qa_failed'";
+
+        if ($hasMethodologyTaskDepartments && $hasMethodologyTasks) {
+            $qaRevisionWhere = "(
+                t.status = 'qa_failed'
+                OR EXISTS (
+                    SELECT 1
+                    FROM methodology_task_departments mtd_badge
+                    LEFT JOIN methodology_tasks mt_badge ON mt_badge.id = mtd_badge.methodology_task_id
+                    WHERE COALESCE(mtd_badge.workflow_task_id, mt_badge.task_id) = t.id
+                      AND mtd_badge.status IN ('for_revision', 'planned')
+                      AND COALESCE(mtd_badge.revision_notes, '') <> ''
+                )
+            )";
+        }
+
+        $qaRevisionResult = $sidebarConn->query("
+            SELECT COUNT(DISTINCT t.id) AS revision_count,
+                   GROUP_CONCAT(DISTINCT p.name ORDER BY p.name SEPARATOR ', ') AS project_names
+            FROM tasks t
+            JOIN projects p ON p.id = t.project_id
+            WHERE (p.architect_id = {$architectId} OR p.architect_id IS NULL)
+              AND p.status != 'cancelled'
+              AND {$qaRevisionWhere}
+        ");
+
+        if ($qaRevisionResult) {
+            $qaRevisionRow = $qaRevisionResult->fetch_assoc() ?: [];
+            $qaRevisionNotificationCount = max(0, (int) ($qaRevisionRow['revision_count'] ?? 0));
+            $qaRevisionProjectNames = trim((string) ($qaRevisionRow['project_names'] ?? ''));
+            if ($qaRevisionProjectNames !== '') {
+                $qaRevisionNotificationTitle = implode(', ', array_slice(array_map('trim', explode(',', $qaRevisionProjectNames)), 0, 4));
+            }
+        }
+    }
+} catch (Throwable $exception) {
+    $qaRevisionNotificationCount = 0;
+    $qaRevisionNotificationTitle = '';
 }
 
 function isSidebarItemActive(array $item, string $currentPage, string $currentPath): bool
@@ -158,14 +207,30 @@ function isSidebarItemActive(array $item, string $currentPage, string $currentPa
 
     <div class="sidebar-nav py-2">
         <?php foreach ($currentMenu as $item): ?>
+            <?php
+                $itemAttentionKey = (string) ($item['attention_key'] ?? '');
+                $itemAttentionCount = !empty($item['attention']) ? $projectInsightsAttentionCount : 0;
+                $itemAttentionTitle = !empty($item['attention']) ? $projectInsightsAttentionTitle : '';
+                $itemAttentionLabel = 'Project insights need attention';
+                $itemAttentionSubject = 'project';
+                $itemAttentionVerb = 'need attention';
+
+                if ($itemAttentionKey === 'qa_revisions') {
+                    $itemAttentionCount = $qaRevisionNotificationCount;
+                    $itemAttentionTitle = $qaRevisionNotificationTitle;
+                    $itemAttentionLabel = 'QA revisions need attention';
+                    $itemAttentionSubject = 'QA revision';
+                    $itemAttentionVerb = 'need attention';
+                }
+            ?>
             <a
                 href="<?php echo BASE_URL . ltrim($item['url'], '/'); ?>"
-                class="menu-item <?php echo isSidebarItemActive($item, $currentPage, $currentPath) ? 'active' : ''; ?> <?php echo !empty($item['attention']) && $projectInsightsAttentionCount > 0 ? 'has-attention' : ''; ?>"
+                class="menu-item <?php echo isSidebarItemActive($item, $currentPage, $currentPath) ? 'active' : ''; ?> <?php echo $itemAttentionCount > 0 ? 'has-attention' : ''; ?>"
             >
                 <i class="fas fa-<?php echo htmlspecialchars($item['icon']); ?> menu-icon"></i>
                 <span class="menu-label sidebar-label"><?php echo htmlspecialchars($item['label']); ?></span>
-                <?php if (!empty($item['attention']) && $projectInsightsAttentionCount > 0): ?>
-                    <span class="sidebar-attention-badge" title="<?php echo (int) $projectInsightsAttentionCount; ?> project<?php echo $projectInsightsAttentionCount === 1 ? '' : 's'; ?> need attention<?php echo $projectInsightsAttentionTitle !== '' ? ': ' . htmlspecialchars($projectInsightsAttentionTitle) : ''; ?>" aria-label="Project insights need attention">
+                <?php if ($itemAttentionCount > 0): ?>
+                    <span class="sidebar-attention-badge" title="<?php echo (int) $itemAttentionCount; ?> <?php echo htmlspecialchars($itemAttentionSubject); ?><?php echo $itemAttentionCount === 1 ? '' : 's'; ?> <?php echo htmlspecialchars($itemAttentionVerb); ?><?php echo $itemAttentionTitle !== '' ? ': ' . htmlspecialchars($itemAttentionTitle) : ''; ?>" aria-label="<?php echo htmlspecialchars($itemAttentionLabel); ?>">
                         <i class="fas fa-exclamation"></i>
                     </span>
                 <?php endif; ?>
