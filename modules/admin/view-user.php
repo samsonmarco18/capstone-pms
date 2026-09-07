@@ -358,6 +358,12 @@ include '../../includes/navbar.php';
                                 <i class="fas fa-user-tie"></i>
                                 <?php echo htmlspecialchars($roleLabel); ?>
                             </span>
+                            <?php if ($role === 'developer'): ?>
+                            <span class="profile-badge">
+                                <i class="fas fa-layer-group"></i>
+                                <?php echo htmlspecialchars(getDeveloperClassificationLabel($selectedUser['developer_classification'] ?? null)); ?>
+                            </span>
+                            <?php endif; ?>
                             <span class="profile-badge">
                                 <i class="fas fa-building"></i>
                                 <?php echo htmlspecialchars($selectedUser['department'] ?: 'No department'); ?>
