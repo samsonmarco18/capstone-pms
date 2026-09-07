@@ -1162,12 +1162,12 @@ CREATE TABLE repository_operations (
 
 -- Insert default admin user (password: password)
 INSERT INTO users (username, email, password, full_name, department, role, status, designation) VALUES
-('admin', 'admin@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'System Administrator', NULL, 'admin', 'active', 'Admin');
+('admin', 'admin@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'System Administrator', 'Administration', 'admin', 'active', 'Admin');
 
 -- Insert Sample Users for Each Role (password: password)
 INSERT INTO users (username, email, password, full_name, department, role, status, designation) VALUES
-('sales_user', 'sales@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'John Sales Manager', NULL, 'sales', 'active', 'Sales Manager'),
-('architect', 'architect@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Maria Architect', NULL, 'architect', 'active', 'System Architect'),
+('sales_user', 'sales@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'John Sales Manager', 'Sales', 'sales', 'active', 'Sales Manager'),
+('architect', 'architect@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Maria Architect', 'Architecture', 'architect', 'active', 'System Architect'),
 ('sul_user', 'sul@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Robert Frontend SUL', 'Frontend Developer', 'sul', 'active', 'Service Unit Leader'),
 ('qa_user', 'qa@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Quinn QA Engineer', 'QA Engineer', 'qa', 'active', 'QA Engineer'),
 ('expert', 'expert@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Dr. Frontend Expert', 'Frontend Developer', 'expert', 'active', 'Frontend Expert'),

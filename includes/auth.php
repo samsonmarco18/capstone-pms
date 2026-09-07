@@ -18,6 +18,7 @@ function getCurrentUser(): ?array
     }
 
     $conn = getConnection();
+    ensureCoreRoleDepartments($conn);
     $stmt = $conn->prepare('SELECT * FROM users WHERE id = ? LIMIT 1');
     if ($stmt === false) {
         error_log('getCurrentUser prepare failed: ' . ($conn->error ?? 'unknown error'));
@@ -42,6 +43,27 @@ function getCurrentUser(): ?array
     $stmt->close();
 
     return $user;
+}
+
+function ensureCoreRoleDepartments(mysqli|PgsqlMysqliCompatConnection $conn): void
+{
+    static $ensured = false;
+    if ($ensured) {
+        return;
+    }
+
+    $ensured = true;
+    $conn->query("
+        UPDATE users
+        SET department = CASE role
+            WHEN 'admin' THEN 'Administration'
+            WHEN 'sales' THEN 'Sales'
+            WHEN 'architect' THEN 'Architecture'
+            ELSE department
+        END
+        WHERE role IN ('admin', 'sales', 'architect')
+          AND TRIM(COALESCE(department, '')) = ''
+    ");
 }
 
 function getUserProfileImageUrl(?string $profilePic): string
@@ -553,6 +575,9 @@ function getRoleDisplayName(string $role): string
 function getDepartmentOptions(): array
 {
     return [
+        'Administration',
+        'Sales',
+        'Architecture',
         'UI/UX',
         'Frontend',
         'Backend',
