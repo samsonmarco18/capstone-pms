@@ -145,7 +145,7 @@ include '../../includes/navbar.php';
                         <?php endforeach; ?>
                     </div>
                 <?php endif; ?>
-                <form method="POST" action="edit-user.php?id=<?php echo (int) $selectedUser['id']; ?>" autocomplete="off" data-selected-user-form data-restore-server-values="<?php echo $usePostedValues ? '0' : '1'; ?>">
+                <form method="POST" action="edit-user.php?id=<?php echo (int) $selectedUser['id']; ?>" autocomplete="off" data-selected-user-form data-generic-draft-disabled="true" data-restore-server-values="<?php echo $usePostedValues ? '0' : '1'; ?>">
                     <input type="hidden" name="id" value="<?php echo (int) $selectedUser['id']; ?>">
                     <div class="row g-3">
                         <div class="col-md-6">
@@ -162,7 +162,7 @@ include '../../includes/navbar.php';
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Department</label>
-                            <select name="department" class="form-select">
+                            <select name="department" class="form-select" data-server-value="<?php echo htmlspecialchars($formValues['department'], ENT_QUOTES); ?>">
                                 <option value="">Select department</option>
                                 <?php $selectedDepartment = $formValues['department']; ?>
                                 <?php foreach ($departments as $department): ?>
@@ -179,7 +179,7 @@ include '../../includes/navbar.php';
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Role</label>
-                            <select name="role" class="form-select">
+                            <select name="role" class="form-select" data-server-value="<?php echo htmlspecialchars($formValues['role'], ENT_QUOTES); ?>">
                                 <?php $selectedRole = $formValues['role']; ?>
                                 <?php foreach (['admin', 'sales', 'architect', 'sul', 'qa', 'expert', 'developer'] as $role): ?>
                                     <option value="<?php echo $role; ?>" <?php echo $selectedRole === $role ? 'selected' : ''; ?>>
@@ -190,7 +190,7 @@ include '../../includes/navbar.php';
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Status</label>
-                            <select name="status" class="form-select">
+                            <select name="status" class="form-select" data-server-value="<?php echo htmlspecialchars($formValues['status'], ENT_QUOTES); ?>">
                                 <?php $selectedStatus = $formValues['status']; ?>
                                 <?php foreach (['active', 'inactive', 'suspended'] as $status): ?>
                                     <option value="<?php echo $status; ?>" <?php echo $selectedStatus === $status ? 'selected' : ''; ?>>
@@ -234,6 +234,7 @@ document.addEventListener('DOMContentLoaded', function () {
         form.querySelectorAll('[data-server-value]').forEach(function (field) {
             field.value = field.dataset.serverValue || '';
         });
+        form.querySelector('select[name="role"]')?.dispatchEvent(new Event('change'));
     };
 
     restoreServerValues();
