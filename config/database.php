@@ -149,11 +149,18 @@ function getConnection(): mysqli|PgsqlMysqliCompatConnection
 
 function dbColumnExists(mysqli|PgsqlMysqliCompatConnection $conn, string $table, string $column): bool
 {
+    static $columnExistsCache = [];
+
     $tableName = strtolower(trim($table));
     $columnName = strtolower(trim($column));
 
     if ($tableName === '' || $columnName === '') {
         return false;
+    }
+
+    $cacheKey = DB_DRIVER . ':' . $tableName . ':' . $columnName;
+    if (array_key_exists($cacheKey, $columnExistsCache)) {
+        return $columnExistsCache[$cacheKey];
     }
 
     $escapedTable = $conn->real_escape_string($tableName);
@@ -181,17 +188,24 @@ function dbColumnExists(mysqli|PgsqlMysqliCompatConnection $conn, string $table,
 
     $result = $conn->query($sql);
 
-    return $result instanceof mysqli_result
+    return $columnExistsCache[$cacheKey] = $result instanceof mysqli_result
         ? $result->num_rows > 0
         : ($result instanceof PgsqlMysqliCompatResult && $result->num_rows > 0);
 }
 
 function dbTableExists(mysqli|PgsqlMysqliCompatConnection $conn, string $table): bool
 {
+    static $tableExistsCache = [];
+
     $tableName = strtolower(trim($table));
 
     if ($tableName === '') {
         return false;
+    }
+
+    $cacheKey = DB_DRIVER . ':' . $tableName;
+    if (array_key_exists($cacheKey, $tableExistsCache)) {
+        return $tableExistsCache[$cacheKey];
     }
 
     $escapedTable = $conn->real_escape_string($tableName);
@@ -216,7 +230,7 @@ function dbTableExists(mysqli|PgsqlMysqliCompatConnection $conn, string $table):
 
     $result = $conn->query($sql);
 
-    return $result instanceof mysqli_result
+    return $tableExistsCache[$cacheKey] = $result instanceof mysqli_result
         ? $result->num_rows > 0
         : ($result instanceof PgsqlMysqliCompatResult && $result->num_rows > 0);
 }

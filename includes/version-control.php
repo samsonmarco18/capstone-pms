@@ -1137,7 +1137,6 @@ function vcCreateRepositoryArchive(
         $gitDir = $cloneTempDir . DIRECTORY_SEPARATOR . '.git';
         if (!is_dir($gitDir)) {
             error_log('ERROR: .git directory not found at: ' . $gitDir);
-            error_log('Clone directory contents: ' . print_r(scandir($cloneTempDir), true));
             throw new RuntimeException('Git directory not found after clone at: ' . $gitDir . '. Clone may have failed.');
         }
         

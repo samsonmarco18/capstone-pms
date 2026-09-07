@@ -156,7 +156,7 @@ function fetchProjectContext(mysqli|PgsqlMysqliCompatConnection $conn, int $proj
     try {
     $projectStmt = $conn->prepare(
         'SELECT p.*, c.name AS client_name, c.contact_person, c.email AS client_email,
-                c.phone AS client_phone, c.address AS client_address, c.industry AS client_industry,
+                c.phone AS client_phone, c.address AS client_address,
                 creator.full_name AS created_by_name,
                 architect.full_name AS architect_name,
                 sul.full_name AS sul_name

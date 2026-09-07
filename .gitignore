@@ -37,6 +37,9 @@ temp/
 tmp/
 cache/
 .cache/
+temp-*.html
+temp-cookies.txt
+tmp_*.js
 
 # User-specific files
 uploads/user-temp/

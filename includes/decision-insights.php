@@ -523,7 +523,6 @@ function di_load_decision_insights(mysqli|PgsqlMysqliCompatConnection $conn, int
         SELECT
             p.*,
             c.name AS client_name,
-            c.industry AS client_industry,
             (
                 SELECT COUNT(*)
                 FROM projects px

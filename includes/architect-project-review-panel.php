@@ -8,7 +8,7 @@ $architectReviewPanelBodyId = 'architectReviewPanelBody' . max(0, $architectRevi
 
 if ($architectReviewProjectId > 0) {
     $architectReviewResult = $conn->query("
-        SELECT p.*, c.name AS client_name, c.contact_person, c.email AS client_email, c.phone AS client_phone, c.address AS client_address, c.industry AS client_industry
+        SELECT p.*, c.name AS client_name, c.contact_person, c.email AS client_email, c.phone AS client_phone, c.address AS client_address
         FROM projects p
         INNER JOIN clients c ON c.id = p.client_id
         WHERE p.id = {$architectReviewProjectId}
