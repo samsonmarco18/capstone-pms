@@ -103,7 +103,7 @@ function normalizeMailSettingValue(string $name, mixed $value): ?string
 
 function getMailConfig(): array
 {
-    $companyName = getAppSetting('company_name', 'ERNI PMS') ?? 'ERNI PMS';
+    $companyName = getAppSetting('company_name', 'EVORTIX PMS') ?? 'EVORTIX PMS';
     $notificationEmail = getAppSetting('notification_email', '') ?? '';
     $envEnabled = getMailSetting('MAIL_ENABLED', '');
     $envHost = getMailSetting('MAIL_HOST', '');
@@ -169,7 +169,7 @@ function getMailConfig(): array
         'username' => $username,
         'password' => normalizeMailPassword($host, $password),
         'from_email' => $fromEmail,
-        'from_name' => $fromName !== '' ? $fromName : 'ERNI PMS',
+        'from_name' => $fromName !== '' ? $fromName : 'EVORTIX PMS',
         'verify_peer' => !in_array($verifyPeerRaw, ['0', 'false', 'no', 'off'], true),
         'timeout' => $timeout,
         'delivery_method' => $deliveryMethod,
@@ -330,7 +330,7 @@ function sendSystemEmail(string|array $to, string $subject, string $htmlBody, ?s
         'MIME-Version: 1.0',
         'Content-Type: ' . ($attachments !== [] ? 'multipart/mixed; boundary="' . $mixedBoundary . '"' : 'multipart/alternative; boundary="' . $boundary . '"'),
         'Message-ID: <' . bin2hex(random_bytes(10)) . '@' . $messageIdHost . '>',
-        'X-Mailer: ERNI PMS SMTP Mailer',
+        'X-Mailer: EVORTIX PMS SMTP Mailer',
     ];
 
     $message = implode("\r\n", $headers) . "\r\n\r\n";
@@ -793,7 +793,7 @@ function sendNotificationEmailToUser(int $userId, string $title, string $message
 
         $fullName = trim((string) ($user['full_name'] ?? 'Team Member'));
         $url = buildNotificationUrl($actionUrl);
-        $subject = '[ERNI PMS] ' . $title;
+        $subject = '[EVORTIX PMS] ' . $title;
         $safeTitle = htmlspecialchars($title, ENT_QUOTES, 'UTF-8');
         $safeName = htmlspecialchars($fullName, ENT_QUOTES, 'UTF-8');
         $safeMessage = nl2br(htmlspecialchars($message, ENT_QUOTES, 'UTF-8'));
@@ -806,15 +806,15 @@ function sendNotificationEmailToUser(int $userId, string $title, string $message
 
         if ($url !== null) {
             $htmlBody .= '<p style="margin:0 0 16px;"><a href="' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . '" '
-                . 'style="display:inline-block;background:#1f6392;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:10px;">Open in ERNI PMS</a></p>';
+                . 'style="display:inline-block;background:#1f6392;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:10px;">Open in EVORTIX PMS</a></p>';
         }
 
-        $htmlBody .= '<p style="margin:16px 0 0;color:#64748b;font-size:13px;">This email was sent automatically by ERNI PMS.</p>'
+        $htmlBody .= '<p style="margin:16px 0 0;color:#64748b;font-size:13px;">This email was sent automatically by EVORTIX PMS.</p>'
             . '</div></div>';
 
         $textBody = "Hello {$fullName},\n\n{$title}\n\n{$message}";
         if ($url !== null) {
-            $textBody .= "\n\nOpen in ERNI PMS: {$url}";
+            $textBody .= "\n\nOpen in EVORTIX PMS: {$url}";
         }
 
         $result = sendSystemEmail($email, $subject, $htmlBody, $textBody);

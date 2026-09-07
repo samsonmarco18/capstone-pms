@@ -5,6 +5,7 @@ require_once '../../includes/methodology-roadmap.php';
 require_once '../../includes/project-workflow.php';
 require_once '../../includes/project-estimation.php';
 require_once '../../includes/task-reopen.php';
+require_once '../../includes/version-control.php';
 requireRole('sul');
 
 $conn = getConnection();
@@ -64,7 +65,8 @@ $taskId = isset($_GET['task_id']) ? intval($_GET['task_id']) : 0;
 
 function sulTaskAllocationProjectFilter($conn, string $projectAlias, string $department): string
 {
-    return projectWorkflowProjectDepartmentClause($conn, $projectAlias, $department);
+    $departmentClause = projectWorkflowProjectDepartmentClause($conn, $projectAlias, $department);
+    return "({$departmentClause}) AND {$projectAlias}.workflow_status = 'architect_submitted' AND {$projectAlias}.status != 'cancelled'";
 }
 
 function sulTaskAllocationFormatDeadline(?string $deadline): string
@@ -121,7 +123,59 @@ function sulTaskAllocationProfileUrl(?string $profilePic): string
         return $profilePic;
     }
 
-    return BASE_URL . ltrim(str_replace('\\', '/', $profilePic), '/');
+    return storagePublicUrl($profilePic);
+}
+
+function sulTaskAllocationVersionControlUrl(array $task, bool $includeBranch = true): string
+{
+    return vcBuildRepositoryBrowserUrl(
+        (int) ($task['project_id'] ?? 0),
+        (int) ($task['review_repository_id'] ?? 0),
+        $includeBranch ? (int) ($task['review_branch_id'] ?? 0) : 0
+    );
+}
+
+function sulTaskAllocationIsUsableExternalUrl(?string $url): bool
+{
+    $url = trim((string) $url);
+    if ($url === '' || filter_var($url, FILTER_VALIDATE_URL) === false) {
+        return false;
+    }
+
+    return !vcIsInternalManagedRepositoryUrl($url);
+}
+
+function sulTaskAllocationRepositoryReviewUrl(array $task): string
+{
+    $externalRemoteUrl = vcNormalizeExternalRemoteUrl((string) ($task['review_external_remote_url'] ?? ''));
+    if ($externalRemoteUrl !== null) {
+        return $externalRemoteUrl;
+    }
+
+    $storedRepositoryUrl = trim((string) ($task['repository_url'] ?? ''));
+    if (sulTaskAllocationIsUsableExternalUrl($storedRepositoryUrl)) {
+        return $storedRepositoryUrl;
+    }
+
+    return sulTaskAllocationVersionControlUrl($task, false);
+}
+
+function sulTaskAllocationPullRequestReviewUrl(array $task): array
+{
+    $storedPullRequestUrl = trim((string) ($task['pull_request_url'] ?? ''));
+    if (sulTaskAllocationIsUsableExternalUrl($storedPullRequestUrl)) {
+        return [
+            'url' => $storedPullRequestUrl,
+            'label' => 'PR',
+            'icon' => 'fa-code-pull-request',
+        ];
+    }
+
+    return [
+        'url' => sulTaskAllocationVersionControlUrl($task, true),
+        'label' => 'Branch',
+        'icon' => 'fa-code-branch',
+    ];
 }
 
 function sulTaskAllocationInitials(?string $name): string
@@ -1219,7 +1273,11 @@ $codeReviewTasks = $conn->query("
                ORDER BY mtd_revision.updated_at DESC, mtd_revision.id DESC
                LIMIT 1
            ) AS department_revision_notes,
-           latest_git.branch_name, latest_git.commit_hash, latest_git.pull_request_url, latest_git.repository_url, latest_git.notes AS git_notes
+           latest_git.branch_name, latest_git.commit_hash, latest_git.pull_request_url, latest_git.repository_url, latest_git.notes AS git_notes,
+           review_repo.id AS review_repository_id,
+           review_repo.name AS review_repository_name,
+           review_repo.external_remote_url AS review_external_remote_url,
+           review_branch.id AS review_branch_id
     FROM tasks t
     JOIN users u ON t.assigned_to = u.id
     JOIN projects p ON t.project_id = p.id
@@ -1230,6 +1288,18 @@ $codeReviewTasks = $conn->query("
         ORDER BY tgu.created_at DESC, tgu.id DESC
         LIMIT 1
     )
+    LEFT JOIN repository_branches review_branch ON review_branch.id = (
+        SELECT rb_match.id
+        FROM repository_branches rb_match
+        INNER JOIN project_repositories pr_match ON pr_match.id = rb_match.repository_id
+        WHERE pr_match.project_id = t.project_id
+          AND pr_match.repository_status = 'active'
+          AND rb_match.branch_status != 'deleted'
+          AND rb_match.name = latest_git.branch_name
+        ORDER BY pr_match.id ASC, rb_match.id ASC
+        LIMIT 1
+    )
+    LEFT JOIN project_repositories review_repo ON review_repo.id = review_branch.repository_id
     WHERE t.status = 'for_review'
       {$sulUserDepartmentFilter}
       AND {$sulProjectFilter}
@@ -3937,6 +4007,11 @@ include '../../includes/navbar.php';
     min-width: 72px;
 }
 
+#developer-review-panel tr.is-notification-target {
+    box-shadow: inset 4px 0 0 #38bdf8;
+    background: rgba(56, 189, 248, .1);
+}
+
 .qa-primary-decision-actions[hidden],
 .qa-fail-routing-panel[hidden] {
     display: none !important;
@@ -4184,6 +4259,15 @@ include '../../includes/navbar.php';
     display: block;
     font-weight: 700;
     white-space: nowrap;
+}
+
+.allocation-branch-link {
+    text-decoration: none;
+}
+
+.allocation-branch-link:hover {
+    color: var(--theme-primary);
+    text-decoration: underline;
 }
 
 .allocation-deadline-note {
@@ -7703,7 +7787,7 @@ include '../../includes/navbar.php';
                                     static fn(array $target): bool => !empty($target['is_available'])
                                 ));
                             ?>
-                                <tr class="is-static-row">
+                                <tr class="is-static-row" data-review-task-id="<?php echo (int) ($task['id'] ?? 0); ?>">
                                     <td>
                                         <span class="task-priority priority-<?php echo htmlspecialchars($priority); ?>"><?php echo htmlspecialchars(ucfirst($priority)); ?></span>
                                     </td>
@@ -7728,8 +7812,18 @@ include '../../includes/navbar.php';
                                             <span class="allocation-deadline">QA notes and evidence</span>
                                             <span class="allocation-deadline-note">Open the task to inspect the submitted testing handoff</span>
                                         <?php elseif (!$isUiUxDepartmentSul): ?>
+                                            <?php
+                                                $branchReviewUrl = sulTaskAllocationVersionControlUrl($task, true);
+                                                $repositoryReviewUrl = sulTaskAllocationRepositoryReviewUrl($task);
+                                                $pullRequestReview = sulTaskAllocationPullRequestReviewUrl($task);
+                                                $hasRepositoryReviewTarget = !empty($task['repository_url'])
+                                                    || !empty($task['review_external_remote_url'])
+                                                    || (int) ($task['review_repository_id'] ?? 0) > 0;
+                                            ?>
                                             <?php if (!empty($task['branch_name'])): ?>
-                                                <span class="allocation-deadline"><i class="fas fa-code-branch" aria-hidden="true"></i> <?php echo htmlspecialchars((string) $task['branch_name']); ?></span>
+                                                <a class="allocation-deadline allocation-branch-link" href="<?php echo htmlspecialchars($branchReviewUrl); ?>" target="_blank" rel="noopener" title="Open this branch in Version Control">
+                                                    <i class="fas fa-code-branch" aria-hidden="true"></i> <?php echo htmlspecialchars((string) $task['branch_name']); ?>
+                                                </a>
                                             <?php else: ?>
                                                 <span class="allocation-deadline">Branch not linked</span>
                                             <?php endif; ?>
@@ -7738,11 +7832,11 @@ include '../../includes/navbar.php';
                                             <?php endif; ?>
                                         <?php endif; ?>
                                         <div class="workflow-action-row<?php echo $isUiUxDepartmentSul ? '' : ' mt-2'; ?>">
-                                            <?php if (!$isUiUxDepartmentSul && !$isQaDepartmentSul && !empty($task['pull_request_url'])): ?>
-                                                <a class="btn-outline-modern" href="<?php echo htmlspecialchars((string) $task['pull_request_url']); ?>" target="_blank" rel="noopener"><i class="fas fa-code-pull-request"></i> PR</a>
+                                            <?php if (!$isUiUxDepartmentSul && !$isQaDepartmentSul && (!empty($task['pull_request_url']) || !empty($task['branch_name']))): ?>
+                                                <a class="btn-outline-modern" href="<?php echo htmlspecialchars((string) $pullRequestReview['url']); ?>" target="_blank" rel="noopener"><i class="fas <?php echo htmlspecialchars((string) $pullRequestReview['icon']); ?>"></i> <?php echo htmlspecialchars((string) $pullRequestReview['label']); ?></a>
                                             <?php endif; ?>
-                                            <?php if (!$isUiUxDepartmentSul && !$isQaDepartmentSul && !empty($task['repository_url'])): ?>
-                                                <a class="btn-outline-modern" href="<?php echo htmlspecialchars((string) $task['repository_url']); ?>" target="_blank" rel="noopener"><i class="fas fa-link"></i> Repo</a>
+                                            <?php if (!$isUiUxDepartmentSul && !$isQaDepartmentSul && $hasRepositoryReviewTarget && $repositoryReviewUrl !== ''): ?>
+                                                <a class="btn-outline-modern" href="<?php echo htmlspecialchars($repositoryReviewUrl); ?>" target="_blank" rel="noopener"><i class="fas fa-link"></i> Repo</a>
                                             <?php endif; ?>
                                             <button type="button" class="btn-outline-modern" onclick="viewTaskDetails(<?php echo (int) $task['id']; ?>)">
                                                 <i class="fas fa-eye"></i> <?php echo $isUiUxDepartmentSul ? 'Review' : 'View'; ?>
@@ -9040,7 +9134,13 @@ function renderSulDeveloperWork(task) {
         </div>`;
     }).join('');
 
-    const gitRows = gitUpdates.map((update) => `<div class="task-evidence-row">
+    const gitRows = gitUpdates.map((update) => {
+        const pullRequestUrl = update.pull_request_review_url || update.pull_request_url || '';
+        const pullRequestLabel = update.pull_request_review_label || 'PR';
+        const pullRequestIcon = update.pull_request_review_icon || 'fa-code-pull-request';
+        const repositoryUrl = update.repository_review_url || update.repository_url || '';
+
+        return `<div class="task-evidence-row">
         <span class="task-evidence-icon"><i class="fas fa-code-branch"></i></span>
         <div class="task-evidence-main">
             <strong>${escapeHtml(update.branch_name || 'Repository update')}</strong>
@@ -9049,10 +9149,11 @@ function renderSulDeveloperWork(task) {
         <span class="task-evidence-type">Git update</span>
         <p class="task-evidence-note" title="${escapeHtml(update.notes || '')}">${update.notes ? escapeHtml(update.notes) : 'No additional note'}</p>
         <div class="task-evidence-actions">
-            ${update.pull_request_url ? `<a href="${escapeHtml(update.pull_request_url)}" target="_blank" rel="noopener"><i class="fas fa-code-pull-request"></i><span>PR</span></a>` : ''}
-            ${update.repository_url ? `<a href="${escapeHtml(update.repository_url)}" target="_blank" rel="noopener"><i class="fas fa-link"></i><span>Repo</span></a>` : ''}
+            ${pullRequestUrl ? `<a href="${escapeAttribute(pullRequestUrl)}" target="_blank" rel="noopener"><i class="fas ${escapeAttribute(pullRequestIcon)}"></i><span>${escapeHtml(pullRequestLabel)}</span></a>` : ''}
+            ${repositoryUrl ? `<a href="${escapeAttribute(repositoryUrl)}" target="_blank" rel="noopener"><i class="fas fa-link"></i><span>Repo</span></a>` : ''}
         </div>
-    </div>`).join('');
+    </div>`;
+    }).join('');
 
     const relevantGitUpdates = sulIsUiUxReview ? [] : gitUpdates;
     const rowCount = artifacts.length + relevantGitUpdates.length;
@@ -9261,6 +9362,16 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+function escapeAttribute(text) {
+    return String(text ?? '').replace(/[&<>"']/g, (character) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+    }[character]));
+}
+
 const sulGanttProject = <?php echo json_encode($ganttProjectData, JSON_UNESCAPED_UNICODE); ?>;
 
 function diffDays(startDate, endDate) {
@@ -9464,6 +9575,25 @@ function activateSulHashTab() {
 }
 
 activateSulHashTab();
+
+function focusSulReviewNotificationTarget() {
+    const taskId = new URLSearchParams(window.location.search).get('task_id');
+    if (!taskId || window.location.hash !== '#developer-review-panel') {
+        return;
+    }
+
+    window.setTimeout(() => {
+        const row = Array.from(document.querySelectorAll('[data-review-task-id]')).find((item) => item.dataset.reviewTaskId === taskId);
+        if (!row) {
+            return;
+        }
+        row.classList.add('is-notification-target');
+        row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        window.setTimeout(() => row.classList.remove('is-notification-target'), 6500);
+    }, 250);
+}
+
+focusSulReviewNotificationTarget();
 
 document.querySelectorAll('#expertWorkflowTabs [data-bs-toggle="tab"]').forEach((tab) => {
     tab.addEventListener('shown.bs.tab', () => {

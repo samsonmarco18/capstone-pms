@@ -22,6 +22,16 @@ taskReopenEnsureSchema($conn);
 
 $taskId = intval($_GET['id'] ?? 0);
 
+function taskDetailsIsUsableExternalUrl(?string $url): bool
+{
+    $url = trim((string) $url);
+    if ($url === '' || filter_var($url, FILTER_VALIDATE_URL) === false) {
+        return false;
+    }
+
+    return !vcIsInternalManagedRepositoryUrl($url);
+}
+
 if ($taskId <= 0) {
     http_response_code(400);
     echo json_encode(['error' => 'Invalid task ID']);
@@ -84,6 +94,9 @@ $stmt->execute();
 $result = $stmt->get_result();
 
 if ($task = $result->fetch_assoc()) {
+    $projectIsCancelled = (string) ($task['project_status'] ?? '') === 'cancelled';
+    $task['project_is_cancelled'] = $projectIsCancelled;
+
     // Calculate days left
     $deadlineTimestamp = $task['deadline'] ? strtotime($task['deadline']) : false;
     $daysLeft = $deadlineTimestamp ? (int) floor(($deadlineTimestamp - time()) / 86400) : null;
@@ -115,11 +128,61 @@ if ($task = $result->fetch_assoc()) {
     while ($gitUpdate = $gitUpdatesResult->fetch_assoc()) {
         $task['git_updates'][] = $gitUpdate;
     }
-    $task['latest_git_update'] = $task['git_updates'][0] ?? null;
     $latestGitStmt->close();
 
+    if ($task['git_updates'] && dbTableExists($conn, 'project_repositories') && dbTableExists($conn, 'repository_branches')) {
+        $taskProjectId = (int) ($task['project_id'] ?? 0);
+        $branchReviewLookup = [];
+        foreach ($task['git_updates'] as $gitUpdateIndex => $gitUpdate) {
+            $branchName = trim((string) ($gitUpdate['branch_name'] ?? ''));
+            if ($branchName !== '' && !array_key_exists($branchName, $branchReviewLookup)) {
+                $reviewBranchStmt = $conn->prepare(
+                    "SELECT rb.id AS branch_id, pr.id AS repository_id, pr.name AS repository_name, pr.external_remote_url
+                     FROM project_repositories pr
+                     INNER JOIN repository_branches rb ON rb.repository_id = pr.id
+                     WHERE pr.project_id = ?
+                       AND pr.repository_status = 'active'
+                       AND rb.branch_status != 'deleted'
+                       AND rb.name = ?
+                     ORDER BY pr.id ASC, rb.id ASC
+                     LIMIT 1"
+                );
+                $reviewBranchStmt->bind_param('is', $taskProjectId, $branchName);
+                $reviewBranchStmt->execute();
+                $branchReviewLookup[$branchName] = $reviewBranchStmt->get_result()->fetch_assoc() ?: [];
+                $reviewBranchStmt->close();
+            }
+
+            $reviewBranch = $branchReviewLookup[$branchName] ?? [];
+            $reviewRepositoryId = (int) ($reviewBranch['repository_id'] ?? 0);
+            $reviewBranchId = (int) ($reviewBranch['branch_id'] ?? 0);
+            $branchReviewUrl = vcBuildRepositoryBrowserUrl($taskProjectId, $reviewRepositoryId, $reviewBranchId);
+            $repositoryReviewUrl = vcBuildRepositoryBrowserUrl($taskProjectId, $reviewRepositoryId);
+
+            $externalRemoteUrl = vcNormalizeExternalRemoteUrl((string) ($reviewBranch['external_remote_url'] ?? ''));
+            $storedRepositoryUrl = trim((string) ($gitUpdate['repository_url'] ?? ''));
+            if ($externalRemoteUrl !== null) {
+                $repositoryReviewUrl = $externalRemoteUrl;
+            } elseif (taskDetailsIsUsableExternalUrl($storedRepositoryUrl)) {
+                $repositoryReviewUrl = $storedRepositoryUrl;
+            }
+
+            $storedPullRequestUrl = trim((string) ($gitUpdate['pull_request_url'] ?? ''));
+            $hasExternalPullRequest = taskDetailsIsUsableExternalUrl($storedPullRequestUrl);
+
+            $task['git_updates'][$gitUpdateIndex]['review_repository_id'] = $reviewRepositoryId;
+            $task['git_updates'][$gitUpdateIndex]['review_branch_id'] = $reviewBranchId;
+            $task['git_updates'][$gitUpdateIndex]['branch_review_url'] = $branchReviewUrl;
+            $task['git_updates'][$gitUpdateIndex]['repository_review_url'] = $repositoryReviewUrl;
+            $task['git_updates'][$gitUpdateIndex]['pull_request_review_url'] = $hasExternalPullRequest ? $storedPullRequestUrl : $branchReviewUrl;
+            $task['git_updates'][$gitUpdateIndex]['pull_request_review_label'] = $hasExternalPullRequest ? 'PR' : 'Branch';
+            $task['git_updates'][$gitUpdateIndex]['pull_request_review_icon'] = $hasExternalPullRequest ? 'fa-code-pull-request' : 'fa-code-branch';
+        }
+    }
+    $task['latest_git_update'] = $task['git_updates'][0] ?? null;
+
     $task['repository_branches'] = [];
-    if (dbTableExists($conn, 'project_repositories') && dbTableExists($conn, 'repository_branches')) {
+    if (!$projectIsCancelled && dbTableExists($conn, 'project_repositories') && dbTableExists($conn, 'repository_branches')) {
         $taskProjectId = (int) ($task['project_id'] ?? 0);
         $branchStmt = $conn->prepare(
             "SELECT rb.id, rb.name, pr.id AS repository_id, pr.name AS repository_name, pr.slug
@@ -145,8 +208,12 @@ if ($task = $result->fetch_assoc()) {
     $task['project_requirements'] = departmentArtifactParseRequirements($task['requested_features'] ?? '');
     $task['additional_requirements'] = departmentArtifactAdditionalRequirements($task['requested_features'] ?? '');
     if (($user['role'] ?? '') === 'developer' && (int) ($task['assigned_to'] ?? 0) === (int) ($user['id'] ?? 0)) {
-        projectWorkflowSyncRoadmap($conn, (int) ($task['project_id'] ?? 0));
-        $task['roadmap_start_block_reason'] = methodologyRoadmapStartBlockReason($conn, $taskId, (int) $user['id']);
+        if ($projectIsCancelled) {
+            $task['roadmap_start_block_reason'] = 'This project is cancelled. Restore the project before updating progress.';
+        } else {
+            projectWorkflowSyncRoadmap($conn, (int) ($task['project_id'] ?? 0));
+            $task['roadmap_start_block_reason'] = methodologyRoadmapStartBlockReason($conn, $taskId, (int) $user['id']);
+        }
     } else {
         $task['roadmap_start_block_reason'] = null;
     }
@@ -213,9 +280,11 @@ if ($task = $result->fetch_assoc()) {
         $nextResult = $conn->query(
             "SELECT DISTINCT t.id, t.title, t.priority, t.status, t.started_at, t.deadline
              FROM tasks t
+             INNER JOIN projects p_next ON p_next.id = t.project_id
              LEFT JOIN methodology_tasks mt ON mt.task_id = t.id
              LEFT JOIN methodology_task_departments mtd ON mtd.workflow_task_id = t.id OR mtd.methodology_task_id = mt.id
              WHERE t.id <> {$taskId}
+               AND p_next.status != 'cancelled'
                AND t.status IN ('todo', 'in_progress', 'sul_revision', 'qa_failed', 'blocked')
                AND (t.assigned_to = {$developerId} OR mt.assigned_developer_id = {$developerId} OR mtd.assigned_developer_id = {$developerId})
              ORDER BY

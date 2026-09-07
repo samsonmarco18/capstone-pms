@@ -172,6 +172,7 @@ define('UPLOAD_MAX_SIZE', (int) getEnvOrDefault('UPLOAD_MAX_SIZE', 52428800)); /
 define('APP_ROOT_PATH', $appRootPath);
 $configuredUploadPath = trim((string) getEnvOrDefault('UPLOAD_STORAGE_ROOT', ''));
 define('UPLOAD_PATH', rtrim($configuredUploadPath !== '' ? $configuredUploadPath : APP_ROOT_PATH . '/uploads', '/\\') . DIRECTORY_SEPARATOR);
+define('UPLOAD_STORAGE_BACKEND', strtolower((string) getEnvOrDefault('UPLOAD_STORAGE_BACKEND', 'filesystem')));
 define('GIT_PATH', APP_ROOT_PATH . '/git/');
 define('GIT_WORKSPACES_PATH', APP_ROOT_PATH . '/git-workspaces/');
 

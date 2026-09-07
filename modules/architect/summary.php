@@ -1,5 +1,6 @@
 <?php
 require_once '../../includes/auth.php';
+require_once '../../includes/file-storage.php';
 require_once '../../includes/project-delay-insights.php';
 require_once '../../includes/workflow.php';
 require_once '../../includes/methodology-roadmap.php';
@@ -32,6 +33,8 @@ if (!$project) {
     header('Location: projects.php');
     exit();
 }
+
+projectWorkflowNormalizePreSubmitFeatureTasks($conn, $projectId);
 
 $featureCountRow = $conn->query("SELECT COUNT(*) AS total FROM tasks WHERE project_id = $projectId AND task_type = 'feature'")->fetch_assoc();
 $featureCount = (int) ($featureCountRow['total'] ?? 0);
@@ -1900,7 +1903,7 @@ a.progress-step:hover {
                                 <span><?php echo htmlspecialchars(trim((string) ($doc['description'] ?? '')) ?: 'No description provided.'); ?></span>
                                 <small><i class="far fa-clock me-1" aria-hidden="true"></i>Uploaded <?php echo !empty($doc['created_at']) ? date('M d, Y \a\t g:i A', strtotime((string) $doc['created_at'])) : 'with no recorded date'; ?></small>
                             </span>
-                            <a href="<?php echo BASE_URL; ?>/<?php echo htmlspecialchars((string) $doc['file_path']); ?>" class="summary-document-row__action" target="_blank" rel="noopener" aria-label="View <?php echo htmlspecialchars($documentLabel); ?>" title="View document"><i class="fas fa-eye" aria-hidden="true"></i></a>
+                            <a href="<?php echo htmlspecialchars(storagePublicUrl((string) $doc['file_path'])); ?>" class="summary-document-row__action" target="_blank" rel="noopener" aria-label="View <?php echo htmlspecialchars($documentLabel); ?>" title="View document"><i class="fas fa-eye" aria-hidden="true"></i></a>
                         </div>
                     <?php endwhile; ?>
                 </div>

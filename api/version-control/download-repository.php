@@ -125,7 +125,8 @@ try {
         (string) $repository['slug'],
         $archiveRef,
         (string) ($repository['external_remote_url'] ?? ''),
-        (string) ($repository['webhook_token'] ?? '')
+        (string) ($repository['webhook_token'] ?? ''),
+        $user
     );
 
     $archivePath = (string) $archive['archive_path'];

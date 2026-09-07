@@ -16,7 +16,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         SELECT t.id, t.title, t.status, t.assigned_to, t.project_id, p.name AS project_name
         FROM tasks t
         JOIN projects p ON p.id = t.project_id
-        WHERE t.id = ? AND t.status = 'qa_testing'
+        WHERE t.id = ? AND t.status = 'qa_testing' AND p.status != 'cancelled'
         LIMIT 1
     ");
     $taskStmt->bind_param('i', $taskId);
@@ -123,6 +123,7 @@ $queue = $conn->query("
     JOIN projects p ON p.id = t.project_id
     LEFT JOIN users u ON u.id = t.assigned_to
     WHERE t.status = 'qa_testing'
+      AND p.status != 'cancelled'
     ORDER BY t.sul_reviewed_at ASC, t.updated_at ASC
 ");
 $queueCount = $queue ? $queue->num_rows : 0;
@@ -141,7 +142,7 @@ if ($selectedTaskId > 0) {
         FROM tasks t
         JOIN projects p ON p.id = t.project_id
         LEFT JOIN users u ON u.id = t.assigned_to
-        WHERE t.id = ? AND t.status = 'qa_testing'
+        WHERE t.id = ? AND t.status = 'qa_testing' AND p.status != 'cancelled'
         LIMIT 1
     ");
     $selectedStmt->bind_param('i', $selectedTaskId);

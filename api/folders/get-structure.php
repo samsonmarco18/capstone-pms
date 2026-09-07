@@ -182,8 +182,10 @@ function getFolderTree(mysqli|PgsqlMysqliCompatConnection $conn, int $parentId, 
     return $folders;
 }
 
-function getSharedProjectFolders(mysqli|PgsqlMysqliCompatConnection $conn, ?string $roleFilter = null): array
+function getSharedProjectFolders(mysqli|PgsqlMysqliCompatConnection $conn, array $user, ?string $roleFilter = null): array
 {
+    $userId = (int) ($user['id'] ?? 0);
+    $isAdmin = (string) ($user['role'] ?? '') === 'admin';
     $sql = '
         SELECT f.*,
                u.full_name AS owner_name,
@@ -192,25 +194,72 @@ function getSharedProjectFolders(mysqli|PgsqlMysqliCompatConnection $conn, ?stri
         FROM folders f
         LEFT JOIN users u ON u.id = f.created_by
         LEFT JOIN clients c ON c.id = f.client_id
+        LEFT JOIN projects p ON p.id = f.project_id
         WHERE f.folder_type = \'project\' AND f.project_id IS NOT NULL';
 
     if ($roleFilter !== '') {
         $sql .= ' AND (f.role IS NULL OR f.role = ?)';
     }
 
+    if (!$isAdmin) {
+        $sql .= '
+            AND (
+                p.created_by = ?
+                OR c.created_by = ?
+                OR p.architect_id = ?
+                OR p.sul_id = ?
+                OR EXISTS (
+                    SELECT 1
+                    FROM tasks t
+                    WHERE t.project_id = p.id
+                      AND (t.assigned_to = ? OR t.assigned_by = ?)
+                    LIMIT 1
+                )
+                OR EXISTS (
+                    SELECT 1
+                    FROM methodology_tasks mt
+                    WHERE mt.project_id = p.id
+                      AND mt.assigned_developer_id = ?
+                    LIMIT 1
+                )
+                OR EXISTS (
+                    SELECT 1
+                    FROM methodology_task_departments mtd
+                    WHERE mtd.project_id = p.id
+                      AND mtd.assigned_developer_id = ?
+                    LIMIT 1
+                )
+                OR EXISTS (
+                    SELECT 1
+                    FROM developer_allocations da
+                    INNER JOIN developer_allocation_assignments daa ON daa.allocation_id = da.id
+                    WHERE da.project_id = p.id
+                      AND daa.developer_id = ?
+                    LIMIT 1
+                )
+                OR EXISTS (
+                    SELECT 1
+                    FROM feature_estimations fe
+                    WHERE fe.project_id = p.id
+                      AND fe.expert_id = ?
+                    LIMIT 1
+                )
+            )';
+    }
+
     $sql .= ' ORDER BY f.name ASC';
 
-    if ($roleFilter !== '') {
-        $stmt = $conn->prepare($sql);
-        if ($stmt === false) {
-            throw new RuntimeException('Failed to prepare shared project folder query: ' . ($conn->error ?? 'unknown error'));
-        }
+    $stmt = $conn->prepare($sql);
+    if ($stmt === false) {
+        throw new RuntimeException('Failed to prepare shared project folder query: ' . ($conn->error ?? 'unknown error'));
+    }
+
+    if ($roleFilter !== '' && !$isAdmin) {
+        $stmt->bind_param('siiiiiiiiii', $roleFilter, $userId, $userId, $userId, $userId, $userId, $userId, $userId, $userId, $userId, $userId);
+    } elseif ($roleFilter !== '') {
         $stmt->bind_param('s', $roleFilter);
-    } else {
-        $stmt = $conn->prepare($sql);
-        if ($stmt === false) {
-            throw new RuntimeException('Failed to prepare shared project folder query: ' . ($conn->error ?? 'unknown error'));
-        }
+    } elseif (!$isAdmin) {
+        $stmt->bind_param('iiiiiiiiii', $userId, $userId, $userId, $userId, $userId, $userId, $userId, $userId, $userId, $userId);
     }
 
     $stmt->execute();
@@ -230,20 +279,49 @@ function getSharedProjectFolders(mysqli|PgsqlMysqliCompatConnection $conn, ?stri
 try {
     ensureClientRootFolders($conn, (int) $user['id']);
     ensureProjectSharedFolders($conn, (int) $user['id']);
-    $folders = getSharedProjectFolders($conn, $roleFilter);
+    $folders = getSharedProjectFolders($conn, $user, $roleFilter);
 
-    $recentStmt = $conn->prepare(
-        'SELECT f.*, u.full_name AS owner_name
+    $recentSql = '
+        SELECT f.*, u.full_name AS owner_name
          FROM files f
+         INNER JOIN folders fo ON fo.id = f.folder_id
+         LEFT JOIN projects p ON p.id = fo.project_id
+         LEFT JOIN clients c ON c.id = p.client_id
          LEFT JOIN users u ON u.id = f.uploaded_by
-         ORDER BY f.created_at DESC
-         LIMIT 10'
-    );
+         WHERE 1 = 1';
+    if ((string) ($user['role'] ?? '') !== 'admin') {
+        $recentSql .= '
+           AND (
+                fo.project_id IS NULL
+                OR p.created_by = ?
+                OR c.created_by = ?
+                OR p.architect_id = ?
+                OR p.sul_id = ?
+                OR EXISTS (SELECT 1 FROM tasks t WHERE t.project_id = p.id AND (t.assigned_to = ? OR t.assigned_by = ?) LIMIT 1)
+                OR EXISTS (SELECT 1 FROM methodology_tasks mt WHERE mt.project_id = p.id AND mt.assigned_developer_id = ? LIMIT 1)
+                OR EXISTS (SELECT 1 FROM methodology_task_departments mtd WHERE mtd.project_id = p.id AND mtd.assigned_developer_id = ? LIMIT 1)
+                OR EXISTS (
+                    SELECT 1
+                    FROM developer_allocations da
+                    INNER JOIN developer_allocation_assignments daa ON daa.allocation_id = da.id
+                    WHERE da.project_id = p.id AND daa.developer_id = ?
+                    LIMIT 1
+                )
+                OR EXISTS (SELECT 1 FROM feature_estimations fe WHERE fe.project_id = p.id AND fe.expert_id = ? LIMIT 1)
+           )';
+    }
+    $recentSql .= ' ORDER BY f.created_at DESC LIMIT 10';
+
+    $recentStmt = $conn->prepare($recentSql);
 
     if ($recentStmt === false) {
         throw new RuntimeException('Failed to prepare recent files query: ' . ($conn->error ?? 'unknown error'));
     }
 
+    if ((string) ($user['role'] ?? '') !== 'admin') {
+        $userId = (int) $user['id'];
+        $recentStmt->bind_param('iiiiiiiiii', $userId, $userId, $userId, $userId, $userId, $userId, $userId, $userId, $userId, $userId);
+    }
     $recentStmt->execute();
     $recentFiles = $recentStmt->get_result()->fetch_all(MYSQLI_ASSOC);
     $recentStmt->close();

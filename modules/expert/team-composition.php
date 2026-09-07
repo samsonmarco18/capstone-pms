@@ -15,6 +15,7 @@ $projects = $conn->query("
     FROM projects p
     JOIN tasks t ON p.id = t.project_id
     WHERE t.assigned_to = {$user['id']}
+      AND p.status != 'cancelled'
     ORDER BY p.created_at DESC
 ");
 

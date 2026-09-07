@@ -6,6 +6,7 @@ requireRole('admin');
 $conn = getConnection();
 workflowEnsureSchema($conn);
 $user = getCurrentUser();
+$hasDeveloperClassification = ensureUserDeveloperClassificationColumn();
 
 // Handle user creation
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
@@ -16,16 +17,21 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         $full_name = $_POST['full_name'];
         $department = trim((string) $_POST['department']);
         $role = trim((string) $_POST['role']);
+        $developerClassification = normalizeDeveloperClassification($_POST['developer_classification'] ?? null);
         $hasPasswordChangedAt = ensureUserPasswordSecurityColumns();
 
         if ($role === 'sul' && $department === '') {
             $_SESSION['error'] = "SUL users must be assigned to a department.";
+        } elseif ($role === 'developer' && $developerClassification === null) {
+            $_SESSION['error'] = 'Select a developer classification.';
+        } elseif (!$hasDeveloperClassification) {
+            $_SESSION['error'] = 'Unable to prepare developer classifications. Please try again.';
         } else {
             $sql = $hasPasswordChangedAt
-                ? "INSERT INTO users (username, email, password, full_name, department, role, password_changed_at) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
-                : "INSERT INTO users (username, email, password, full_name, department, role) VALUES (?, ?, ?, ?, ?, ?)";
+                ? "INSERT INTO users (username, email, password, full_name, department, role, developer_classification, password_changed_at) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
+                : "INSERT INTO users (username, email, password, full_name, department, role, developer_classification) VALUES (?, ?, ?, ?, ?, ?, ?)";
             $stmt = $conn->prepare($sql);
-            $stmt->bind_param("ssssss", $username, $email, $password, $full_name, $department, $role);
+            $stmt->bind_param("sssssss", $username, $email, $password, $full_name, $department, $role, $developerClassification);
 
             if ($stmt->execute()) {
                 $userId = $stmt->insert_id;
@@ -41,14 +47,21 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         $department = trim((string) $_POST['department']);
         $role = trim((string) $_POST['role']);
         $status = $_POST['status'];
+        $developerClassification = $role === 'developer'
+            ? normalizeDeveloperClassification($_POST['developer_classification'] ?? null)
+            : null;
         
         if ($role === 'sul' && $department === '') {
             $_SESSION['error'] = "SUL users must be assigned to a department.";
+        } elseif ($role === 'developer' && $developerClassification === null) {
+            $_SESSION['error'] = 'Select a developer classification.';
+        } elseif (!$hasDeveloperClassification) {
+            $_SESSION['error'] = 'Unable to prepare developer classifications. Please try again.';
         } else {
             $oldData = $conn->query("SELECT * FROM users WHERE id = $id")->fetch_assoc();
 
-            $stmt = $conn->prepare("UPDATE users SET full_name=?, department=?, role=?, status=? WHERE id=?");
-            $stmt->bind_param("ssssi", $full_name, $department, $role, $status, $id);
+            $stmt = $conn->prepare("UPDATE users SET full_name=?, department=?, role=?, status=?, developer_classification=? WHERE id=?");
+            $stmt->bind_param("sssssi", $full_name, $department, $role, $status, $developerClassification, $id);
 
             if ($stmt->execute()) {
                 logActivity($user['id'], 'update_user', 'users', $id, $oldData, $_POST);
@@ -611,6 +624,45 @@ include '../../includes/navbar.php';
     color: var(--panel-muted);
 }
 
+.user-directory-profile {
+    align-items: center;
+    display: flex;
+    gap: 0.75rem;
+    min-width: 0;
+}
+
+.user-directory-avatar {
+    align-items: center;
+    background: linear-gradient(145deg, #dff1fb 0%, #c8e4f4 100%);
+    border: 1px solid #bedcec;
+    border-radius: 50%;
+    color: var(--theme-primary);
+    display: inline-flex;
+    flex: 0 0 38px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    height: 38px;
+    justify-content: center;
+    letter-spacing: 0.02em;
+    overflow: hidden;
+    width: 38px;
+}
+
+.user-directory-avatar img {
+    display: block;
+    height: 100%;
+    object-fit: cover;
+    width: 100%;
+}
+
+.user-directory-avatar.has-profile-image span {
+    display: none;
+}
+
+.user-directory-copy {
+    min-width: 0;
+}
+
 /* Badges */
 .badge-role {
     display: inline-block;
@@ -1023,6 +1075,12 @@ include '../../includes/navbar.php';
     color: var(--panel-text) !important;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .user-directory-avatar {
+    background: #102a40;
+    border-color: #214764;
+    color: #8cc7ff;
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-title {
     color: #ffffff !important;
 }
@@ -1053,6 +1111,21 @@ include '../../includes/navbar.php';
     background: transparent;
     border-color: var(--panel-border);
     color: var(--panel-input-text);
+    color-scheme: dark;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-input select option,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .user-pagination__size option,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-select option {
+    background-color: #071725;
+    color: var(--panel-input-text);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-input select option:checked,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .user-pagination__size option:checked,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-select option:checked {
+    background-color: var(--theme-primary);
+    color: #ffffff;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-input input:focus,
@@ -1394,10 +1467,24 @@ include '../../includes/navbar.php';
                 </thead>
                 <tbody>
                     <?php while($row = $users->fetch_assoc()): ?>
+                    <?php
+                        $rowProfileImageUrl = getUserProfileImageUrl($row['profile_pic'] ?? null);
+                        $rowInitials = getUserInitials($row['full_name'] ?? 'User');
+                    ?>
                     <tr>
                         <td>
-                            <div class="user-name"><?php echo htmlspecialchars($row['full_name']); ?></div>
-                            <div class="user-email"><?php echo htmlspecialchars($row['email']); ?></div>
+                            <div class="user-directory-profile">
+                                <span class="user-directory-avatar <?php echo $rowProfileImageUrl !== '' ? 'has-profile-image' : ''; ?>" aria-hidden="true">
+                                    <?php if ($rowProfileImageUrl !== ''): ?>
+                                        <img src="<?php echo htmlspecialchars($rowProfileImageUrl); ?>" alt="" loading="lazy" onerror="this.remove(); this.parentElement.classList.remove('has-profile-image');">
+                                    <?php endif; ?>
+                                    <span><?php echo htmlspecialchars($rowInitials); ?></span>
+                                </span>
+                                <div class="user-directory-copy">
+                                    <div class="user-name"><?php echo htmlspecialchars($row['full_name']); ?></div>
+                                    <div class="user-email"><?php echo htmlspecialchars($row['email']); ?></div>
+                                </div>
+                            </div>
                         </td>
                         <td><?php echo htmlspecialchars($row['department'] ?: '—'); ?></td>
                         <td>
@@ -1413,12 +1500,12 @@ include '../../includes/navbar.php';
                         <td><?php echo date('M d, Y', strtotime($row['created_at'])); ?></td>
                         <td>
                             <div class="action-buttons">
-                                <button class="btn-icon view" onclick="viewUser(<?php echo $row['id']; ?>)">
+                                <a class="btn-icon view" href="view-user.php?id=<?php echo (int) $row['id']; ?>" aria-label="View <?php echo htmlspecialchars($row['full_name'], ENT_QUOTES); ?>">
                                     <i class="fas fa-eye"></i>
-                                </button>
-                                <button class="btn-icon edit" onclick="editUser(<?php echo $row['id']; ?>)">
+                                </a>
+                                <a class="btn-icon edit" href="edit-user.php?id=<?php echo (int) $row['id']; ?>" aria-label="Edit <?php echo htmlspecialchars($row['full_name'], ENT_QUOTES); ?>">
                                     <i class="fas fa-edit"></i>
-                                </button>
+                                </a>
                                 <button
                                     type="button"
                                     class="btn-icon delete"
@@ -1544,7 +1631,12 @@ include '../../includes/navbar.php';
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Password</label>
-                            <input type="password" name="password" class="form-control" placeholder="Create a secure password" autocomplete="new-password" required>
+                            <div class="password-field">
+                                <input type="password" name="password" class="form-control" placeholder="Create a secure password" autocomplete="new-password" required>
+                                <button type="button" class="password-toggle-btn" data-password-toggle title="Show password">
+                                    <i class="fas fa-eye" aria-hidden="true"></i>
+                                </button>
+                            </div>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Full Name</label>
@@ -1563,13 +1655,22 @@ include '../../includes/navbar.php';
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Role</label>
-                            <select name="role" class="form-select" required>
+                            <select name="role" class="form-select" data-create-user-role required>
                                 <option value="sales">Sales</option>
                                 <option value="architect">Architect</option>
                                 <option value="sul">Service Unit Leader</option>
                                 <option value="qa">QA</option>
                                 <option value="expert">Expert/Senior</option>
                                 <option value="developer">Developer</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 d-none" data-create-developer-classification>
+                            <label class="form-label" for="createDeveloperClassification">Developer Classification</label>
+                            <select name="developer_classification" id="createDeveloperClassification" class="form-select" disabled>
+                                <option value="">Select classification</option>
+                                <?php foreach (getDeveloperClassificationOptions() as $value => $label): ?>
+                                <option value="<?php echo htmlspecialchars($value); ?>"><?php echo htmlspecialchars($label); ?></option>
+                                <?php endforeach; ?>
                             </select>
                         </div>
                     </div>
@@ -1610,14 +1711,6 @@ userPageSize?.addEventListener('change', function() {
     window.location.href = 'user-management.php?' + params.toString() + '#userDirectory';
 });
 
-function viewUser(id) {
-    window.location.href = 'view-user.php?id=' + id;
-}
-
-function editUser(id) {
-    window.location.href = 'edit-user.php?id=' + id;
-}
-
 function openDeleteUserModal(button) {
     const userId = button.getAttribute('data-user-id') || '';
     const userName = button.getAttribute('data-user-name') || 'this user';
@@ -1627,6 +1720,23 @@ function openDeleteUserModal(button) {
 
     new bootstrap.Modal(document.getElementById('deleteUserModal')).show();
 }
+
+const createUserRole = document.querySelector('[data-create-user-role]');
+const createDeveloperClassification = document.querySelector('[data-create-developer-classification]');
+const createDeveloperClassificationSelect = document.getElementById('createDeveloperClassification');
+
+function toggleCreateDeveloperClassification() {
+    const isDeveloper = createUserRole?.value === 'developer';
+    createDeveloperClassification?.classList.toggle('d-none', !isDeveloper);
+    if (createDeveloperClassificationSelect) {
+        createDeveloperClassificationSelect.disabled = !isDeveloper;
+        createDeveloperClassificationSelect.required = isDeveloper;
+        if (!isDeveloper) createDeveloperClassificationSelect.value = '';
+    }
+}
+
+createUserRole?.addEventListener('change', toggleCreateDeveloperClassification);
+toggleCreateDeveloperClassification();
 </script>
 
 <?php

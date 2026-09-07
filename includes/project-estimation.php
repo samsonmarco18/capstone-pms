@@ -294,7 +294,7 @@ function projectEstimationFetchProjects(mysqli|PgsqlMysqliCompatConnection $conn
         LEFT JOIN tasks t ON t.project_id = p.id AND t.assigned_to = {$expertId}
         LEFT JOIN expert_project_estimations e ON e.project_id = p.id
         WHERE (t.id IS NOT NULL OR e.expert_id = {$expertId})
-          AND p.status != 'completed'
+          AND p.status NOT IN ('completed', 'cancelled')
         ORDER BY p.created_at DESC, p.name ASC
     ");
     if ($result) {
@@ -623,11 +623,11 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
             FROM tasks t
             LEFT JOIN feature_estimations fe
                 ON fe.task_id = t.id
-               AND fe.expert_id = " . (int) $user['id'] . "
+               AND (fe.expert_id = " . (int) $user['id'] . " OR fe.expert_id IS NULL OR fe.expert_id = t.assigned_to)
             WHERE t.project_id = {$selectedProjectId}
               AND t.assigned_to = " . (int) $user['id'] . "
               AND t.task_type = 'feature'
-              AND t.status IN ('todo', 'in_review')
+              AND t.status NOT IN ('completed', 'cancelled')
         ");
         if ($featureProgressResult) {
             $featureProgressRow = $featureProgressResult->fetch_assoc() ?: [];

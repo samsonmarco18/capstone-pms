@@ -7,10 +7,19 @@ $conn = getConnection();
 $user = getCurrentUser();
 $sulDepartment = projectWorkflowDepartmentLabel((string) ($user['department'] ?? ''));
 $sulMissingDepartment = $sulDepartment === '';
+$isExpertDepartmentSul = $sulDepartment === 'Expert Department';
+$managedResourceRole = $isExpertDepartmentSul ? 'expert' : 'developer';
+$managedResourceRoleSql = $conn->real_escape_string($managedResourceRole);
+$managedResourceLabel = $isExpertDepartmentSul ? 'Expert' : 'Developer';
+$managedResourceLower = strtolower($managedResourceLabel);
+$managedResourcePlural = $isExpertDepartmentSul ? 'Experts' : 'Developers';
+$managedResourcePluralLower = strtolower($managedResourcePlural);
 $resourceDepartmentFilter = ' AND ' . projectWorkflowUserDepartmentClause($conn, 'u', $sulDepartment);
 $resourceDepartmentWhere = ' AND ' . projectWorkflowUserDepartmentClause($conn, 'users', $sulDepartment);
-$assignedTaskDepartmentFilter = projectWorkflowTaskDepartmentClause($conn, 't', $sulDepartment, true);
 $taskProjectDepartmentFilter = projectWorkflowProjectDepartmentClause($conn, 'p_task_scope', $sulDepartment);
+$assignedTaskDepartmentFilter = $isExpertDepartmentSul
+    ? "t.task_type = 'feature'"
+    : projectWorkflowTaskDepartmentClause($conn, 't', $sulDepartment, true);
 $developerTaskJoinFilter = "
     AND {$assignedTaskDepartmentFilter}
     AND EXISTS (
@@ -53,22 +62,24 @@ $developers = sulQueryRows($conn, "
                ELSE NULL END) as avg_completion_days
     FROM users u
      LEFT JOIN tasks t ON u.id = t.assigned_to{$developerTaskJoinFilter}
-     WHERE u.role = 'developer' AND u.status = 'active'{$resourceDepartmentFilter}
-    GROUP BY u.id
-    ORDER BY active_tasks DESC
+     WHERE u.role = '{$managedResourceRoleSql}' AND u.status = 'active'{$resourceDepartmentFilter}
+     GROUP BY u.id
+     ORDER BY active_tasks DESC
 ", 'developers');
 
-// Get available developers (not already in SUL's team)
+// Get available resources in the SUL's managed department.
 $availableDevelopers = sulQueryRows($conn, "
     SELECT u.id, u.full_name, u.email, u.department,
            COALESCE(u.availability_status, 'available') AS availability_status,
            COALESCE(u.max_concurrent_tasks, 5) AS max_concurrent_tasks
     FROM users u
-    WHERE u.role = 'developer' AND u.status = 'active'{$resourceDepartmentFilter}
+    WHERE u.role = '{$managedResourceRoleSql}' AND u.status = 'active'{$resourceDepartmentFilter}
     ORDER BY u.full_name
 ", 'availableDevelopers');
 
-$reallocationTaskDepartmentFilter = projectWorkflowTaskDepartmentClause($conn, 't', $sulDepartment, true);
+$reallocationTaskDepartmentFilter = $isExpertDepartmentSul
+    ? "t.task_type = 'feature'"
+    : projectWorkflowTaskDepartmentClause($conn, 't', $sulDepartment, true);
 $reallocationProjectDepartmentFilter = projectWorkflowProjectDepartmentClause($conn, 'p', $sulDepartment);
 $reallocationUserDepartmentFilter = projectWorkflowUserDepartmentClause($conn, 'source_user', $sulDepartment);
 $reallocationTasks = sulQueryRows($conn, "
@@ -77,7 +88,7 @@ $reallocationTasks = sulQueryRows($conn, "
     FROM tasks t
     INNER JOIN projects p ON p.id = t.project_id
     INNER JOIN users source_user ON source_user.id = t.assigned_to
-    WHERE source_user.role = 'developer'
+    WHERE source_user.role = '{$managedResourceRoleSql}'
       AND source_user.status = 'active'
       AND {$reallocationUserDepartmentFilter}
       AND {$reallocationTaskDepartmentFilter}
@@ -97,7 +108,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $userId = (int) ($_POST['user_id'] ?? 0);
         $maxTasks = max(1, min(10, (int) ($_POST['max_tasks'] ?? 5)));
 
-        $stmt = $conn->prepare("UPDATE users SET max_concurrent_tasks = ? WHERE id = ? AND role = 'developer'{$resourceDepartmentWhere}");
+        $stmt = $conn->prepare("UPDATE users SET max_concurrent_tasks = ? WHERE id = ? AND role = '{$managedResourceRoleSql}'{$resourceDepartmentWhere}");
         $stmt->bind_param("ii", $maxTasks, $userId);
         $stmt->execute();
 
@@ -105,7 +116,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             logActivity($user['id'], 'update_resource_allocation', 'users', $userId, null, $_POST);
             $_SESSION['success'] = "Resource allocation updated successfully";
         } else {
-            $_SESSION['error'] = "Developer not found in your department or no changes were made";
+            $_SESSION['error'] = $managedResourceLabel . " not found in your department or no changes were made";
         }
         $stmt->close();
         header('Location: resource-management.php');
@@ -116,7 +127,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $userId = $_POST['user_id'];
         $status = $_POST['availability_status'];
         
-        $stmt = $conn->prepare("UPDATE users SET availability_status = ? WHERE id = ? AND role = 'developer'{$resourceDepartmentWhere}");
+        $stmt = $conn->prepare("UPDATE users SET availability_status = ? WHERE id = ? AND role = '{$managedResourceRoleSql}'{$resourceDepartmentWhere}");
         $stmt->bind_param("si", $status, $userId);
         $stmt->execute();
         
@@ -136,7 +147,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
         try {
             if ($sourceDeveloperId <= 0 || $destinationDeveloperId <= 0 || $sourceDeveloperId === $destinationDeveloperId) {
-                throw new RuntimeException('Choose different source and destination developers.');
+                throw new RuntimeException('Choose different source and destination ' . $managedResourcePluralLower . '.');
             }
             if ($taskIds === []) {
                 throw new RuntimeException('Select at least one task to reallocate.');
@@ -146,7 +157,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 "SELECT id, full_name, COALESCE(availability_status, 'available') AS availability_status,
                         COALESCE(max_concurrent_tasks, 5) AS max_concurrent_tasks
                  FROM users
-                 WHERE id IN (?, ?) AND role = 'developer' AND status = 'active'{$resourceDepartmentWhere}"
+                  WHERE id IN (?, ?) AND role = '{$managedResourceRoleSql}' AND status = 'active'{$resourceDepartmentWhere}"
             );
             $developerStmt->bind_param('ii', $sourceDeveloperId, $destinationDeveloperId);
             $developerStmt->execute();
@@ -159,10 +170,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $sourceDeveloper = $developersById[$sourceDeveloperId] ?? null;
             $destinationDeveloper = $developersById[$destinationDeveloperId] ?? null;
             if (!$sourceDeveloper || !$destinationDeveloper) {
-                throw new RuntimeException('Both developers must be active members of your department.');
+                throw new RuntimeException('Both ' . $managedResourcePluralLower . ' must be active members of your department.');
             }
             if (in_array((string) $destinationDeveloper['availability_status'], ['on_leave', 'sick', 'unavailable'], true)) {
-                throw new RuntimeException('The destination developer is currently unavailable.');
+                throw new RuntimeException('The destination ' . $managedResourceLower . ' is currently unavailable.');
             }
 
             $taskIdList = implode(',', $taskIds);
@@ -175,6 +186,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 WHERE t.id IN ({$taskIdList})
                   AND t.assigned_to = {$sourceDeveloperId}
                   AND t.status NOT IN ('completed', 'merged', 'ready_for_release')
+                  AND source_user.role = '{$managedResourceRoleSql}'
                   AND {$taskScopeUserFilter}
                   AND {$reallocationTaskDepartmentFilter}
                   AND {$reallocationProjectDepartmentFilter}
@@ -221,7 +233,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 }
                 $updateTaskStmt->close();
 
-                if (dbTableExists($conn, 'methodology_tasks') && dbColumnExists($conn, 'methodology_tasks', 'assigned_developer_id')) {
+                if (
+                    !$isExpertDepartmentSul
+                    && dbTableExists($conn, 'methodology_tasks')
+                    && dbColumnExists($conn, 'methodology_tasks', 'assigned_developer_id')
+                ) {
                     $roadmapStmt = $conn->prepare(
                         'UPDATE methodology_tasks
                          SET assigned_developer_id = ?, updated_by = ?, updated_at = NOW()
@@ -235,6 +251,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 }
 
                 if (
+                    !$isExpertDepartmentSul
+                    &&
                     dbTableExists($conn, 'methodology_task_departments')
                     && dbColumnExists($conn, 'methodology_task_departments', 'assigned_developer_id')
                     && dbColumnExists($conn, 'methodology_task_departments', 'workflow_task_id')
@@ -260,8 +278,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     [
                         'assigned_to' => $destinationDeveloperId,
                         'task_ids' => $taskIds,
-                        'source_developer' => $sourceDeveloper['full_name'],
-                        'destination_developer' => $destinationDeveloper['full_name'],
+                        'resource_role' => $managedResourceRole,
+                        'source_resource' => $sourceDeveloper['full_name'],
+                        'destination_resource' => $destinationDeveloper['full_name'],
                     ]
                 );
                 $conn->commit();
@@ -650,7 +669,19 @@ unset($_SESSION['success'], $_SESSION['error']);
     height: 36px;
     justify-content: center;
     letter-spacing: 0.03em;
+    overflow: hidden;
     width: 36px;
+}
+
+.resource-profile-avatar img {
+    display: block;
+    height: 100%;
+    object-fit: cover;
+    width: 100%;
+}
+
+.resource-profile-avatar.has-profile-image span {
+    display: none;
 }
 
 .resource-profile-copy {
@@ -713,19 +744,51 @@ unset($_SESSION['success'], $_SESSION['error']);
 
 .resource-actions {
     display: inline-flex;
-    gap: 0.4rem;
+    gap: 0.55rem;
     justify-content: flex-end;
     white-space: nowrap;
 }
 
 .resource-action-btn {
     align-items: center;
-    border-radius: 8px;
+    border: 1px solid rgba(31, 99, 146, 0.14);
+    border-radius: 12px;
+    box-shadow: 0 8px 18px rgba(31, 99, 146, 0.12);
     display: inline-flex;
-    height: 34px;
+    font-size: 0.88rem;
+    height: 42px;
     justify-content: center;
     padding: 0;
-    width: 34px;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+    width: 42px;
+}
+
+.resource-action-btn:hover,
+.resource-action-btn:focus-visible {
+    transform: translateY(-1px);
+}
+
+.resource-action-edit {
+    background: linear-gradient(135deg, #38bdf8 0%, #0ea5e9 100%);
+    color: #062236;
+}
+
+.resource-action-edit:hover,
+.resource-action-edit:focus-visible {
+    box-shadow: 0 12px 24px rgba(14, 165, 233, 0.24);
+    color: #031a2b;
+}
+
+.resource-action-view {
+    background: #f8fbff;
+    color: #1f6f9e;
+}
+
+.resource-action-view:hover,
+.resource-action-view:focus-visible {
+    background: #edf7ff;
+    box-shadow: 0 12px 24px rgba(31, 111, 158, 0.16);
+    color: #155b84;
 }
 
 /* Progress Bar */
@@ -795,6 +858,39 @@ unset($_SESSION['success'], $_SESSION['error']);
 
 .btn-secondary-modern:hover {
     background: var(--gray-300);
+}
+
+.resource-action-btn.resource-action-btn {
+    border: 1px solid rgba(31, 99, 146, 0.14);
+    border-radius: 12px;
+    box-shadow: 0 8px 18px rgba(31, 99, 146, 0.12);
+    font-size: 0.88rem;
+    height: 42px;
+    padding: 0;
+    width: 42px;
+}
+
+.resource-action-edit.resource-action-edit {
+    background: linear-gradient(135deg, #38bdf8 0%, #0ea5e9 100%);
+    color: #062236;
+}
+
+.resource-action-edit.resource-action-edit:hover,
+.resource-action-edit.resource-action-edit:focus-visible {
+    box-shadow: 0 12px 24px rgba(14, 165, 233, 0.24);
+    color: #031a2b;
+}
+
+.resource-action-view.resource-action-view {
+    background: #f8fbff;
+    color: #1f6f9e;
+}
+
+.resource-action-view.resource-action-view:hover,
+.resource-action-view.resource-action-view:focus-visible {
+    background: #edf7ff;
+    box-shadow: 0 12px 24px rgba(31, 111, 158, 0.16);
+    color: #155b84;
 }
 
 /* Keep the navbar burger neutral on this page */
@@ -876,14 +972,17 @@ unset($_SESSION['success'], $_SESSION['error']);
 
 /* Modal */
 .modal-modern .modal-content {
+    background: #ffffff;
     border-radius: 24px;
-    border: none;
+    border: 1px solid #dce8f3;
+    box-shadow: 0 24px 70px rgba(15, 36, 56, 0.24);
+    color: #102a43;
     overflow: hidden;
 }
 
 .modal-modern .modal-header {
-    background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-dark) 100%);
-    color: white;
+    background: linear-gradient(135deg, #1f6392 0%, #0d3f60 100%) !important;
+    color: #ffffff;
     padding: 1.5rem;
     border: none;
 }
@@ -894,16 +993,175 @@ unset($_SESSION['success'], $_SESSION['error']);
 }
 
 .modal-modern .modal-header .btn-close {
-    filter: brightness(0) invert(1);
+    filter: invert(1) grayscale(100%) brightness(180%);
+    opacity: 0.88;
+}
+
+.modal-modern .modal-header .btn-close:hover {
+    opacity: 1;
 }
 
 .modal-modern .modal-body {
+    background: #ffffff;
+    color: #102a43;
     padding: 2rem;
 }
 
 .modal-modern .modal-footer {
+    background: #fbfdff;
     padding: 1rem 2rem 2rem;
-    border-top: 1px solid var(--gray-200);
+    border-top: 1px solid #e4edf5;
+}
+
+.modal-modern .form-label {
+    color: #102a43;
+    font-weight: 800;
+}
+
+.modal-modern .form-control,
+.modal-modern .form-select {
+    background-color: #ffffff;
+    border: 1px solid #d4e1ee;
+    border-radius: 12px;
+    color: #102a43;
+    min-height: 48px;
+}
+
+.modal-modern .form-control:focus,
+.modal-modern .form-select:focus {
+    border-color: #4f9ecc;
+    box-shadow: 0 0 0 0.2rem rgba(31, 99, 146, 0.14);
+}
+
+.modal-modern .form-select:disabled,
+.modal-modern .form-control:disabled {
+    background-color: #eef3f8;
+    color: #60758a;
+    opacity: 1;
+}
+
+.modal-modern .form-select option {
+    background: #ffffff;
+    color: #102a43;
+}
+
+.modal-modern .text-muted,
+.modal-modern small {
+    color: #526f8a !important;
+}
+
+#reallocation_task_list {
+    background: #ffffff;
+    border: 1px solid #d4e1ee !important;
+    border-radius: 12px !important;
+    color: #102a43;
+}
+
+#reallocation_task_list p {
+    color: #526f8a !important;
+}
+
+#reallocation_task_list .reallocation-task-option {
+    border-bottom: 1px solid #e4edf5 !important;
+    color: #102a43;
+    cursor: pointer;
+}
+
+#reallocation_task_list .reallocation-task-option:last-child {
+    border-bottom: 0 !important;
+}
+
+#reallocation_task_list .reallocation-task-option:hover {
+    background: #f3f8fc;
+}
+
+#reallocation_task_list .reallocation-task-option strong {
+    color: #102a43;
+}
+
+.modal-modern .form-check-input {
+    border-color: #a9bfd3;
+}
+
+.modal-modern .form-check-input:checked {
+    background-color: #1f6392;
+    border-color: #1f6392;
+}
+
+.modal-modern .btn-secondary-modern {
+    align-items: center;
+    background: #e8eef5;
+    color: #18334d;
+    display: inline-flex;
+    min-height: 40px;
+}
+
+.modal-modern .btn-secondary-modern:hover {
+    background: #dbe6f0;
+    color: #102a43;
+}
+
+.modal-modern .btn-primary-modern {
+    align-items: center;
+    min-height: 40px;
+}
+
+.modal-modern .btn-primary-modern:disabled,
+.modal-modern .btn-primary-modern[disabled] {
+    background: #dbe5ee !important;
+    box-shadow: none !important;
+    color: #748ca2 !important;
+    cursor: not-allowed;
+    opacity: 1;
+    transform: none !important;
+}
+
+#addDeveloperModal .modal-content {
+    background: #ffffff;
+    color: #0f2a40;
+}
+
+#addDeveloperModal .modal-header {
+    background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-dark) 100%);
+    color: #ffffff;
+}
+
+#addDeveloperModal .modal-title,
+#addDeveloperModal .modal-title i {
+    color: #ffffff !important;
+}
+
+#addDeveloperModal .modal-body,
+#addDeveloperModal .modal-footer {
+    background: #ffffff;
+    color: #0f2a40;
+}
+
+#addDeveloperModal .form-label {
+    color: #0f2a40;
+    font-weight: 700;
+}
+
+#addDeveloperModal .form-select,
+#addDeveloperModal #reallocation_task_list {
+    background-color: #ffffff;
+    border-color: #cfe0ee;
+    color: #14304a;
+}
+
+#addDeveloperModal .text-muted,
+#addDeveloperModal small {
+    color: #526f8a !important;
+}
+
+#addDeveloperModal .btn-secondary-modern {
+    background: #eef3f8;
+    color: #14304a;
+}
+
+#addDeveloperModal .btn-secondary-modern:disabled,
+#addDeveloperModal .btn-primary-modern:disabled {
+    opacity: 0.65;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper,
@@ -918,6 +1176,22 @@ unset($_SESSION['success'], $_SESSION['error']);
     background: #071321 !important;
     border: 1px solid rgba(31, 99, 146, 0.24) !important;
     box-shadow: 0 20px 45px rgba(0, 0, 0, 0.22);
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-header {
+    background: linear-gradient(135deg, #123552 0%, #081827 100%) !important;
+    border-bottom: 1px solid rgba(125, 211, 252, 0.14) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-header .modal-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-header .modal-title i {
+    color: #eef8ff !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-header .btn-close {
+    filter: invert(1) grayscale(100%) brightness(190%);
+    opacity: 0.76;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern::before {
@@ -933,6 +1207,10 @@ unset($_SESSION['success'], $_SESSION['error']);
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-footer {
     background: #0a1b2c !important;
     border-color: rgba(31, 99, 146, 0.24) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .form-label {
+    color: #e7f2ff !important;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern h2,
@@ -994,11 +1272,122 @@ unset($_SESSION['success'], $_SESSION['error']);
     color: #9db6cf;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .resource-action-btn {
+    border-color: rgba(125, 211, 252, 0.16);
+    box-shadow: 0 10px 22px rgba(0, 0, 0, 0.22);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .resource-action-edit {
+    background: linear-gradient(135deg, rgba(56, 189, 248, 0.96) 0%, rgba(14, 165, 233, 0.9) 100%);
+    color: #031626;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .resource-action-edit:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .resource-action-edit:focus-visible {
+    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.14), 0 14px 28px rgba(14, 165, 233, 0.26);
+    color: #031626;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .resource-action-view {
+    background: rgba(15, 38, 57, 0.88);
+    color: #aee2ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .resource-action-view:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .resource-action-view:focus-visible {
+    background: rgba(31, 99, 146, 0.38);
+    border-color: rgba(125, 211, 252, 0.3);
+    box-shadow: 0 0 0 3px rgba(125, 211, 252, 0.1), 0 14px 28px rgba(0, 0, 0, 0.28);
+    color: #e7f6ff;
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-select {
     background-color: #071321;
     border-color: rgba(31, 99, 146, 0.28);
     color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .form-control,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .form-select {
+    background-color: #0b2032 !important;
+    border-color: rgba(125, 211, 252, 0.18) !important;
+    color: #e5f2ff !important;
+    color-scheme: dark;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .form-control:focus,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .form-select:focus {
+    border-color: rgba(125, 211, 252, 0.48) !important;
+    box-shadow: 0 0 0 0.2rem rgba(56, 189, 248, 0.12);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .form-select:disabled,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .form-control:disabled {
+    background-color: #102335 !important;
+    color: #9db6cf !important;
+    opacity: 1;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .form-select option {
+    background: #0b2032;
+    color: #e5f2ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #reallocation_task_list {
+    background: #081827 !important;
+    border-color: rgba(125, 211, 252, 0.24) !important;
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #reallocation_task_list p {
+    color: #9db6cf !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #reallocation_task_list .reallocation-task-option {
+    border-color: rgba(125, 211, 252, 0.14) !important;
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #reallocation_task_list .reallocation-task-option:hover {
+    background: rgba(31, 99, 146, 0.18);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #reallocation_task_list .reallocation-task-option strong {
+    color: #e7f2ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .form-check-input {
+    background-color: #071321;
+    border-color: rgba(125, 211, 252, 0.32);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .form-check-input:checked {
+    background-color: #38bdf8;
+    border-color: #38bdf8;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .btn-secondary-modern {
+    background: #122b42;
+    border: 1px solid rgba(125, 211, 252, 0.18);
+    color: #dff2ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .btn-secondary-modern:hover {
+    background: #173852;
+    color: #ffffff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .btn-primary-modern:not(:disabled) {
+    background: linear-gradient(135deg, #38bdf8 0%, #0ea5e9 100%);
+    color: #041827;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .btn-primary-modern:disabled,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .btn-primary-modern[disabled] {
+    background: #172839 !important;
+    border: 1px solid rgba(125, 211, 252, 0.12);
+    color: #7190aa !important;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .nav-tabs {
@@ -1086,7 +1475,7 @@ unset($_SESSION['success'], $_SESSION['error']);
                 <i class="fas fa-users me-2"></i> 
                 Resource Management
             </h2>
-            <p>Manage team resources, workload, and availability</p>
+            <p>Manage <?php echo htmlspecialchars($managedResourcePluralLower); ?>, workload, and availability</p>
         </div>
     </div>
 
@@ -1101,7 +1490,7 @@ unset($_SESSION['success'], $_SESSION['error']);
                 <span class="resource-workload-heading-icon"><i class="fas fa-list" aria-hidden="true"></i></span>
                 <div>
                     <h5>Resource Details &amp; Workload</h5>
-                    <small class="text-muted"><?php echo count($developers); ?> active profile<?php echo count($developers) === 1 ? '' : 's'; ?> in <?php echo htmlspecialchars($sulDepartment); ?></small>
+                    <small class="text-muted"><?php echo count($developers); ?> active <?php echo htmlspecialchars($managedResourceLower); ?> profile<?php echo count($developers) === 1 ? '' : 's'; ?> in <?php echo htmlspecialchars($sulDepartment); ?></small>
                 </div>
             </div>
             <button class="btn-primary-modern resource-reallocation-btn" data-bs-toggle="modal" data-bs-target="#addDeveloperModal">
@@ -1130,15 +1519,16 @@ unset($_SESSION['success'], $_SESSION['error']);
                             <tbody>
                                 <?php if ($developers !== []): ?>
                                     <?php foreach ($developers as $resource):
-                                        $resourceName = trim((string) ($resource['full_name'] ?? 'Developer'));
+                                        $resourceName = trim((string) ($resource['full_name'] ?? $managedResourceLabel));
                                         $resourceNameParts = preg_split('/\s+/', $resourceName) ?: [];
                                         $resourceInitial = static function (string $value): string {
                                             return strtoupper(function_exists('mb_substr') ? mb_substr($value, 0, 1) : substr($value, 0, 1));
                                         };
-                                        $resourceInitials = $resourceInitial((string) ($resourceNameParts[0] ?? 'D'));
+                                        $resourceInitials = $resourceInitial((string) ($resourceNameParts[0] ?? substr($managedResourceLabel, 0, 1)));
                                         if (count($resourceNameParts) > 1) {
                                             $resourceInitials .= $resourceInitial((string) end($resourceNameParts));
                                         }
+                                        $resourceProfileImageUrl = getUserProfileImageUrl($resource['profile_pic'] ?? null);
                                         $resourceActiveTasks = (int) ($resource['active_tasks'] ?? 0);
                                         $workloadPercent = (int) round(min(100, ($resourceActiveTasks / 5) * 100));
                                         $statusClass = $resourceActiveTasks >= 5 ? 'overloaded' : ($resourceActiveTasks >= 3 ? 'busy' : ($resourceActiveTasks > 0 ? 'available' : 'free'));
@@ -1147,7 +1537,12 @@ unset($_SESSION['success'], $_SESSION['error']);
                                     <tr>
                                         <td>
                                             <div class="resource-profile">
-                                                <span class="resource-profile-avatar" aria-hidden="true"><?php echo htmlspecialchars($resourceInitials); ?></span>
+                                                <span class="resource-profile-avatar <?php echo $resourceProfileImageUrl !== '' ? 'has-profile-image' : ''; ?>" aria-hidden="true">
+                                                    <?php if ($resourceProfileImageUrl !== ''): ?>
+                                                        <img src="<?php echo htmlspecialchars($resourceProfileImageUrl); ?>" alt="" loading="lazy" onerror="this.remove(); this.parentElement.classList.remove('has-profile-image');">
+                                                    <?php endif; ?>
+                                                    <span><?php echo htmlspecialchars($resourceInitials); ?></span>
+                                                </span>
                                                 <div class="resource-profile-copy">
                                                     <p class="resource-profile-name"><?php echo htmlspecialchars($resourceName); ?></p>
                                                     <span class="resource-profile-email" title="<?php echo htmlspecialchars((string) $resource['email']); ?>"><?php echo htmlspecialchars((string) $resource['email']); ?></span>
@@ -1170,10 +1565,10 @@ unset($_SESSION['success'], $_SESSION['error']);
                                         <td><span class="badge-status-<?php echo $statusClass; ?>"><?php echo $statusText; ?></span></td>
                                         <td>
                                             <div class="resource-actions">
-                                                <button type="button" class="btn-primary-modern resource-action-btn" title="Edit allocation" aria-label="Edit allocation for <?php echo htmlspecialchars($resourceName); ?>" onclick="editAllocation(<?php echo (int) $resource['id']; ?>, <?php echo htmlspecialchars(json_encode($resourceName), ENT_QUOTES, 'UTF-8'); ?>, <?php echo $resourceActiveTasks; ?>)">
+                                                <button type="button" class="btn-primary-modern resource-action-btn resource-action-edit" title="Edit allocation" aria-label="Edit allocation for <?php echo htmlspecialchars($resourceName); ?>" onclick="editAllocation(<?php echo (int) $resource['id']; ?>, <?php echo htmlspecialchars(json_encode($resourceName), ENT_QUOTES, 'UTF-8'); ?>, <?php echo $resourceActiveTasks; ?>)">
                                                     <i class="fas fa-sliders-h" aria-hidden="true"></i>
                                                 </button>
-                                                <button type="button" class="btn-secondary-modern resource-action-btn" title="View assigned tasks" aria-label="View tasks for <?php echo htmlspecialchars($resourceName); ?>" onclick="viewResourceTasks(<?php echo (int) $resource['id']; ?>)">
+                                                <button type="button" class="btn-secondary-modern resource-action-btn resource-action-view" title="View assigned tasks" aria-label="View tasks for <?php echo htmlspecialchars($resourceName); ?>" onclick="viewResourceTasks(<?php echo (int) $resource['id']; ?>)">
                                                     <i class="fas fa-list-check" aria-hidden="true"></i>
                                                 </button>
                                             </div>
@@ -1181,7 +1576,7 @@ unset($_SESSION['success'], $_SESSION['error']);
                                     </tr>
                                     <?php endforeach; ?>
                                 <?php else: ?>
-                                    <tr><td colspan="9" class="text-center text-muted py-4">No developer data available.</td></tr>
+                                    <tr><td colspan="9" class="text-center text-muted py-4">No <?php echo htmlspecialchars($managedResourceLower); ?> data available.</td></tr>
                                 <?php endif; ?>
                             </tbody>
                         </table>
@@ -1191,20 +1586,20 @@ unset($_SESSION['success'], $_SESSION['error']);
 
 </div>
 
-<!-- Developer Reallocation Modal -->
+<!-- Resource Reallocation Modal -->
 <div class="modal fade modal-modern" id="addDeveloperModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title"><i class="fas fa-right-left me-2"></i>Developer Reallocation</h5>
+                <h5 class="modal-title"><i class="fas fa-right-left me-2"></i><?php echo htmlspecialchars($managedResourceLabel); ?> Reallocation</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form method="POST" id="reallocationForm">
                 <div class="modal-body">
                     <div class="mb-3">
-                        <label class="form-label" for="reallocation_source">From Developer</label>
+                        <label class="form-label" for="reallocation_source">From <?php echo htmlspecialchars($managedResourceLabel); ?></label>
                         <select name="source_developer_id" id="reallocation_source" class="form-select" required>
-                            <option value="">Choose the current developer...</option>
+                            <option value="">Choose the current <?php echo htmlspecialchars($managedResourceLower); ?>...</option>
                             <?php foreach ($availableDevelopers as $dev): ?>
                                 <option value="<?php echo $dev['id']; ?>">
                                     <?php echo htmlspecialchars($dev['full_name']); ?> 
@@ -1216,14 +1611,14 @@ unset($_SESSION['success'], $_SESSION['error']);
                     <div class="mb-3">
                         <label class="form-label">Tasks to Reallocate</label>
                         <div id="reallocation_task_list" class="border rounded p-3" style="max-height: 240px; overflow-y: auto;">
-                            <p class="text-muted mb-0">Select a source developer to view eligible tasks.</p>
+                            <p class="text-muted mb-0">Select a source <?php echo htmlspecialchars($managedResourceLower); ?> to view eligible tasks.</p>
                         </div>
                         <small class="text-muted"><span id="reallocation_task_count">0</span> task(s) selected</small>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label" for="reallocation_destination">To Developer</label>
+                        <label class="form-label" for="reallocation_destination">To <?php echo htmlspecialchars($managedResourceLabel); ?></label>
                         <select name="destination_developer_id" id="reallocation_destination" class="form-select" required disabled>
-                            <option value="">Choose the destination developer...</option>
+                            <option value="">Choose the destination <?php echo htmlspecialchars($managedResourceLower); ?>...</option>
                             <?php foreach ($availableDevelopers as $dev): ?>
                                 <option
                                     value="<?php echo $dev['id']; ?>"
@@ -1236,7 +1631,7 @@ unset($_SESSION['success'], $_SESSION['error']);
                                 </option>
                             <?php endforeach; ?>
                         </select>
-                        <small class="text-muted">Unavailable developers and the current owner cannot be selected.</small>
+                        <small class="text-muted">Unavailable <?php echo htmlspecialchars($managedResourcePluralLower); ?> and the current owner cannot be selected.</small>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -1308,6 +1703,7 @@ unset($_SESSION['success'], $_SESSION['error']);
 
 <script>
 const reallocationTasks = <?php echo json_encode($reallocationTasks, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+const managedResourceLower = <?php echo json_encode($managedResourceLower, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 
 function refreshReallocationForm() {
     const source = document.getElementById('reallocation_source');
@@ -1325,14 +1721,14 @@ function refreshReallocationForm() {
     });
 
     if (sourceId <= 0) {
-        taskList.innerHTML = '<p class="text-muted mb-0">Select a source developer to view eligible tasks.</p>';
+        taskList.innerHTML = `<p class="text-muted mb-0">Select a source ${escapeHtml(managedResourceLower)} to view eligible tasks.</p>`;
     } else if (eligibleTasks.length === 0) {
-        taskList.innerHTML = '<p class="text-muted mb-0">This developer has no eligible active tasks.</p>';
+        taskList.innerHTML = `<p class="text-muted mb-0">This ${escapeHtml(managedResourceLower)} has no eligible active tasks.</p>`;
     } else {
         taskList.innerHTML = eligibleTasks.map(task => {
             const meta = [task.project_name, task.priority, String(task.status || '').replaceAll('_', ' ')].filter(Boolean).join(' • ');
             return `
-                <label class="d-flex align-items-start gap-2 py-2 border-bottom">
+                <label class="reallocation-task-option d-flex align-items-start gap-2 py-2 px-2">
                     <input type="checkbox" class="form-check-input reallocation-task-checkbox" name="task_ids[]" value="${Number(task.id)}">
                     <span>
                         <strong class="d-block">${escapeHtml(task.title || '')}</strong>

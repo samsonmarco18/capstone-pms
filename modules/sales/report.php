@@ -126,7 +126,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_report'])) {
         $clientData = $clientStmt->get_result()->fetch_assoc();
         $clientStmt->close();
 
-        $receiptNumber = 'ERNI-' . date('Ymd') . '-' . str_pad((string) $reportId, 5, '0', STR_PAD_LEFT);
+        $receiptNumber = 'EVORTIX-' . date('Ymd') . '-' . str_pad((string) $reportId, 5, '0', STR_PAD_LEFT);
         $amountDue = $technologyCost + $developerCost + $resourceCost;
         $dueDate = date('Y-m-d', strtotime('+30 days'));
 

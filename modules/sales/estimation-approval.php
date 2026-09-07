@@ -182,17 +182,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             if ($stmt->execute()) {
-                $taskDetails = $conn->query("SELECT title, project_id FROM tasks WHERE id = $taskId")->fetch_assoc();
-                projectWorkflowNotifyDepartmentSuls(
-                    $conn,
-                    'Expert Department',
-                    "Sales Approved Estimation: " . ($taskDetails['title'] ?? 'Task'),
-                    "Sales approved the estimation. Task is ready for Expert SUL review.",
-                    BASE_URL . 'modules/sul/task-allocation.php?project_id=' . (int) ($taskDetails['project_id'] ?? 0) . '#expert-review-panel',
-                    (int) ($taskDetails['project_id'] ?? 0)
-                );
+                $taskDetails = $conn->query("
+                    SELECT t.title, t.project_id, COALESCE(p.workflow_status, '') AS workflow_status
+                    FROM tasks t
+                    LEFT JOIN projects p ON p.id = t.project_id
+                    WHERE t.id = $taskId
+                    LIMIT 1
+                ")->fetch_assoc();
+                if (trim((string) ($taskDetails['workflow_status'] ?? '')) === 'architect_submitted') {
+                    projectWorkflowNotifyDepartmentSuls(
+                        $conn,
+                        'Expert Department',
+                        "Sales Approved Estimation: " . ($taskDetails['title'] ?? 'Task'),
+                        "Sales approved the estimation. Task is ready for Expert SUL review.",
+                        BASE_URL . 'modules/sul/task-allocation.php?project_id=' . (int) ($taskDetails['project_id'] ?? 0) . '#expert-review-panel',
+                        (int) ($taskDetails['project_id'] ?? 0)
+                    );
+                }
                 logActivity($user['id'], 'sales_approve_estimation', 'tasks', $taskId, null, $_POST);
-                $_SESSION['success'] = "Estimation approved and sent to SUL.";
+                $_SESSION['success'] = trim((string) ($taskDetails['workflow_status'] ?? '')) === 'architect_submitted'
+                    ? "Estimation approved and sent to SUL."
+                    : "Estimation approved. SUL notification will wait until Architect submits the final plan.";
             } else {
                 $_SESSION['error'] = "Failed to approve estimation.";
             }

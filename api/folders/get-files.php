@@ -71,7 +71,7 @@ try {
     if (!$currentFolder) {
         folderApiRespond(['success' => false, 'error' => 'Folder not found'], 404);
     }
-    if (!folderApiCanAccessFolder($currentFolder, $user)) {
+    if (!folderApiCanAccessFolderWithProject($conn, $currentFolder, $user)) {
         folderApiRespond(['success' => false, 'error' => 'You do not have access to this folder.'], 403);
     }
 
@@ -89,7 +89,10 @@ try {
 
     $folderStmt->bind_param('i', $folderId);
     $folderStmt->execute();
-    $folders = $folderStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $folders = array_values(array_filter(
+        $folderStmt->get_result()->fetch_all(MYSQLI_ASSOC),
+        static fn (array $folder): bool => folderApiCanAccessFolderWithProject($conn, $folder, $user)
+    ));
     $folderStmt->close();
 
     $fileStmt = $conn->prepare(

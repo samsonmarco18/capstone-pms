@@ -374,7 +374,7 @@ function roadmapMonitoringProfileUrl(?string $profilePic): string
         return $profilePic;
     }
 
-    return BASE_URL . ltrim(str_replace('\\', '/', $profilePic), '/');
+    return storagePublicUrl($profilePic);
 }
 
 function roadmapMonitoringInitials(?string $name): string
@@ -599,6 +599,9 @@ if (!$selectedProject && $requestedProjectId > 0 && $projects === []) {
 if (!$selectedProject && count($projects) > 0) {
     $selectedProjectId = (int) $projects[0]['id'];
     $selectedProject = roadmapGetProject($conn, $selectedProjectId, $user);
+}
+if ($selectedProject && $canEditArchitecture) {
+    projectWorkflowNormalizePreSubmitFeatureTasks($conn, $selectedProjectId);
 }
 $selectedProjectTemplate = null;
 $suggestedMethodologyLabel = '';

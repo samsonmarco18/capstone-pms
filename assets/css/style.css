@@ -45,6 +45,43 @@ body {
     line-height: 1.6;
 }
 
+.password-field {
+    position: relative;
+}
+
+.password-field .form-control,
+.password-field .form-control-modern {
+    padding-right: 3rem;
+}
+
+.password-toggle-btn {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    color: var(--text-muted);
+    display: inline-flex;
+    height: 2.5rem;
+    justify-content: center;
+    position: absolute;
+    right: 0.35rem;
+    top: 50%;
+    transform: translateY(-50%);
+    transition: color 0.2s ease, background-color 0.2s ease;
+    width: 2.5rem;
+    z-index: 2;
+}
+
+.password-toggle-btn:hover,
+.password-toggle-btn:focus-visible {
+    color: var(--primary-color);
+}
+
+.password-toggle-btn:focus-visible {
+    border-radius: 0.5rem;
+    box-shadow: 0 0 0 0.2rem rgba(13, 85, 107, 0.16);
+    outline: none;
+}
+
 /* =====================================================
    SIDEBAR STYLES
    ===================================================== */
@@ -2071,6 +2108,19 @@ body {
     border-radius: 50%;
     background: linear-gradient(135deg, #1aa5df, #0f4c81);
     box-shadow: 0 10px 20px rgba(15, 76, 129, 0.16);
+    overflow: hidden;
+    position: relative;
+}
+
+.user-profile-pic img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+}
+
+.user-profile-pic.has-profile-image i {
+    display: none;
 }
 
 .nav-user-link {
@@ -3585,6 +3635,28 @@ body {
     background: linear-gradient(145deg, #438fc6 0%, #285f9e 100%);
 }
 
+.conversation-avatar.has-profile-image,
+.chat-thread-avatar.has-profile-image,
+.chat-group-info-hero-avatar.has-profile-image,
+.chat-group-member-avatar.has-profile-image,
+.group-member-avatar.has-profile-image,
+.message-avatar.has-profile-image {
+    overflow: hidden;
+}
+
+.conversation-avatar img,
+.chat-thread-avatar img,
+.chat-group-info-hero-avatar img,
+.chat-group-member-avatar img,
+.group-member-avatar img,
+.message-avatar img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+    border-radius: inherit;
+}
+
 .conversation-main {
     flex: 1 1 auto;
     min-width: 0;
@@ -4903,6 +4975,57 @@ body {
         --role-stat-glow: rgba(14, 116, 144, 0.10);
         --role-stat-border: rgba(14, 116, 144, 0.14);
         --role-stat-border-strong: rgba(14, 116, 144, 0.28);
+    }
+}
+
+@keyframes dashboardOverdueHeartbeat {
+    0%, 100% {
+        outline-color: rgba(220, 38, 38, 0);
+        outline-offset: 0;
+        outline-width: 0;
+    }
+    30% {
+        outline-color: rgba(220, 38, 38, 0.32);
+        outline-offset: 4px;
+        outline-width: 3px;
+    }
+    58% {
+        outline-color: rgba(220, 38, 38, 0.14);
+        outline-offset: 1px;
+        outline-width: 1px;
+    }
+}
+
+.stat-overdue.has-alert,
+.stat-overdue.is-overdue-alert,
+.dashboard-overdue-card.is-overdue-alert,
+.role-dashboard-shell.role-dashboard-shell :is(.stat-overdue, .dashboard-overdue-card).is-overdue-alert {
+    --role-stat-color: #dc2626;
+    --role-stat-glow: rgba(220, 38, 38, 0.18);
+    --role-stat-border: rgba(220, 38, 38, 0.42);
+    --role-stat-border-strong: rgba(220, 38, 38, 0.62);
+    --role-dashboard-card-glow: rgba(220, 38, 38, 0.16);
+    --role-dashboard-card-tint: rgba(220, 38, 38, 0.055);
+    --role-dashboard-border: rgba(220, 38, 38, 0.46);
+    --role-dashboard-border-strong: rgba(220, 38, 38, 0.68);
+    animation: dashboardOverdueHeartbeat 1.85s ease-in-out infinite;
+    border-color: rgba(220, 38, 38, 0.48) !important;
+    outline: 0 solid rgba(220, 38, 38, 0);
+}
+
+.stat-overdue.has-alert :is(.stat-icon, .stat-number, .h1, .fa-exclamation-triangle),
+.stat-overdue.is-overdue-alert :is(.stat-icon, .stat-number, .h1, .fa-exclamation-triangle),
+.dashboard-overdue-card.is-overdue-alert :is(.stat-icon, .stat-number, .h1, .fa-exclamation-triangle),
+.role-dashboard-shell.role-dashboard-shell :is(.stat-overdue, .dashboard-overdue-card).is-overdue-alert :is(.stat-icon, .stat-number, .h1, .fa-exclamation-triangle) {
+    color: #dc2626 !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .stat-overdue.has-alert,
+    .stat-overdue.is-overdue-alert,
+    .dashboard-overdue-card.is-overdue-alert,
+    .role-dashboard-shell.role-dashboard-shell :is(.stat-overdue, .dashboard-overdue-card).is-overdue-alert {
+        animation: none;
     }
 }
 

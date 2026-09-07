@@ -1,5 +1,6 @@
 <?php
 require_once '../../includes/auth.php';
+require_once '../../includes/file-storage.php';
 require_once '../../includes/project-progress.php';
 require_once '../../includes/workflow.php';
 require_once '../../includes/project-workflow.php';
@@ -218,23 +219,23 @@ function salesClientsSendProjectStartingEmail(
             . '</tr>';
     }
 
-    $subject = 'Your ERNI project is starting: ' . $projectLabel;
+    $subject = 'Your EVORTIX project is starting: ' . $projectLabel;
     $htmlBody = '<div style="font-family:Arial,sans-serif;max-width:660px;margin:0 auto;padding:24px;background:#f5f7fb;color:#1f2937;">'
         . '<div style="background:#ffffff;border:1px solid #dbe3ef;border-radius:16px;padding:24px;">'
         . '<h2 style="margin:0 0 12px;color:#1f6392;">Your project is starting</h2>'
         . '<p style="margin:0 0 12px;line-height:1.6;">Good day ' . $safeRecipientName . ',</p>'
-        . '<p style="margin:0 0 16px;line-height:1.6;">Thank you for trusting ERNI Development Center Philippines, Inc. We have created your project record for <strong>' . $safeProjectLabel . '</strong>, and our team is starting the planning and review process.</p>'
+        . '<p style="margin:0 0 16px;line-height:1.6;">Thank you for trusting EVORTIX. We have created your project record for <strong>' . $safeProjectLabel . '</strong>, and our team is starting the planning and review process.</p>'
         . '<table role="presentation" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;margin:16px 0;background:#f8fafc;border:1px solid #e5edf5;border-radius:12px;overflow:hidden;">'
         . $detailRows
         . '</table>'
         . '<p style="margin:16px 0 0;line-height:1.6;">We will contact you if we need additional details before the next project step.</p>'
-        . '<p style="margin:16px 0 0;color:#64748b;font-size:13px;">This email was sent automatically by ERNI PMS.</p>'
+        . '<p style="margin:16px 0 0;color:#64748b;font-size:13px;">This email was sent automatically by EVORTIX PMS.</p>'
         . '</div></div>';
 
     $textLines = [
         'Good day ' . $recipientName . ',',
         '',
-        'Thank you for trusting ERNI Development Center Philippines, Inc. We have created your project record for ' . $projectLabel . ', and our team is starting the planning and review process.',
+        'Thank you for trusting EVORTIX. We have created your project record for ' . $projectLabel . ', and our team is starting the planning and review process.',
         '',
         'Project details:',
     ];
@@ -328,6 +329,23 @@ function salesClientsInsertProject($conn, array $data): int
     return $projectId;
 }
 
+function salesClientsResolveProjectTemplate(mysqli|PgsqlMysqliCompatConnection $conn, string $projectType, int $requestedTemplateId): ?array
+{
+    $normalizedProjectType = projectTemplateNormalizeType($projectType);
+    if ($normalizedProjectType === '') {
+        return null;
+    }
+
+    if ($requestedTemplateId > 0) {
+        $selectedTemplate = projectTemplateFindById($conn, $requestedTemplateId);
+        if ($selectedTemplate && projectTemplateNormalizeType((string) ($selectedTemplate['project_type'] ?? '')) === $normalizedProjectType) {
+            return $selectedTemplate;
+        }
+    }
+
+    return projectTemplateFindByType($conn, $projectType);
+}
+
 function salesClientsEnsureClientFolder(mysqli|PgsqlMysqliCompatConnection $conn, int $clientId, string $clientName, int $createdBy): int
 {
     $checkStmt = $conn->prepare(
@@ -399,25 +417,29 @@ function salesClientsSaveAttachments(array $files): array
         return $saved;
     }
 
-    $relativeDir = 'uploads/sales-intake/' . date('Y/m/d');
-    $uploadDir = __DIR__ . '/../../' . $relativeDir;
-    if (!is_dir($uploadDir)) {
-        mkdir($uploadDir, 0775, true);
-    }
-
     foreach ($files['name'] as $index => $name) {
         if (($files['error'][$index] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
             continue;
         }
 
         $originalName = basename((string) $name);
-        $extension = pathinfo($originalName, PATHINFO_EXTENSION);
-        $fileName = uniqid('sales_', true) . ($extension ? '.' . $extension : '');
-        $targetPath = $uploadDir . '/' . $fileName;
-        if (move_uploaded_file((string) $files['tmp_name'][$index], $targetPath)) {
+        try {
+            $target = storageBuildUploadTarget($originalName, 'sales-intake/' . date('Y/m/d'));
+        } catch (Throwable $e) {
+            continue;
+        }
+
+        if (move_uploaded_file((string) $files['tmp_name'][$index], $target['absolute_path'])) {
+            try {
+                storagePersistFile($target['relative_path'], $target['absolute_path'], $target['original_name'], (string) ($files['type'][$index] ?? ''));
+            } catch (Throwable $e) {
+                @unlink($target['absolute_path']);
+                continue;
+            }
+
             $saved[] = [
                 'name' => $originalName,
-                'path' => $relativeDir . '/' . $fileName,
+                'path' => $target['relative_path'],
                 'type' => (string) ($files['type'][$index] ?? ''),
                 'size' => (int) ($files['size'][$index] ?? 0),
             ];
@@ -512,10 +534,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $projectName = trim((string) ($_POST['project_name'] ?? ''));
         $projectType = trim((string) ($_POST['project_type'] ?? ''));
         $requestedTemplateId = (int) ($_POST['project_template_id'] ?? 0);
-        $projectTemplate = $requestedTemplateId > 0 ? projectTemplateFindById($conn, $requestedTemplateId) : null;
-        if (!$projectTemplate || projectTemplateNormalizeType((string) ($projectTemplate['project_type'] ?? '')) !== projectTemplateNormalizeType($projectType)) {
-            $projectTemplate = $projectType !== '' ? projectTemplateFindByType($conn, $projectType) : null;
-        }
+        $projectTemplate = salesClientsResolveProjectTemplate($conn, $projectType, $requestedTemplateId);
         $projectTemplateId = $projectTemplate ? (int) ($projectTemplate['id'] ?? 0) : null;
         $projectTemplateSnapshot = $projectTemplate ? json_encode($projectTemplate, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) : null;
         $projectDescription = trim((string) ($_POST['project_description'] ?? ''));
@@ -605,6 +624,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     ]);
 
                     salesClientsCreateSharedProjectFolder($conn, (int) $clientId, (int) $projectId, (int) $clientFolderId, $projectName, (int) $user['id']);
+                    projectTemplateCaptureProject($conn, (int) $projectId);
+                    $learnedProjectTemplate = projectTemplateFindByType($conn, $projectType);
+                    if ($learnedProjectTemplate) {
+                        $learnedTemplateId = (int) ($learnedProjectTemplate['id'] ?? 0);
+                        $learnedTemplateSnapshot = json_encode($learnedProjectTemplate, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+                        $templateUpdateStmt = $conn->prepare('UPDATE projects SET project_template_id = ?, project_template_snapshot = ? WHERE id = ?');
+                        if ($templateUpdateStmt !== false) {
+                            $templateUpdateStmt->bind_param('isi', $learnedTemplateId, $learnedTemplateSnapshot, $projectId);
+                            $templateUpdateStmt->execute();
+                            $templateUpdateStmt->close();
+                        }
+                    }
                 }
 
                 $conn->commit();
@@ -666,10 +697,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $projectName = trim((string) ($_POST['project_name'] ?? ''));
         $projectType = trim((string) ($_POST['project_type'] ?? ''));
         $requestedTemplateId = (int) ($_POST['project_template_id'] ?? 0);
-        $projectTemplate = $requestedTemplateId > 0 ? projectTemplateFindById($conn, $requestedTemplateId) : null;
-        if (!$projectTemplate || projectTemplateNormalizeType((string) ($projectTemplate['project_type'] ?? '')) !== projectTemplateNormalizeType($projectType)) {
-            $projectTemplate = $projectType !== '' ? projectTemplateFindByType($conn, $projectType) : null;
-        }
+        $projectTemplate = salesClientsResolveProjectTemplate($conn, $projectType, $requestedTemplateId);
         $projectTemplateId = $projectTemplate ? (int) ($projectTemplate['id'] ?? 0) : null;
         $projectTemplateSnapshot = $projectTemplate ? json_encode($projectTemplate, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) : null;
         $projectDescription = trim((string) ($_POST['project_description'] ?? ''));
@@ -760,6 +788,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         (int) $user['id']
                     );
                     salesClientsCreateSharedProjectFolder($conn, $clientId, $projectId, $clientFolderId, $projectName, (int) $user['id']);
+                    projectTemplateCaptureProject($conn, (int) $projectId);
+                    $learnedProjectTemplate = projectTemplateFindByType($conn, $projectType);
+                    if ($learnedProjectTemplate) {
+                        $learnedTemplateId = (int) ($learnedProjectTemplate['id'] ?? 0);
+                        $learnedTemplateSnapshot = json_encode($learnedProjectTemplate, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+                        $templateUpdateStmt = $conn->prepare('UPDATE projects SET project_template_id = ?, project_template_snapshot = ? WHERE id = ?');
+                        if ($templateUpdateStmt !== false) {
+                            $templateUpdateStmt->bind_param('isi', $learnedTemplateId, $learnedTemplateSnapshot, $projectId);
+                            $templateUpdateStmt->execute();
+                            $templateUpdateStmt->close();
+                        }
+                    }
 
                     if ($timelineEnd !== null) {
                         $deadlineStmt = $conn->prepare('UPDATE clients SET deadline = COALESCE(deadline, ?) WHERE id = ?');
@@ -828,16 +868,60 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $_SESSION['success'] = "Client updated successfully";
         }
     } elseif (isset($_POST['delete_client'])) {
-        $id = $_POST['id'];
+        $id = (int) $_POST['id'];
         $oldResult = salesClientsQuery($conn, "SELECT * FROM clients WHERE id = $id");
         $oldData = $oldResult ? $oldResult->fetch_assoc() : null;
+
+        if ($oldData) {
+            $relatedProjects = salesClientsFetchRows($conn, "SELECT id, status FROM projects WHERE client_id = $id AND status != 'cancelled'");
+            $oldData['related_projects'] = $relatedProjects;
+        }
         
-        $stmt = $conn->prepare("DELETE FROM clients WHERE id=?");
-        $stmt->bind_param("i", $id);
-        
-        if ($stmt->execute()) {
-            logActivity($user['id'], 'delete_client', 'clients', $id, $oldData, null);
-            $_SESSION['success'] = "Client deleted successfully";
+        $conn->begin_transaction();
+        try {
+            $projectStmt = $conn->prepare("UPDATE projects SET status = 'cancelled' WHERE client_id = ? AND status != 'cancelled'");
+            if ($projectStmt === false) {
+                throw new RuntimeException('Unable to prepare related project delete.' . salesClientsDbError($conn));
+            }
+            $projectStmt->bind_param("i", $id);
+            $projectStmt->execute();
+            $projectStmt->close();
+
+            $stmt = $conn->prepare("UPDATE clients SET status = 'inactive' WHERE id=?");
+            if ($stmt === false) {
+                throw new RuntimeException('Unable to prepare client delete.' . salesClientsDbError($conn));
+            }
+            $stmt->bind_param("i", $id);
+            $stmt->execute();
+            $stmt->close();
+
+            $conn->commit();
+            logActivity($user['id'], 'delete_client', 'clients', $id, $oldData, ['status' => 'inactive', 'related_projects_status' => 'cancelled']);
+            $_SESSION['success'] = "Client and related projects deleted successfully";
+        } catch (Throwable $e) {
+            $conn->rollback();
+            error_log('Sales delete client error: ' . $e->getMessage());
+            $_SESSION['error'] = 'Unable to delete client. ' . $e->getMessage();
+        }
+    } elseif (isset($_POST['delete_project'])) {
+        $id = (int) ($_POST['id'] ?? 0);
+        $oldResult = salesClientsQuery($conn, "SELECT * FROM projects WHERE id = $id LIMIT 1");
+        $oldData = $oldResult ? $oldResult->fetch_assoc() : null;
+
+        if (!$oldData) {
+            $_SESSION['error'] = 'Project not found.';
+        } else {
+            $stmt = $conn->prepare("UPDATE projects SET status = 'cancelled' WHERE id = ?");
+            if ($stmt === false) {
+                $_SESSION['error'] = 'Unable to prepare project delete.' . salesClientsDbError($conn);
+            } else {
+                $stmt->bind_param("i", $id);
+                if ($stmt->execute()) {
+                    logActivity($user['id'], 'delete_project', 'projects', $id, $oldData, ['status' => 'cancelled']);
+                    $_SESSION['success'] = "Project deleted successfully";
+                }
+                $stmt->close();
+            }
         }
     }
     
@@ -861,14 +945,14 @@ if (!in_array($clientPageSize, $allowedClientPageSizes, true)) {
 }
 $clientCurrentPage = max(1, isset($_GET['page']) ? (int) $_GET['page'] : 1);
 
-$featureCondition = projectProgressFeatureCondition('t');
-$mergedCondition = projectProgressMergedCondition('t');
 $clientWhereSql = " WHERE 1=1";
 if ($search) {
     $clientWhereSql .= " AND (c.name LIKE '%$search%' OR c.email LIKE '%$search%' OR c.contact_person LIKE '%$search%')";
 }
 if ($statusFilter) {
     $clientWhereSql .= " AND c.status = '$statusFilter'";
+} else {
+    $clientWhereSql .= " AND c.status != 'inactive'";
 }
 
 $totalFilteredClients = 0;
@@ -913,24 +997,31 @@ if ($clientRows) {
                 p.name,
                 p.status,
                 p.timeline_end,
-                p.created_at,
-                COALESCE(COUNT(t.id), 0) AS total_features,
-                COALESCE(SUM(CASE WHEN {$mergedCondition} THEN 1 ELSE 0 END), 0) AS merged_features
+                p.created_at
             FROM projects p
-            LEFT JOIN tasks t ON t.project_id = p.id AND {$featureCondition}
             WHERE p.client_id IN ({$clientIdsSql})
-            GROUP BY p.id, p.client_id, p.name, p.status, p.timeline_end, p.created_at
+              AND p.status != 'cancelled'
             ORDER BY p.created_at DESC, p.id DESC
         ");
 
         if ($projectRows) {
+            $projectRowsByClient = [];
+            $projectIds = [];
             while ($projectRow = $projectRows->fetch_assoc()) {
                 $clientId = (int) ($projectRow['client_id'] ?? 0);
-                $projectRow['progress'] = projectProgressPercent(
-                    (int) ($projectRow['total_features'] ?? 0),
-                    (int) ($projectRow['merged_features'] ?? 0)
-                );
-                $projectsByClient[$clientId][] = $projectRow;
+                $projectId = (int) ($projectRow['id'] ?? 0);
+                $projectRowsByClient[$clientId][] = $projectRow;
+                $projectIds[] = $projectId;
+            }
+
+            $roadmapProgress = projectRoadmapProgressByProject($conn, $projectIds);
+            foreach ($projectRowsByClient as $clientId => $clientProjects) {
+                foreach ($clientProjects as $projectRow) {
+                    $projectRow['progress'] = strtolower((string) ($projectRow['status'] ?? '')) === 'completed'
+                        ? 100
+                        : ($roadmapProgress[(int) ($projectRow['id'] ?? 0)] ?? 0);
+                    $projectsByClient[$clientId][] = $projectRow;
+                }
             }
         }
     }
@@ -1991,7 +2082,7 @@ button.client-pagination__step {
 
 .project-expansion-item {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1.15fr) minmax(180px, 1fr) minmax(220px, 1fr) auto;
     align-items: center;
     gap: 1.25rem;
     padding: 1rem;
@@ -2034,10 +2125,12 @@ button.client-pagination__step {
 .project-team-notify.is-completed { justify-content:flex-end; }
 .project-team-notify input { flex:1 1 auto; width:100%; min-width:0; border:1px solid #cbdde9; border-radius:9px; padding:.55rem .75rem; }
 .project-team-notify button, .project-team-notify .project-download-button { white-space:nowrap; }
+.project-expansion-actions { display:flex; justify-content:flex-end; }
+.project-delete-button { width:34px; height:34px; display:inline-flex; align-items:center; justify-content:center; border-radius:9px; }
 
 @media (max-width: 1100px) {
     .project-expansion-item { grid-template-columns:1fr 1fr; }
-    .project-team-notify { grid-column:1 / -1; }
+    .project-team-notify, .project-expansion-actions { grid-column:1 / -1; }
 }
 
 @media (max-width: 700px) {
@@ -5548,6 +5641,18 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
     background: #071321;
     border-color: rgba(31, 99, 146, 0.24);
     color: #d7e4f2;
+    color-scheme: dark;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern input[type="date"]::-webkit-calendar-picker-indicator,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern input[type="time"]::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 0.9;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern input[type="date"]::-webkit-calendar-picker-indicator:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern input[type="time"]::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-input input:focus,
@@ -7118,6 +7223,17 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
                                         </a>
                                     <?php endif; ?>
                                 </div>
+                                <div class="project-expansion-actions">
+                                    <button
+                                        type="button"
+                                        class="btn btn-outline-danger btn-sm project-delete-button"
+                                        title="Delete project"
+                                        aria-label="Delete <?php echo htmlspecialchars((string) $project['name']); ?>"
+                                        onclick="openDeleteProjectModal(<?php echo (int) $project['id']; ?>, <?php echo htmlspecialchars(json_encode((string) $project['name'])); ?>)"
+                                    >
+                                        <i class="fas fa-trash" aria-hidden="true"></i>
+                                    </button>
+                                </div>
                             </div>
                         <?php endforeach; ?>
                     </div>
@@ -8015,13 +8131,42 @@ Attendees:</textarea>
                     <i class="fas fa-triangle-exclamation fa-lg"></i>
                     <div>
                         <div class="fw-semibold mb-1" id="deleteClientName">Selected client</div>
-                        <div class="small text-muted">This will remove the client and all related projects, tasks, and files. This action cannot be undone.</div>
+                        <div class="small text-muted">This will hide the client and cancel its projects. You can restore them from the audit log.</div>
                     </div>
                 </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn-delete-cancel" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn-delete-confirm" id="deleteClientConfirmBtn">
+                    <i class="fas fa-trash-alt me-1"></i> Yes, delete it
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Project Modal -->
+<div class="modal fade modal-modern delete-confirm-modal" id="deleteProjectModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-folder-minus me-2"></i> Delete Project
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="delete-confirm-note mb-0">
+                    <i class="fas fa-triangle-exclamation fa-lg"></i>
+                    <div>
+                        <div class="fw-semibold mb-1" id="deleteProjectName">Selected project</div>
+                        <div class="small text-muted">This will cancel the project and hide it from the client list. Files, plans, tasks, and progress are kept for restore.</div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-delete-cancel" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn-delete-confirm" id="deleteProjectConfirmBtn">
                     <i class="fas fa-trash-alt me-1"></i> Yes, delete it
                 </button>
             </div>
@@ -8066,7 +8211,7 @@ body.sales-assistant-open #chat-bot-float .chat-bot-float-animation { animation:
 #addClientForm .template-type-picker::after, #addProjectForm .template-type-picker::after { display:none !important; }
 #addClientForm [data-template-picker-input], #addProjectForm [data-template-picker-input] { padding-right:.9rem !important; }
 :is(#addClientForm, #addProjectForm) .template-recommendation-shell [data-template-picker-input] { padding-right:2.7rem !important; }
-#addClientForm [data-template-version-select], #addProjectForm [data-template-version-select] { display:none !important; }
+#addClientForm [data-template-version-select][hidden], #addProjectForm [data-template-version-select][hidden] { display:none !important; }
 .sales-bot-head { padding-left:.75rem; font-weight:800; color:#083a5d; }
 .sales-bot-heading-row { position:relative; z-index:5; display:flex; align-items:center; justify-content:space-between; gap:.6rem; }
 .sales-bot-dismiss { flex:0 0 auto; border:0; border-radius:999px; background:rgba(255,255,255,.72); color:#0b5d89; width:27px; height:27px; cursor:pointer; transition:transform .18s ease,background .18s ease; }
@@ -8458,11 +8603,7 @@ const salesTemplateAssistant = (() => {
     };
 
     const templateFor = (form) => {
-        const selectedId = Number(form?.querySelector('[data-template-version-select]')?.value || 0);
-        const type = normalizeSalesTemplateType(form?.elements?.project_type?.value);
-        return projectTemplates.find(item => selectedId && Number(item.id) === selectedId)
-            || projectTemplates.find(item => normalizeSalesTemplateType(item.project_type) === type)
-            || null;
+        return getSelectedTemplateForForm(form, normalizeSalesTemplateType);
     };
     const setField = async (name, value) => {
         const field = activeForm?.elements?.[name];
@@ -8594,7 +8735,7 @@ const salesTemplateAssistant = (() => {
         const choices = matches.map(template => ({
             label:template.project_type,
             field:'project_type',
-            version:`V${Number(template.template_version || 1)}${Number(template.template_version || 1) === Math.max(...projectTemplates.filter(item => item.project_type === template.project_type).map(item => Number(item.template_version || 1))) ? ' · Latest' : ''}`,
+            version:formatTemplateVersionLabel(template),
             apply:async () => {
                 const changed = await setField('project_type', template.project_type);
                 if (changed === false) return false;
@@ -8988,6 +9129,19 @@ function normalizeSalesTemplateType(value) {
         .toLowerCase();
 }
 
+function latestTemplateVersionForType(projectType) {
+    const normalizedType = normalizeSalesTemplateType(projectType);
+    const versions = projectTemplates
+        .filter((template) => normalizeSalesTemplateType(template.project_type) === normalizedType)
+        .map((template) => Number(template.template_version || 1));
+    return versions.length ? Math.max(...versions) : 1;
+}
+
+function formatTemplateVersionLabel(template, latestSuffix = ' · Latest') {
+    const version = Number(template?.template_version || 1);
+    return `V${version}${version === latestTemplateVersionForType(template?.project_type) ? latestSuffix : ''}`;
+}
+
 function escapeClientHtml(value) {
     const div = document.createElement('div');
     div.textContent = String(value ?? '');
@@ -9121,6 +9275,21 @@ const projectTemplateTypeNames = Array.from(new Set(
         .filter(Boolean)
 )).sort((a, b) => a.localeCompare(b));
 
+function getSelectedTemplateForForm(form, normalizer = normalizeSalesTemplateType) {
+    const projectType = normalizer(form?.elements?.project_type?.value || '');
+    const selectedId = Number(form?.querySelector('[data-template-version-select]')?.value || 0);
+    if (!projectType) {
+        return null;
+    }
+
+    const selectedTemplate = projectTemplates.find((template) => selectedId > 0 && Number(template.id) === selectedId);
+    if (selectedTemplate && normalizer(selectedTemplate.project_type) === projectType) {
+        return selectedTemplate;
+    }
+
+    return projectTemplates.find((template) => normalizer(template.project_type) === projectType) || null;
+}
+
 function closeTemplatePickers(exceptMenu = null) {
     document.querySelectorAll('[data-template-picker-menu]').forEach((menu) => {
         if (menu !== exceptMenu) {
@@ -9136,24 +9305,36 @@ function initProjectTemplatePicker(picker) {
     if (!input || !menu) {
         return;
     }
-    if (salesEvortixEnabled) {
-        menu.hidden = true;
-        return;
-    }
 
     let selectingTemplate = false;
     const syncVersions = () => {
         if (!versionSelect) return;
+        const previousValue = versionSelect.value;
         const needle = normalizeSalesTemplateType(input.value);
         const versions = projectTemplates
             .filter((template) => normalizeSalesTemplateType(template.project_type) === needle)
             .sort((a, b) => Number(b.template_version || 1) - Number(a.template_version || 1));
         versionSelect.innerHTML = versions.map((template) =>
-            `<option value="${Number(template.id || 0)}">V${Number(template.template_version || 1)}${Number(template.template_version || 1) === Math.max(...versions.map(item => Number(item.template_version || 1))) ? ' (Latest)' : ''}</option>`
+            `<option value="${Number(template.id || 0)}">${formatTemplateVersionLabel(template, ' (Latest)')}</option>`
         ).join('');
         versionSelect.hidden = versions.length < 2;
-        if (versions.length === 1) versionSelect.value = String(versions[0].id || '');
+        if (versions.some((template) => String(template.id || '') === previousValue)) {
+            versionSelect.value = previousValue;
+        } else if (versions.length >= 1) {
+            versionSelect.value = String(versions[0].id || '');
+        }
     };
+    syncVersions();
+
+    if (salesEvortixEnabled) {
+        menu.hidden = true;
+        input.addEventListener('input', syncVersions);
+        input.addEventListener('change', syncVersions);
+        versionSelect?.addEventListener('change', () => {
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        return;
+    }
     const renderMenu = () => {
         if (selectingTemplate) {
             return;
@@ -9277,9 +9458,8 @@ function findSalesProjectTemplate(value) {
         return null;
     }
 
-    const selectedId = Number(document.querySelector('#addProjectForm [data-template-version-select]')?.value || 0);
-    const exactMatch = projectTemplates.find((template) => selectedId > 0 && Number(template.id) === selectedId)
-        || projectTemplates.find((template) => normalizeSalesTemplateType(template.project_type) === needle);
+    const form = document.getElementById('addProjectForm');
+    const exactMatch = getSelectedTemplateForForm(form, normalizeSalesTemplateType);
     if (exactMatch) {
         return exactMatch;
     }
@@ -10569,6 +10749,10 @@ let pendingDeleteClientId = null;
 const deleteClientModalElement = document.getElementById('deleteClientModal');
 const deleteClientConfirmBtn = document.getElementById('deleteClientConfirmBtn');
 const deleteClientName = document.getElementById('deleteClientName');
+let pendingDeleteProjectId = null;
+const deleteProjectModalElement = document.getElementById('deleteProjectModal');
+const deleteProjectConfirmBtn = document.getElementById('deleteProjectConfirmBtn');
+const deleteProjectName = document.getElementById('deleteProjectName');
 let pendingDeleteDraftId = null;
 const deleteDraftModalElement = document.getElementById('deleteDraftModal');
 const deleteDraftConfirmBtn = document.getElementById('deleteDraftConfirmBtn');
@@ -10582,6 +10766,16 @@ function openDeleteClientModal(id, name) {
     }
 
     new bootstrap.Modal(deleteClientModalElement).show();
+}
+
+function openDeleteProjectModal(id, name) {
+    pendingDeleteProjectId = Number(id) || null;
+
+    if (deleteProjectName) {
+        deleteProjectName.textContent = name || 'Selected project';
+    }
+
+    new bootstrap.Modal(deleteProjectModalElement).show();
 }
 
 function openDeleteDraftModal(draftId, draftLabel) {
@@ -10644,6 +10838,27 @@ if (deleteClientConfirmBtn) {
     });
 }
 
+if (deleteProjectConfirmBtn) {
+    deleteProjectConfirmBtn.addEventListener('click', function () {
+        if (!pendingDeleteProjectId) {
+            return;
+        }
+
+        if (window.appShowLoading) {
+            window.appShowLoading('Deleting project', 'Please wait while the project is cancelled.');
+        }
+
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.innerHTML = `
+            <input type="hidden" name="delete_project" value="1">
+            <input type="hidden" name="id" value="${pendingDeleteProjectId}">
+        `;
+        document.body.appendChild(form);
+        form.submit();
+    });
+}
+
 const addClientModalElement = document.getElementById('addClientModal');
 const addClientForm = document.getElementById('addClientForm');
 
@@ -10666,6 +10881,7 @@ if (addClientModalElement && addClientForm) {
     const previousButton = addClientModalElement.querySelector('[data-client-prev]');
     const nextButton = addClientModalElement.querySelector('[data-client-next]');
     const submitButton = addClientModalElement.querySelector('[data-client-submit]');
+    const saveDraftButton = addClientModalElement.querySelector('[data-save-draft]');
     const generatedComplexityField = addClientModalElement.querySelector('[data-generated-complexity]');
     const closeButtons = Array.from(addClientModalElement.querySelectorAll('.add-client-close'));
     const draftStatus = addClientModalElement.querySelector('[data-draft-status]');
@@ -10705,7 +10921,7 @@ if (addClientModalElement && addClientForm) {
     }
 
     function normalizeTemplateType(value) {
-        return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+        return normalizeSalesTemplateType(value);
     }
 
     function formatPeso(value) {
@@ -10776,9 +10992,7 @@ if (addClientModalElement && addClientForm) {
             return null;
         }
 
-        const selectedId = Number(addClientForm.querySelector('[data-template-version-select]')?.value || 0);
-        const exactMatch = projectTemplates.find((template) => selectedId > 0 && Number(template.id) === selectedId)
-            || projectTemplates.find((template) => normalizeTemplateType(template.project_type) === needle);
+        const exactMatch = getSelectedTemplateForForm(addClientForm, normalizeTemplateType);
         if (exactMatch) {
             return exactMatch;
         }
@@ -10926,6 +11140,32 @@ if (addClientModalElement && addClientForm) {
         return input;
     }
 
+    function splitRequestedFeatureInput(value) {
+        const rawValue = String(value || '').trim();
+        if (rawValue === '') {
+            return [];
+        }
+
+        const delimited = rawValue
+            .split(/[\r\n,;|]+/)
+            .map((feature) => feature.trim().replace(/\s+/g, ' '))
+            .filter(Boolean);
+        if (delimited.length > 1) {
+            return delimited;
+        }
+
+        const words = rawValue.replace(/\s+/g, ' ').split(' ').filter(Boolean);
+        const firstCompactIndex = words.findIndex((word, index) => index > 0 && /^[a-z]+[\w-]*\d+$/i.test(word));
+        if (firstCompactIndex > 0) {
+            return [
+                words.slice(0, firstCompactIndex).join(' '),
+                ...words.slice(firstCompactIndex)
+            ].filter(Boolean);
+        }
+
+        return [rawValue.replace(/\s+/g, ' ')];
+    }
+
     function getRequestedFeatureValues() {
         if (!requestedFeatureList) {
             return [];
@@ -10944,7 +11184,20 @@ if (addClientModalElement && addClientForm) {
 
     function addRequestedFeatureValue(value, focusInput = true) {
         const input = requestedFeatureList?.querySelector('[data-requested-feature-input]');
-        const normalizedValue = String(value || '').trim().replace(/\s+/g, ' ');
+        const parts = splitRequestedFeatureInput(value);
+        if (parts.length > 1) {
+            let addedAny = false;
+            parts.forEach((part) => {
+                addedAny = addRequestedFeatureValue(part, false) || addedAny;
+            });
+            input && (input.value = '');
+            if (focusInput) {
+                setClientFeatureEditorExpanded(true, true);
+            }
+            return addedAny;
+        }
+
+        const normalizedValue = parts[0] || '';
         if (!requestedFeatureList || !input || !normalizedValue) {
             return false;
         }
@@ -11574,9 +11827,7 @@ if (addClientModalElement && addClientForm) {
         }
 
         const seen = new Set();
-        const features = String(rawValue || '')
-            .split(/\r?\n/)
-            .map((feature) => feature.trim())
+        const features = splitRequestedFeatureInput(rawValue)
             .filter((feature) => {
                 const normalized = normalizeTemplateType(feature);
                 if (!normalized || seen.has(normalized)) {
@@ -11969,6 +12220,7 @@ if (addClientModalElement && addClientForm) {
         recommendedFeatureTitles = new Set();
         templateApplyMessage = '';
         updateDraftStatus(true);
+        showClientStep(0);
     }
 
     function clearAddClientDraft() {
@@ -12548,6 +12800,32 @@ if (addClientModalElement && addClientForm) {
         requestedFeatureList.addEventListener('input', (event) => {
             if (event.target.matches('[data-requested-feature-input]')) {
                 event.target.setCustomValidity('');
+            }
+        });
+
+        requestedFeatureList.addEventListener('paste', (event) => {
+            const input = event.target.closest('[data-requested-feature-input]');
+            if (!input) {
+                return;
+            }
+
+            const pastedText = event.clipboardData?.getData('text') || '';
+            const parts = splitRequestedFeatureInput(pastedText);
+            if (parts.length <= 1) {
+                return;
+            }
+
+            event.preventDefault();
+            let addedAny = false;
+            parts.forEach((part) => {
+                addedAny = addRequestedFeatureValue(part, false) || addedAny;
+            });
+            input.value = '';
+            if (addedAny) {
+                formTouched = true;
+                hideUnsavedClosePanel();
+                updateDraftStatus(false);
+                setClientFeatureEditorExpanded(true, true);
             }
         });
 

@@ -69,7 +69,7 @@ try {
     }
 
     $membersStmt = $conn->prepare(
-        'SELECT u.id, u.full_name, u.role, u.email, gm.role AS group_role, gm.joined_at
+        'SELECT u.id, u.full_name, u.role, u.email, u.profile_pic, gm.role AS group_role, gm.joined_at
          FROM chat_group_members gm
          INNER JOIN users u ON u.id = gm.user_id
          WHERE gm.group_id = ? AND gm.left_at IS NULL
@@ -94,6 +94,7 @@ try {
             'role' => (string) ($row['role'] ?? ''),
             'role_label' => getRoleDisplayName((string) ($row['role'] ?? '')),
             'email' => (string) ($row['email'] ?? ''),
+            'profile_url' => getUserProfileImageUrl($row['profile_pic'] ?? null),
             'group_role' => (string) ($row['group_role'] ?? 'member'),
             'joined_at' => $row['joined_at'] ?? null,
             'is_you' => (int) $row['id'] === $currentUserId,

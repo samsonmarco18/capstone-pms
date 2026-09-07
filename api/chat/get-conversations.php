@@ -28,7 +28,7 @@ try {
     }
 
     $usersStmt = $conn->prepare(
-        'SELECT id, full_name, role, email
+        'SELECT id, full_name, role, email, profile_pic
          FROM users
          WHERE id != ? AND status = ?
          ORDER BY full_name ASC'
@@ -93,6 +93,7 @@ try {
             'subtitle' => getRoleDisplayName((string) ($row['role'] ?? '')),
             'role' => (string) ($row['role'] ?? ''),
             'email' => (string) ($row['email'] ?? ''),
+            'profile_url' => getUserProfileImageUrl($row['profile_pic'] ?? null),
             'last_message' => !empty($lastMessageRow['deleted_at'])
                 ? 'Message unsent'
                 : (string) ($lastMessageRow['message'] ?? 'No messages yet.'),

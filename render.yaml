@@ -28,6 +28,8 @@ services:
         sync: false
       - key: UPLOAD_STORAGE_ROOT
         value: /tmp/erni-pms/uploads
+      - key: UPLOAD_STORAGE_BACKEND
+        value: db
       - key: MAIL_ENABLED
         value: "1"
       - key: MAIL_DELIVERY_METHOD

@@ -20,6 +20,56 @@ function projectProgressPercent(int $totalFeatures, int $mergedFeatures): int
     return max(0, min(100, (int) round(($mergedFeatures / $totalFeatures) * 100)));
 }
 
+/**
+ * Return roadmap completion percentages keyed by project ID.
+ *
+ * Sales-facing delivery progress is intentionally derived from the project's
+ * roadmap phases, rather than from repository or feature merge state.
+ */
+function projectRoadmapProgressByProject(mysqli|PgsqlMysqliCompatConnection $conn, array $projectIds): array
+{
+    $progressByProject = [];
+    foreach ($projectIds as $projectId) {
+        $projectId = (int) $projectId;
+        if ($projectId > 0) {
+            $progressByProject[$projectId] = 0;
+        }
+    }
+
+    if ($progressByProject === [] || !dbTableExists($conn, 'methodology_phases')) {
+        return $progressByProject;
+    }
+
+    $projectIdList = implode(',', array_keys($progressByProject));
+    $result = $conn->query("
+        SELECT
+            project_id,
+            COUNT(*) AS total_phases,
+            COALESCE(SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END), 0) AS completed_phases
+        FROM methodology_phases
+        WHERE project_id IN ({$projectIdList})
+        GROUP BY project_id
+    ");
+
+    if (!$result) {
+        return $progressByProject;
+    }
+
+    while ($row = $result->fetch_assoc()) {
+        $projectId = (int) ($row['project_id'] ?? 0);
+        if (!array_key_exists($projectId, $progressByProject)) {
+            continue;
+        }
+
+        $progressByProject[$projectId] = projectProgressPercent(
+            (int) ($row['total_phases'] ?? 0),
+            (int) ($row['completed_phases'] ?? 0)
+        );
+    }
+
+    return $progressByProject;
+}
+
 function projectProgressIsAdditionalFeature(array $feature): bool
 {
     $taskType = strtolower((string) ($feature['task_type'] ?? ''));

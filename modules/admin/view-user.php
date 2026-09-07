@@ -3,6 +3,7 @@ require_once '../../includes/auth.php';
 requireRole('admin');
 
 $conn = getConnection();
+ensureUserDeveloperClassificationColumn();
 $userId = (int) ($_GET['id'] ?? 0);
 $stmt = $conn->prepare('SELECT * FROM users WHERE id = ?');
 $stmt->bind_param('i', $userId);
@@ -28,6 +29,8 @@ if ($initials === '') {
 $status = (string) ($selectedUser['status'] ?? 'inactive');
 $role = (string) ($selectedUser['role'] ?? '');
 $roleLabel = getRoleDisplayName($role);
+$isDeveloper = strtolower(trim($role)) === 'developer';
+$developerClassificationLabel = getDeveloperClassificationLabel($selectedUser['developer_classification'] ?? null);
 $createdAt = !empty($selectedUser['created_at']) ? date('F d, Y', strtotime((string) $selectedUser['created_at'])) : 'Not available';
 $lastLogin = !empty($selectedUser['last_login']) ? date('F d, Y g:i A', strtotime((string) $selectedUser['last_login'])) : 'No recorded login';
 
@@ -357,6 +360,12 @@ include '../../includes/navbar.php';
                                 <i class="fas fa-user-tie"></i>
                                 <?php echo htmlspecialchars($roleLabel); ?>
                             </span>
+                            <?php if ($isDeveloper): ?>
+                            <span class="profile-badge">
+                                <i class="fas fa-layer-group"></i>
+                                <?php echo htmlspecialchars($developerClassificationLabel); ?>
+                            </span>
+                            <?php endif; ?>
                             <span class="profile-badge">
                                 <i class="fas fa-building"></i>
                                 <?php echo htmlspecialchars($selectedUser['department'] ?: 'No department'); ?>
@@ -416,6 +425,12 @@ include '../../includes/navbar.php';
                         <label>Designation</label>
                         <div class="profile-value"><?php echo htmlspecialchars($selectedUser['designation'] ?: 'Not set'); ?></div>
                     </div>
+                    <?php if ($isDeveloper): ?>
+                    <div class="profile-field">
+                        <label>Developer Classification</label>
+                        <div class="profile-value"><?php echo htmlspecialchars($developerClassificationLabel); ?></div>
+                    </div>
+                    <?php endif; ?>
                     <div class="profile-field">
                         <label>Member Since</label>
                         <div class="profile-value"><?php echo htmlspecialchars($createdAt); ?></div>

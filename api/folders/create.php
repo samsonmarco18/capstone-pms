@@ -25,7 +25,7 @@ try {
     if (!$parentFolder) {
         folderApiRespond(['success' => false, 'error' => 'Parent folder not found.'], 404);
     }
-    if (!folderApiCanAccessFolder($parentFolder, $user)) {
+    if (!folderApiCanAccessFolderWithProject($conn, $parentFolder, $user)) {
         folderApiRespond(['success' => false, 'error' => 'You do not have access to this folder.'], 403);
     }
 

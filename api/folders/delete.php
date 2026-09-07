@@ -20,7 +20,7 @@ try {
     if (!$folder) {
         folderApiRespond(['success' => false, 'error' => 'Folder not found.'], 404);
     }
-    if (!folderApiCanAccessFolder($folder, $user)) {
+    if (!folderApiCanAccessFolderWithProject($conn, $folder, $user)) {
         folderApiRespond(['success' => false, 'error' => 'You do not have access to this folder.'], 403);
     }
 

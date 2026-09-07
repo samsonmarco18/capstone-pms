@@ -20,7 +20,7 @@ try {
     if (!$folderExists) {
         folderApiRespond(['success' => false, 'error' => 'Upload folder not found.'], 404);
     }
-    if (!folderApiCanAccessFolder($folderExists, $user)) {
+    if (!folderApiCanAccessFolderWithProject($conn, $folderExists, $user)) {
         folderApiRespond(['success' => false, 'error' => 'You do not have access to this folder.'], 403);
     }
 
@@ -41,6 +41,14 @@ try {
             continue;
         }
 
+        try {
+            storagePersistFile($target['relative_path'], $target['absolute_path'], $target['original_name'], (string) ($_FILES['files']['type'][$index] ?? ''));
+        } catch (Throwable $e) {
+            @unlink($target['absolute_path']);
+            $failures[] = (string) $originalName;
+            continue;
+        }
+
         $extension = strtolower((string) pathinfo($target['original_name'], PATHINFO_EXTENSION));
         $stmt = folderApiPrepare($conn,
             'INSERT INTO files (folder_id, original_file_name, stored_file_name, file_type, file_size, file_path, uploaded_by)
@@ -49,7 +57,7 @@ try {
         $userId = (int) $user['id'];
         $stmt->bind_param('isssisi', $folderId, $target['original_name'], $target['stored_name'], $extension, $size, $target['relative_path'], $userId);
         if (!$stmt->execute()) {
-            @unlink($target['absolute_path']);
+            storageDeleteFile($target['relative_path']);
             throw new RuntimeException('Database operation failed: ' . ($conn->error ?: 'unknown error'));
         }
         $createdIds[] = $stmt->insert_id;

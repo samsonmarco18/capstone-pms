@@ -139,8 +139,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 if (!is_uploaded_file((string) $file['tmp_name']) || !move_uploaded_file((string) $file['tmp_name'], $target['absolute_path'])) {
                     $_SESSION['error'] = 'The document could not be saved. Please try uploading it again.';
                 } else {
+                    try {
+                        storagePersistFile($target['relative_path'], $target['absolute_path'], $target['original_name'], (string) ($file['type'] ?? ''));
+                    } catch (Throwable $e) {
+                        @unlink($target['absolute_path']);
+                        $_SESSION['error'] = 'The document could not be saved permanently. Please try uploading it again.';
+                    }
+                }
+
+                if (empty($_SESSION['error'])) {
                     $stmt = $conn->prepare("INSERT INTO architecture_documents (project_id, document_type, file_name, file_path, description, uploaded_by) VALUES (?, ?, ?, ?, ?, ?)");
                     if ($stmt === false) {
+                        storageDeleteFile($target['relative_path']);
                         $_SESSION['error'] = 'The document was uploaded, but the database record could not be prepared.';
                     } else {
                         $stmt->bind_param("issssi", $projectId, $docType, $originalFileName, $target['relative_path'], $description, $user['id']);
@@ -152,6 +162,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                             $_SESSION['success'] = 'Document uploaded successfully';
                             $_SESSION['architecture_document_upload_succeeded'] = true;
                         } else {
+                            storageDeleteFile($target['relative_path']);
                             $_SESSION['error'] = 'The document was uploaded, but it could not be saved to the document list.';
                         }
                         $stmt->close();
@@ -1076,6 +1087,31 @@ a.progress-step:hover {
     border-color: #0a1b2c;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .submission-checklist-trigger {
+    background: rgba(85, 181, 232, 0.12);
+    border-color: rgba(143, 211, 255, 0.26);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+    color: #8fd3ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .submission-checklist-trigger:hover {
+    background: rgba(85, 181, 232, 0.2);
+    border-color: rgba(143, 211, 255, 0.46);
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .submission-checklist-trigger.needs-attention {
+    background: rgba(217, 146, 17, 0.16);
+    border-color: rgba(250, 204, 21, 0.42);
+    color: #f7d878;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .submission-checklist-trigger.is-complete {
+    background: rgba(18, 149, 104, 0.16);
+    border-color: rgba(74, 222, 128, 0.34);
+    color: #8ee6b8;
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .document-item:hover {
     background: #0b1d2e !important;
     border-color: rgba(113, 178, 224, 0.35) !important;
@@ -1302,7 +1338,7 @@ a.progress-step:hover {
                             </div>
                             <div class="document-item__actions">
                                 <a
-                                    href="<?php echo BASE_URL; ?>/<?php echo htmlspecialchars((string) $doc['file_path']); ?>"
+                                    href="<?php echo htmlspecialchars(storagePublicUrl((string) $doc['file_path'])); ?>"
                                     class="document-item__action document-item__action--view"
                                     target="_blank"
                                     rel="noopener"
