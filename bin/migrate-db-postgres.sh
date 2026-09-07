@@ -45,8 +45,3 @@ if [ -f "bin/migrations/postgres-folders.sql" ]; then
     echo "Applying folder-management compatibility migration..."
     psql "$DATABASE_URL" -1 -v ON_ERROR_STOP=1 -f bin/migrations/postgres-folders.sql
 fi
-
-if [ -f "bin/migrations/postgres-project-trends-seed.sql" ]; then
-    echo "Applying dashboard demo-data migration..."
-    psql "$DATABASE_URL" -1 -v ON_ERROR_STOP=1 -f bin/migrations/postgres-project-trends-seed.sql
-fi
