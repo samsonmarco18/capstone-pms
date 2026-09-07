@@ -297,16 +297,54 @@ if ($upcomingStmt !== false) {
     $upcomingStmt->close();
 }
 
-// Get monthly sales data
+// Get the last six months of project data. The chart is zero-filled below so
+// months without projects still remain visible on the timeline.
 $monthlySales = $conn->query("
-    SELECT DATE_FORMAT(created_at, '%Y-%m') as month, 
-           COUNT(*) as project_count,
-           SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed_count
-    FROM projects 
+    SELECT created_at, status
+    FROM projects
     WHERE created_at >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
-    GROUP BY DATE_FORMAT(created_at, '%Y-%m')
-    ORDER BY month ASC
+    ORDER BY created_at ASC
 ");
+
+$trendMonths = [];
+$trendCounts = [];
+$trendCompleted = [];
+$trendMonthIndexes = [];
+$trendMonthCursor = new DateTimeImmutable('first day of this month');
+
+for ($monthOffset = 5; $monthOffset >= 0; $monthOffset--) {
+    $trendMonth = $trendMonthCursor->modify("-{$monthOffset} months");
+    $trendMonthKey = $trendMonth->format('Y-m');
+    $trendMonthIndexes[$trendMonthKey] = count($trendMonths);
+    $trendMonths[] = $trendMonth->format('M Y');
+    $trendCounts[] = 0;
+    $trendCompleted[] = 0;
+}
+
+if (is_object($monthlySales) && method_exists($monthlySales, 'fetch_assoc')) {
+    while ($trendRow = $monthlySales->fetch_assoc()) {
+        $createdAt = trim((string) ($trendRow['created_at'] ?? ''));
+        if ($createdAt === '') {
+            continue;
+        }
+
+        try {
+            $trendMonthKey = (new DateTimeImmutable($createdAt))->format('Y-m');
+        } catch (Throwable) {
+            continue;
+        }
+
+        if (!isset($trendMonthIndexes[$trendMonthKey])) {
+            continue;
+        }
+
+        $trendMonthIndex = $trendMonthIndexes[$trendMonthKey];
+        $trendCounts[$trendMonthIndex]++;
+        if (strtolower((string) ($trendRow['status'] ?? '')) === 'completed') {
+            $trendCompleted[$trendMonthIndex]++;
+        }
+    }
+}
 
 $projectChecklists = fetchSalesProjectChecklists($conn, 5);
 $releaseMergedTotal = 0;
@@ -3145,15 +3183,11 @@ document.querySelectorAll('.delete-plan-form').forEach(function (form) {
 
 // Project Trends Chart
 const trendsData = <?php 
-    $months = [];
-    $counts = [];
-    $completed = [];
-    while($row = $monthlySales->fetch_assoc()) {
-        $months[] = date('M Y', strtotime($row['month'] . '-01'));
-        $counts[] = $row['project_count'];
-        $completed[] = $row['completed_count'];
-    }
-    echo json_encode(['months' => $months, 'counts' => $counts, 'completed' => $completed]);
+    echo json_encode([
+        'months' => $trendMonths,
+        'counts' => $trendCounts,
+        'completed' => $trendCompleted,
+    ], JSON_UNESCAPED_SLASHES);
 ?>;
 
 const trendsCtx = document.getElementById('projectTrendsChart').getContext('2d');
