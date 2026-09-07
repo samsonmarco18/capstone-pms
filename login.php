@@ -262,11 +262,10 @@ $faviconVersion = file_exists($faviconPath) ? (string) filemtime($faviconPath) :
 
         .brand-name {
             font-family: 'Montserrat', 'Source Sans 3', sans-serif;
-            max-width: 30rem;
-            font-size: 1.8rem;
-            line-height: 1.2;
-            letter-spacing: 0;
-            font-weight: 600;
+            font-size: 3.1rem;
+            line-height: 1;
+            letter-spacing: 0.12em;
+            font-weight: 300;
             color: #1da4f1;
         }
 
@@ -280,6 +279,7 @@ $faviconVersion = file_exists($faviconPath) ? (string) filemtime($faviconPath) :
             color: rgba(255, 255, 255, 0.92);
             margin-bottom: 2px;
             text-align: left;
+            font-weight: 600;
         }
 
         .brand-system {
@@ -583,7 +583,7 @@ $faviconVersion = file_exists($faviconPath) ? (string) filemtime($faviconPath) :
             }
 
             .brand-name {
-                font-size: 1.7rem;
+                font-size: 2.4rem;
             }
 
             .brand-subtitle {
@@ -627,7 +627,7 @@ $faviconVersion = file_exists($faviconPath) ? (string) filemtime($faviconPath) :
             }
 
             .brand-name {
-                font-size: 1.55rem;
+                font-size: 2rem;
             }
 
             .brand-lockup {
@@ -716,7 +716,8 @@ $faviconVersion = file_exists($faviconPath) ? (string) filemtime($faviconPath) :
             <div class="brand-panel">
                 <img class="brand-logo" src="assets/img/erniLogo_white.png?v=<?php echo rawurlencode($loginLogoVersion); ?>" alt="ERNI logo">
                 <div class="brand-lockup">
-                    <div class="brand-name"><strong>ERNI Development Center Philippines Inc.</strong></div>
+                    <div class="brand-name"><strong>ERNI</strong></div>
+                    <div class="brand-subtitle">Development<br>Center Philippines, Inc.</div>
 
                 </div>
                 <div class="brand-system">Decision-Driven Project Management Support System</div>
