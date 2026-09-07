@@ -211,6 +211,27 @@ include '../../includes/navbar.php';
     color: #6c757d;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .activity-item {
+    border-bottom-color: rgba(148, 163, 184, 0.28);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .activity-user {
+    color: #e2e8f0;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .activity-user i {
+    color: #7dd3fc;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .activity-time,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .activity-date {
+    color: #a9bbcf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .activity-action {
+    color: #c3d2e0;
+}
+
 .review-project-list {
     display: grid;
     gap: 0.75rem;
