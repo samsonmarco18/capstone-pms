@@ -199,7 +199,7 @@ include '../../includes/navbar.php';
                                 <?php endforeach; ?>
                             </select>
                         </div>
-                        <div class="col-12">
+                        <div class="col-md-6">
                             <label class="form-label">Designation</label>
                             <input type="text" name="designation" class="form-control" value="<?php echo htmlspecialchars($formValues['designation']); ?>" data-server-value="<?php echo htmlspecialchars($formValues['designation'], ENT_QUOTES); ?>" autocomplete="new-password">
                         </div>
