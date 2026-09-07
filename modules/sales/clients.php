@@ -934,8 +934,6 @@ if (!in_array($clientPageSize, $allowedClientPageSizes, true)) {
 }
 $clientCurrentPage = max(1, isset($_GET['page']) ? (int) $_GET['page'] : 1);
 
-$featureCondition = projectProgressFeatureCondition('t');
-$mergedCondition = projectProgressMergedCondition('t');
 $clientWhereSql = " WHERE 1=1";
 if ($search) {
     $clientWhereSql .= " AND (c.name LIKE '%$search%' OR c.email LIKE '%$search%' OR c.contact_person LIKE '%$search%')";
@@ -988,25 +986,29 @@ if ($clientRows) {
                 p.name,
                 p.status,
                 p.timeline_end,
-                p.created_at,
-                COALESCE(COUNT(t.id), 0) AS total_features,
-                COALESCE(SUM(CASE WHEN {$mergedCondition} THEN 1 ELSE 0 END), 0) AS merged_features
+                p.created_at
             FROM projects p
-            LEFT JOIN tasks t ON t.project_id = p.id AND {$featureCondition}
             WHERE p.client_id IN ({$clientIdsSql})
               AND p.status != 'cancelled'
-            GROUP BY p.id, p.client_id, p.name, p.status, p.timeline_end, p.created_at
             ORDER BY p.created_at DESC, p.id DESC
         ");
 
         if ($projectRows) {
+            $projectRowsByClient = [];
+            $projectIds = [];
             while ($projectRow = $projectRows->fetch_assoc()) {
                 $clientId = (int) ($projectRow['client_id'] ?? 0);
-                $projectRow['progress'] = projectProgressPercent(
-                    (int) ($projectRow['total_features'] ?? 0),
-                    (int) ($projectRow['merged_features'] ?? 0)
-                );
-                $projectsByClient[$clientId][] = $projectRow;
+                $projectId = (int) ($projectRow['id'] ?? 0);
+                $projectRowsByClient[$clientId][] = $projectRow;
+                $projectIds[] = $projectId;
+            }
+
+            $roadmapProgress = projectRoadmapProgressByProject($conn, $projectIds);
+            foreach ($projectRowsByClient as $clientId => $clientProjects) {
+                foreach ($clientProjects as $projectRow) {
+                    $projectRow['progress'] = $roadmapProgress[(int) ($projectRow['id'] ?? 0)] ?? 0;
+                    $projectsByClient[$clientId][] = $projectRow;
+                }
             }
         }
     }
