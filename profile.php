@@ -2,6 +2,7 @@
 require_once 'includes/auth.php';
 requireLogin();
 
+ensureUserDeveloperClassificationColumn();
 $user = getCurrentUser();
 $profileImageUrl = getUserProfileImageUrl($user['profile_pic'] ?? null);
 
@@ -465,6 +466,16 @@ include 'includes/navbar.php';
                         <?php echo htmlspecialchars(getRoleDisplayName($user['role'])); ?>
                     </div>
                 </div>
+                <?php if (($user['role'] ?? '') === 'developer'): ?>
+                <div class="info-item">
+                    <div class="info-label">
+                        <i class="fas fa-layer-group"></i> Developer Classification
+                    </div>
+                    <div class="info-value">
+                        <?php echo htmlspecialchars(getDeveloperClassificationLabel($user['developer_classification'] ?? null)); ?>
+                    </div>
+                </div>
+                <?php endif; ?>
                 <div class="info-item">
                     <div class="info-label">
                         <i class="fas fa-clock"></i> Last Login

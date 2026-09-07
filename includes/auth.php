@@ -206,6 +206,61 @@ function ensureUserPasswordSecurityColumns(): bool
     }
 }
 
+function getDeveloperClassificationOptions(): array
+{
+    return [
+        'junior' => 'Junior Developer',
+        'senior' => 'Senior Developer',
+        'professional' => 'Professional Developer',
+    ];
+}
+
+function normalizeDeveloperClassification(?string $classification): ?string
+{
+    $classification = strtolower(trim((string) $classification));
+    return array_key_exists($classification, getDeveloperClassificationOptions()) ? $classification : null;
+}
+
+function getDeveloperClassificationLabel(?string $classification): string
+{
+    $classification = normalizeDeveloperClassification($classification);
+    return $classification === null ? 'Not classified' : getDeveloperClassificationOptions()[$classification];
+}
+
+function ensureUserDeveloperClassificationColumn(): bool
+{
+    static $ensured = null;
+
+    if ($ensured !== null) {
+        return $ensured;
+    }
+
+    try {
+        $conn = getConnection();
+        if (!dbColumnExists($conn, 'users', 'developer_classification')) {
+            $sql = DB_DRIVER === 'pgsql'
+                ? 'ALTER TABLE users ADD COLUMN developer_classification VARCHAR(30) NULL'
+                : 'ALTER TABLE users ADD COLUMN developer_classification VARCHAR(30) NULL AFTER designation';
+
+            if ($conn->query($sql) === false) {
+                error_log('ensureUserDeveloperClassificationColumn failed: ' . ($conn->error ?? 'unknown error'));
+                $ensured = false;
+                return false;
+            }
+        }
+
+        // Existing developer accounts need a visible classification until an
+        // administrator assigns a more specific level.
+        $conn->query("UPDATE users SET developer_classification = 'professional' WHERE role = 'developer' AND (developer_classification IS NULL OR developer_classification = '')");
+        $ensured = true;
+        return true;
+    } catch (Throwable $e) {
+        error_log('ensureUserDeveloperClassificationColumn error: ' . $e->getMessage());
+        $ensured = false;
+        return false;
+    }
+}
+
 function isPasswordExpiredForUser(array $user): bool
 {
     $securitySettings = getSecuritySettings();

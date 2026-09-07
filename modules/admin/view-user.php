@@ -3,6 +3,7 @@ require_once '../../includes/auth.php';
 requireRole('admin');
 
 $conn = getConnection();
+ensureUserDeveloperClassificationColumn();
 $userId = (int) ($_GET['id'] ?? 0);
 $stmt = $conn->prepare('SELECT * FROM users WHERE id = ?');
 $stmt->bind_param('i', $userId);
@@ -416,6 +417,12 @@ include '../../includes/navbar.php';
                         <label>Designation</label>
                         <div class="profile-value"><?php echo htmlspecialchars($selectedUser['designation'] ?: 'Not set'); ?></div>
                     </div>
+                    <?php if ($role === 'developer'): ?>
+                    <div class="profile-field">
+                        <label>Developer Classification</label>
+                        <div class="profile-value"><?php echo htmlspecialchars(getDeveloperClassificationLabel($selectedUser['developer_classification'] ?? null)); ?></div>
+                    </div>
+                    <?php endif; ?>
                     <div class="profile-field">
                         <label>Member Since</label>
                         <div class="profile-value"><?php echo htmlspecialchars($createdAt); ?></div>

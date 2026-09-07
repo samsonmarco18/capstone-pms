@@ -5,12 +5,14 @@ requireRole('admin');
 
 $conn = getConnection();
 workflowEnsureSchema($conn);
+$hasDeveloperClassification = ensureUserDeveloperClassificationColumn();
 $admin = getCurrentUser();
 $isPost = $_SERVER['REQUEST_METHOD'] === 'POST';
 $routeUserId = (int) ($_GET['id'] ?? 0);
 $postedUserId = (int) ($_POST['id'] ?? 0);
 $userId = $routeUserId > 0 ? $routeUserId : $postedUserId;
 $departments = getDepartmentOptions();
+$developerClassificationOptions = getDeveloperClassificationOptions();
 $errors = [];
 $formValues = [];
 
@@ -37,6 +39,9 @@ if ($isPost && $userId > 0) {
     $role = trim((string) ($_POST['role'] ?? ''));
     $status = trim((string) ($_POST['status'] ?? ''));
     $designation = trim((string) ($_POST['designation'] ?? ''));
+    $developerClassification = $role === 'developer'
+        ? normalizeDeveloperClassification($_POST['developer_classification'] ?? null)
+        : null;
 
     if ($fullName === '') {
         $errors[] = 'Full name is required.';
@@ -54,6 +59,12 @@ if ($isPost && $userId > 0) {
     if ($role === 'sul' && $department === '') {
         $errors[] = 'SUL users must be assigned to a department.';
     }
+    if ($role === 'developer' && $developerClassification === null) {
+        $errors[] = 'Select a developer classification.';
+    }
+    if (!$hasDeveloperClassification) {
+        $errors[] = 'Unable to prepare developer classifications. Please try again.';
+    }
     if (!in_array($status, ['active', 'inactive', 'suspended'], true)) {
         $errors[] = 'Please select a valid status.';
     }
@@ -67,9 +78,9 @@ if ($isPost && $userId > 0) {
     $uniqueStmt->close();
 
     if (!$errors) {
-        $stmt = $conn->prepare('UPDATE users SET full_name = ?, username = ?, email = ?, department = ?, role = ?, status = ?, designation = ? WHERE id = ?');
+        $stmt = $conn->prepare('UPDATE users SET full_name = ?, username = ?, email = ?, department = ?, role = ?, status = ?, designation = ?, developer_classification = ? WHERE id = ?');
         $stmt->bind_param(
-            'sssssssi',
+            'ssssssssi',
             $fullName,
             $username,
             $email,
@@ -77,6 +88,7 @@ if ($isPost && $userId > 0) {
             $role,
             $status,
             $designation,
+            $developerClassification,
             $userId
         );
         $stmt->execute();
@@ -90,6 +102,7 @@ if ($isPost && $userId > 0) {
             'role' => $role,
             'status' => $status,
             'designation' => $designation,
+            'developer_classification' => $developerClassification,
         ]);
         header('Location: view-user.php?id=' . $userId);
         exit();
@@ -110,6 +123,7 @@ $formValues = [
     'role' => (string) ($usePostedValues ? ($_POST['role'] ?? '') : ($selectedUser['role'] ?? '')),
     'status' => (string) ($usePostedValues ? ($_POST['status'] ?? '') : ($selectedUser['status'] ?? '')),
     'designation' => (string) ($usePostedValues ? ($_POST['designation'] ?? '') : ($selectedUser['designation'] ?? '')),
+    'developer_classification' => (string) ($usePostedValues ? ($_POST['developer_classification'] ?? '') : ($selectedUser['developer_classification'] ?? '')),
 ];
 
 include '../../includes/header.php';
@@ -189,6 +203,15 @@ include '../../includes/navbar.php';
                             <label class="form-label">Designation</label>
                             <input type="text" name="designation" class="form-control" value="<?php echo htmlspecialchars($formValues['designation']); ?>" data-server-value="<?php echo htmlspecialchars($formValues['designation'], ENT_QUOTES); ?>" autocomplete="new-password">
                         </div>
+                        <div class="col-md-6<?php echo $formValues['role'] === 'developer' ? '' : ' d-none'; ?>" data-developer-classification-field>
+                            <label class="form-label" for="developerClassification">Developer Classification</label>
+                            <select name="developer_classification" id="developerClassification" class="form-select" data-server-value="<?php echo htmlspecialchars($formValues['developer_classification'], ENT_QUOTES); ?>" <?php echo $formValues['role'] === 'developer' ? 'required' : 'disabled'; ?>>
+                                <option value="">Select classification</option>
+                                <?php foreach ($developerClassificationOptions as $value => $label): ?>
+                                <option value="<?php echo htmlspecialchars($value); ?>" <?php echo $formValues['developer_classification'] === $value ? 'selected' : ''; ?>><?php echo htmlspecialchars($label); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
                     </div>
                     <div class="mt-4">
                         <button type="submit" class="btn btn-primary">Save Changes</button>
@@ -216,6 +239,24 @@ document.addEventListener('DOMContentLoaded', function () {
     restoreServerValues();
     window.setTimeout(restoreServerValues, 100);
     window.setTimeout(restoreServerValues, 500);
+});
+
+document.addEventListener('DOMContentLoaded', function () {
+    const roleSelect = document.querySelector('select[name="role"]');
+    const classificationField = document.querySelector('[data-developer-classification-field]');
+    const classificationSelect = document.getElementById('developerClassification');
+    if (!roleSelect || !classificationField || !classificationSelect) return;
+
+    const toggleClassification = function () {
+        const isDeveloper = roleSelect.value === 'developer';
+        classificationField.classList.toggle('d-none', !isDeveloper);
+        classificationSelect.disabled = !isDeveloper;
+        classificationSelect.required = isDeveloper;
+        if (!isDeveloper) classificationSelect.value = '';
+    };
+
+    roleSelect.addEventListener('change', toggleClassification);
+    toggleClassification();
 });
 </script>
 

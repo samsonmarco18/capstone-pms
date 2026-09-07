@@ -6,6 +6,7 @@ requireRole('admin');
 $conn = getConnection();
 workflowEnsureSchema($conn);
 $user = getCurrentUser();
+$hasDeveloperClassification = ensureUserDeveloperClassificationColumn();
 
 // Handle user creation
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
@@ -16,16 +17,21 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         $full_name = $_POST['full_name'];
         $department = trim((string) $_POST['department']);
         $role = trim((string) $_POST['role']);
+        $developerClassification = normalizeDeveloperClassification($_POST['developer_classification'] ?? null);
         $hasPasswordChangedAt = ensureUserPasswordSecurityColumns();
 
         if ($role === 'sul' && $department === '') {
             $_SESSION['error'] = "SUL users must be assigned to a department.";
+        } elseif ($role === 'developer' && $developerClassification === null) {
+            $_SESSION['error'] = 'Select a developer classification.';
+        } elseif (!$hasDeveloperClassification) {
+            $_SESSION['error'] = 'Unable to prepare developer classifications. Please try again.';
         } else {
             $sql = $hasPasswordChangedAt
-                ? "INSERT INTO users (username, email, password, full_name, department, role, password_changed_at) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
-                : "INSERT INTO users (username, email, password, full_name, department, role) VALUES (?, ?, ?, ?, ?, ?)";
+                ? "INSERT INTO users (username, email, password, full_name, department, role, developer_classification, password_changed_at) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
+                : "INSERT INTO users (username, email, password, full_name, department, role, developer_classification) VALUES (?, ?, ?, ?, ?, ?, ?)";
             $stmt = $conn->prepare($sql);
-            $stmt->bind_param("ssssss", $username, $email, $password, $full_name, $department, $role);
+            $stmt->bind_param("sssssss", $username, $email, $password, $full_name, $department, $role, $developerClassification);
 
             if ($stmt->execute()) {
                 $userId = $stmt->insert_id;
@@ -41,14 +47,21 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         $department = trim((string) $_POST['department']);
         $role = trim((string) $_POST['role']);
         $status = $_POST['status'];
+        $developerClassification = $role === 'developer'
+            ? normalizeDeveloperClassification($_POST['developer_classification'] ?? null)
+            : null;
         
         if ($role === 'sul' && $department === '') {
             $_SESSION['error'] = "SUL users must be assigned to a department.";
+        } elseif ($role === 'developer' && $developerClassification === null) {
+            $_SESSION['error'] = 'Select a developer classification.';
+        } elseif (!$hasDeveloperClassification) {
+            $_SESSION['error'] = 'Unable to prepare developer classifications. Please try again.';
         } else {
             $oldData = $conn->query("SELECT * FROM users WHERE id = $id")->fetch_assoc();
 
-            $stmt = $conn->prepare("UPDATE users SET full_name=?, department=?, role=?, status=? WHERE id=?");
-            $stmt->bind_param("ssssi", $full_name, $department, $role, $status, $id);
+            $stmt = $conn->prepare("UPDATE users SET full_name=?, department=?, role=?, status=?, developer_classification=? WHERE id=?");
+            $stmt->bind_param("sssssi", $full_name, $department, $role, $status, $developerClassification, $id);
 
             if ($stmt->execute()) {
                 logActivity($user['id'], 'update_user', 'users', $id, $oldData, $_POST);
@@ -1642,13 +1655,22 @@ include '../../includes/navbar.php';
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Role</label>
-                            <select name="role" class="form-select" required>
+                            <select name="role" class="form-select" data-create-user-role required>
                                 <option value="sales">Sales</option>
                                 <option value="architect">Architect</option>
                                 <option value="sul">Service Unit Leader</option>
                                 <option value="qa">QA</option>
                                 <option value="expert">Expert/Senior</option>
                                 <option value="developer">Developer</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 d-none" data-create-developer-classification>
+                            <label class="form-label" for="createDeveloperClassification">Developer Classification</label>
+                            <select name="developer_classification" id="createDeveloperClassification" class="form-select" disabled>
+                                <option value="">Select classification</option>
+                                <?php foreach (getDeveloperClassificationOptions() as $value => $label): ?>
+                                <option value="<?php echo htmlspecialchars($value); ?>"><?php echo htmlspecialchars($label); ?></option>
+                                <?php endforeach; ?>
                             </select>
                         </div>
                     </div>
@@ -1698,6 +1720,23 @@ function openDeleteUserModal(button) {
 
     new bootstrap.Modal(document.getElementById('deleteUserModal')).show();
 }
+
+const createUserRole = document.querySelector('[data-create-user-role]');
+const createDeveloperClassification = document.querySelector('[data-create-developer-classification]');
+const createDeveloperClassificationSelect = document.getElementById('createDeveloperClassification');
+
+function toggleCreateDeveloperClassification() {
+    const isDeveloper = createUserRole?.value === 'developer';
+    createDeveloperClassification?.classList.toggle('d-none', !isDeveloper);
+    if (createDeveloperClassificationSelect) {
+        createDeveloperClassificationSelect.disabled = !isDeveloper;
+        createDeveloperClassificationSelect.required = isDeveloper;
+        if (!isDeveloper) createDeveloperClassificationSelect.value = '';
+    }
+}
+
+createUserRole?.addEventListener('change', toggleCreateDeveloperClassification);
+toggleCreateDeveloperClassification();
 </script>
 
 <?php

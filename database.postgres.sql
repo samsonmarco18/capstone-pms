@@ -28,6 +28,7 @@ CREATE TABLE users (
     phone VARCHAR(20),
     address TEXT,
     designation VARCHAR(100),
+    developer_classification VARCHAR(30) NULL,
     skills TEXT NULL,
     availability_status VARCHAR(30) DEFAULT 'available',
     max_concurrent_tasks INT DEFAULT 5,
