@@ -37,7 +37,9 @@ while ($row = $result->fetch_assoc()) {
 
 $roadmapProgress = projectRoadmapProgressByProject($conn, array_column($projects, 'id'));
 foreach ($projects as &$project) {
-    $project['progress'] = $roadmapProgress[(int) ($project['id'] ?? 0)] ?? 0;
+    $project['progress'] = strtolower((string) ($project['status'] ?? '')) === 'completed'
+        ? 100
+        : ($roadmapProgress[(int) ($project['id'] ?? 0)] ?? 0);
 }
 unset($project);
 

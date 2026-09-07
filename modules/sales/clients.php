@@ -1017,7 +1017,9 @@ if ($clientRows) {
             $roadmapProgress = projectRoadmapProgressByProject($conn, $projectIds);
             foreach ($projectRowsByClient as $clientId => $clientProjects) {
                 foreach ($clientProjects as $projectRow) {
-                    $projectRow['progress'] = $roadmapProgress[(int) ($projectRow['id'] ?? 0)] ?? 0;
+                    $projectRow['progress'] = strtolower((string) ($projectRow['status'] ?? '')) === 'completed'
+                        ? 100
+                        : ($roadmapProgress[(int) ($projectRow['id'] ?? 0)] ?? 0);
                     $projectsByClient[$clientId][] = $projectRow;
                 }
             }
