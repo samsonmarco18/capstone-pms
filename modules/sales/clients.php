@@ -329,6 +329,23 @@ function salesClientsInsertProject($conn, array $data): int
     return $projectId;
 }
 
+function salesClientsResolveProjectTemplate(mysqli|PgsqlMysqliCompatConnection $conn, string $projectType, int $requestedTemplateId): ?array
+{
+    $normalizedProjectType = projectTemplateNormalizeType($projectType);
+    if ($normalizedProjectType === '') {
+        return null;
+    }
+
+    if ($requestedTemplateId > 0) {
+        $selectedTemplate = projectTemplateFindById($conn, $requestedTemplateId);
+        if ($selectedTemplate && projectTemplateNormalizeType((string) ($selectedTemplate['project_type'] ?? '')) === $normalizedProjectType) {
+            return $selectedTemplate;
+        }
+    }
+
+    return projectTemplateFindByType($conn, $projectType);
+}
+
 function salesClientsEnsureClientFolder(mysqli|PgsqlMysqliCompatConnection $conn, int $clientId, string $clientName, int $createdBy): int
 {
     $checkStmt = $conn->prepare(
@@ -517,10 +534,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $projectName = trim((string) ($_POST['project_name'] ?? ''));
         $projectType = trim((string) ($_POST['project_type'] ?? ''));
         $requestedTemplateId = (int) ($_POST['project_template_id'] ?? 0);
-        $projectTemplate = $requestedTemplateId > 0 ? projectTemplateFindById($conn, $requestedTemplateId) : null;
-        if (!$projectTemplate || projectTemplateNormalizeType((string) ($projectTemplate['project_type'] ?? '')) !== projectTemplateNormalizeType($projectType)) {
-            $projectTemplate = $projectType !== '' ? projectTemplateFindByType($conn, $projectType) : null;
-        }
+        $projectTemplate = salesClientsResolveProjectTemplate($conn, $projectType, $requestedTemplateId);
         $projectTemplateId = $projectTemplate ? (int) ($projectTemplate['id'] ?? 0) : null;
         $projectTemplateSnapshot = $projectTemplate ? json_encode($projectTemplate, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) : null;
         $projectDescription = trim((string) ($_POST['project_description'] ?? ''));
@@ -683,10 +697,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $projectName = trim((string) ($_POST['project_name'] ?? ''));
         $projectType = trim((string) ($_POST['project_type'] ?? ''));
         $requestedTemplateId = (int) ($_POST['project_template_id'] ?? 0);
-        $projectTemplate = $requestedTemplateId > 0 ? projectTemplateFindById($conn, $requestedTemplateId) : null;
-        if (!$projectTemplate || projectTemplateNormalizeType((string) ($projectTemplate['project_type'] ?? '')) !== projectTemplateNormalizeType($projectType)) {
-            $projectTemplate = $projectType !== '' ? projectTemplateFindByType($conn, $projectType) : null;
-        }
+        $projectTemplate = salesClientsResolveProjectTemplate($conn, $projectType, $requestedTemplateId);
         $projectTemplateId = $projectTemplate ? (int) ($projectTemplate['id'] ?? 0) : null;
         $projectTemplateSnapshot = $projectTemplate ? json_encode($projectTemplate, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) : null;
         $projectDescription = trim((string) ($_POST['project_description'] ?? ''));
@@ -8198,7 +8209,7 @@ body.sales-assistant-open #chat-bot-float .chat-bot-float-animation { animation:
 #addClientForm .template-type-picker::after, #addProjectForm .template-type-picker::after { display:none !important; }
 #addClientForm [data-template-picker-input], #addProjectForm [data-template-picker-input] { padding-right:.9rem !important; }
 :is(#addClientForm, #addProjectForm) .template-recommendation-shell [data-template-picker-input] { padding-right:2.7rem !important; }
-#addClientForm [data-template-version-select], #addProjectForm [data-template-version-select] { display:none !important; }
+#addClientForm [data-template-version-select][hidden], #addProjectForm [data-template-version-select][hidden] { display:none !important; }
 .sales-bot-head { padding-left:.75rem; font-weight:800; color:#083a5d; }
 .sales-bot-heading-row { position:relative; z-index:5; display:flex; align-items:center; justify-content:space-between; gap:.6rem; }
 .sales-bot-dismiss { flex:0 0 auto; border:0; border-radius:999px; background:rgba(255,255,255,.72); color:#0b5d89; width:27px; height:27px; cursor:pointer; transition:transform .18s ease,background .18s ease; }
@@ -8590,11 +8601,7 @@ const salesTemplateAssistant = (() => {
     };
 
     const templateFor = (form) => {
-        const selectedId = Number(form?.querySelector('[data-template-version-select]')?.value || 0);
-        const type = normalizeSalesTemplateType(form?.elements?.project_type?.value);
-        return projectTemplates.find(item => selectedId && Number(item.id) === selectedId)
-            || projectTemplates.find(item => normalizeSalesTemplateType(item.project_type) === type)
-            || null;
+        return getSelectedTemplateForForm(form, normalizeSalesTemplateType);
     };
     const setField = async (name, value) => {
         const field = activeForm?.elements?.[name];
@@ -9266,6 +9273,21 @@ const projectTemplateTypeNames = Array.from(new Set(
         .filter(Boolean)
 )).sort((a, b) => a.localeCompare(b));
 
+function getSelectedTemplateForForm(form, normalizer = normalizeSalesTemplateType) {
+    const projectType = normalizer(form?.elements?.project_type?.value || '');
+    const selectedId = Number(form?.querySelector('[data-template-version-select]')?.value || 0);
+    if (!projectType) {
+        return null;
+    }
+
+    const selectedTemplate = projectTemplates.find((template) => selectedId > 0 && Number(template.id) === selectedId);
+    if (selectedTemplate && normalizer(selectedTemplate.project_type) === projectType) {
+        return selectedTemplate;
+    }
+
+    return projectTemplates.find((template) => normalizer(template.project_type) === projectType) || null;
+}
+
 function closeTemplatePickers(exceptMenu = null) {
     document.querySelectorAll('[data-template-picker-menu]').forEach((menu) => {
         if (menu !== exceptMenu) {
@@ -9281,14 +9303,11 @@ function initProjectTemplatePicker(picker) {
     if (!input || !menu) {
         return;
     }
-    if (salesEvortixEnabled) {
-        menu.hidden = true;
-        return;
-    }
 
     let selectingTemplate = false;
     const syncVersions = () => {
         if (!versionSelect) return;
+        const previousValue = versionSelect.value;
         const needle = normalizeSalesTemplateType(input.value);
         const versions = projectTemplates
             .filter((template) => normalizeSalesTemplateType(template.project_type) === needle)
@@ -9297,8 +9316,23 @@ function initProjectTemplatePicker(picker) {
             `<option value="${Number(template.id || 0)}">${formatTemplateVersionLabel(template, ' (Latest)')}</option>`
         ).join('');
         versionSelect.hidden = versions.length < 2;
-        if (versions.length === 1) versionSelect.value = String(versions[0].id || '');
+        if (versions.some((template) => String(template.id || '') === previousValue)) {
+            versionSelect.value = previousValue;
+        } else if (versions.length >= 1) {
+            versionSelect.value = String(versions[0].id || '');
+        }
     };
+    syncVersions();
+
+    if (salesEvortixEnabled) {
+        menu.hidden = true;
+        input.addEventListener('input', syncVersions);
+        input.addEventListener('change', syncVersions);
+        versionSelect?.addEventListener('change', () => {
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        return;
+    }
     const renderMenu = () => {
         if (selectingTemplate) {
             return;
@@ -9422,9 +9456,8 @@ function findSalesProjectTemplate(value) {
         return null;
     }
 
-    const selectedId = Number(document.querySelector('#addProjectForm [data-template-version-select]')?.value || 0);
-    const exactMatch = projectTemplates.find((template) => selectedId > 0 && Number(template.id) === selectedId)
-        || projectTemplates.find((template) => normalizeSalesTemplateType(template.project_type) === needle);
+    const form = document.getElementById('addProjectForm');
+    const exactMatch = getSelectedTemplateForForm(form, normalizeSalesTemplateType);
     if (exactMatch) {
         return exactMatch;
     }
@@ -10957,9 +10990,7 @@ if (addClientModalElement && addClientForm) {
             return null;
         }
 
-        const selectedId = Number(addClientForm.querySelector('[data-template-version-select]')?.value || 0);
-        const exactMatch = projectTemplates.find((template) => selectedId > 0 && Number(template.id) === selectedId)
-            || projectTemplates.find((template) => normalizeTemplateType(template.project_type) === needle);
+        const exactMatch = getSelectedTemplateForForm(addClientForm, normalizeTemplateType);
         if (exactMatch) {
             return exactMatch;
         }

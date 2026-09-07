@@ -149,12 +149,10 @@ $evortixSulProjectRows = sulDashboardQuery($conn, "
             WHEN t.assigned_to IS NULL OR t.assigned_to = 0
             THEN 1 ELSE 0
         END) AS unassigned_count
-    FROM projects p
-    INNER JOIN tasks t ON t.project_id = p.id
+    FROM tasks t
+    INNER JOIN projects p ON p.id = t.project_id
     LEFT JOIN clients c ON c.id = p.client_id
-    WHERE {$sulProjectDepartmentClause}
-      AND {$sulTaskDepartmentClause}
-      AND p.status != 'cancelled'
+    WHERE p.status != 'cancelled'
     GROUP BY p.id, p.name, c.name
     HAVING
         SUM(CASE WHEN t.deadline < NOW() AND t.status != 'completed' THEN 1 ELSE 0 END) > 0
@@ -240,6 +238,31 @@ $evortixSulStatusTotals = [
     'unassigned' => array_sum(array_column($evortixSulProjectGroups['unassigned'], 'task_count')),
     'overloaded' => count($evortixSulProjectGroups['overloaded']),
 ];
+
+$evortixSulStatTotals = [
+    'overdue' => $overdueTasks,
+    'unassigned' => $unassignedTasks,
+];
+foreach ($evortixSulStatTotals as $statusKey => $statTotal) {
+    $previewTotal = (int) ($evortixSulStatusTotals[$statusKey] ?? 0);
+    if ($previewTotal === (int) $statTotal) {
+        continue;
+    }
+
+    $delta = (int) $statTotal - $previewTotal;
+    if ($delta > 0) {
+        $evortixSulProjectGroups[$statusKey][] = [
+            'id' => 0,
+            'name' => 'Other visible tasks',
+            'meta' => 'Dashboard total reconciliation',
+            'quantity_label' => $delta . ' task' . ($delta === 1 ? '' : 's'),
+            'task_count' => $delta,
+            'url' => 'task-allocation.php?evortix_auto=1',
+        ];
+    }
+
+    $evortixSulStatusTotals[$statusKey] = (int) $statTotal;
+}
 
 // Get tasks by priority
 $highPriority = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM tasks {$sulActiveTaskJoin} WHERE tasks.priority = 'high' AND tasks.status != 'completed'");
