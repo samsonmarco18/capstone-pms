@@ -262,10 +262,11 @@ $faviconVersion = file_exists($faviconPath) ? (string) filemtime($faviconPath) :
 
         .brand-name {
             font-family: 'Montserrat', 'Source Sans 3', sans-serif;
-            font-size: 3.1rem;
-            line-height: 1;
-            letter-spacing: 0.1em;
-            font-weight: 300;
+            max-width: 30rem;
+            font-size: 1.8rem;
+            line-height: 1.2;
+            letter-spacing: 0;
+            font-weight: 600;
             color: #1da4f1;
         }
 
@@ -582,7 +583,7 @@ $faviconVersion = file_exists($faviconPath) ? (string) filemtime($faviconPath) :
             }
 
             .brand-name {
-                font-size: 2.4rem;
+                font-size: 1.7rem;
             }
 
             .brand-subtitle {
@@ -626,7 +627,7 @@ $faviconVersion = file_exists($faviconPath) ? (string) filemtime($faviconPath) :
             }
 
             .brand-name {
-                font-size: 2rem;
+                font-size: 1.55rem;
             }
 
             .brand-lockup {
@@ -715,7 +716,7 @@ $faviconVersion = file_exists($faviconPath) ? (string) filemtime($faviconPath) :
             <div class="brand-panel">
                 <img class="brand-logo" src="assets/img/erniLogo_white.png?v=<?php echo rawurlencode($loginLogoVersion); ?>" alt="ERNI logo">
                 <div class="brand-lockup">
-                    <div class="brand-name"><strong>EVORTIX</strong></div>
+                    <div class="brand-name"><strong>ERNI Development Center Philippines Inc.</strong></div>
 
                 </div>
                 <div class="brand-system">Decision-Driven Project Management Support System</div>
