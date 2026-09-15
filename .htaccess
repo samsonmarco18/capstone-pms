@@ -14,6 +14,11 @@ DirectoryIndex index.php
     # Canonical public pages use extensionless URLs. Capture the browser's
     # original request path so the redirect never resolves to a filesystem
     # directory (such as /var/www/html on Render).
+    RewriteCond %{HTTP_HOST} ^erni-pms\.onrender\.com(?::\d+)?$ [NC]
+    RewriteCond %{THE_REQUEST} \s/+([^\s?]+)\.php(?:[?\s]) [NC]
+    RewriteRule ^ https://erni-pms.onrender.com/%1 [R=301,L,NE]
+
+    RewriteCond %{HTTP_HOST} !^erni-pms\.onrender\.com(?::\d+)?$ [NC]
     RewriteCond %{THE_REQUEST} \s/+([^\s?]+)\.php(?:[?\s]) [NC]
     RewriteRule ^ /%1 [R=301,L,NE]
 
