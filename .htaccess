@@ -3,6 +3,20 @@ DirectoryIndex index.php
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
+    # API endpoints retain their explicit filenames so POST/PUT requests are
+    # never redirected and therefore keep their original HTTP method.
+    RewriteRule ^api/ - [L]
+
+    # Keep public application URLs extensionless. Direct PHP requests are
+    # canonicalized, while the extensionless URL is served by its PHP file.
+    RewriteCond %{THE_REQUEST} \s/+[^\s?]+\.php(?:[?\s]) [NC]
+    RewriteRule ^(.+)\.php$ $1 [R=301,L,NE]
+
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME}.php -f
+    RewriteRule ^(.+?)/?$ $1.php [END]
+
     # Redirect to HTTPS outside local development hosts
     RewriteCond %{HTTP_HOST} !^(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$ [NC]
     RewriteCond %{HTTPS} off

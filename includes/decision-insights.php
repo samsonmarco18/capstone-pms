@@ -138,7 +138,14 @@ function di_access_rule(array $user): array
         'sales' => ['where' => '1 = 1', 'types' => '', 'params' => []],
         'sul' => ['where' => '1 = 1', 'types' => '', 'params' => []],
         'architect' => ['where' => '(p.architect_id = ? OR p.architect_id IS NULL)', 'types' => 'i', 'params' => [$userId]],
-        'expert' => ['where' => 'EXISTS (SELECT 1 FROM tasks tx WHERE tx.project_id = p.id AND tx.assigned_to = ?)', 'types' => 'i', 'params' => [$userId]],
+        // Experts may be connected to a project by an assigned task or by a
+        // feature estimation. Keep this in sync with the Expert dashboard's
+        // project-insights scope so estimation-only projects remain visible.
+        'expert' => [
+            'where' => '(EXISTS (SELECT 1 FROM tasks tx WHERE tx.project_id = p.id AND tx.assigned_to = ?) OR EXISTS (SELECT 1 FROM feature_estimations fe WHERE fe.project_id = p.id AND fe.expert_id = ?))',
+            'types' => 'ii',
+            'params' => [$userId, $userId],
+        ],
         'developer' => ['where' => 'EXISTS (SELECT 1 FROM tasks tx WHERE tx.project_id = p.id AND tx.assigned_to = ?)', 'types' => 'i', 'params' => [$userId]],
     ];
 
