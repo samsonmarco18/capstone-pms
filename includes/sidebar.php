@@ -175,7 +175,10 @@ try {
 
 function isSidebarItemActive(array $item, string $currentPage, string $currentPath): bool
 {
-    if ($currentPage === basename($item['url'])) {
+    $itemPage = preg_replace('/\.php$/', '', basename((string) ($item['url'] ?? '')));
+    $currentRoute = preg_replace('/\.php$/', '', $currentPage);
+
+    if ($currentRoute === $itemPage) {
         return true;
     }
 
@@ -209,6 +212,7 @@ function isSidebarItemActive(array $item, string $currentPage, string $currentPa
     <div class="sidebar-nav py-2">
         <?php foreach ($currentMenu as $item): ?>
             <?php
+                $menuUrl = preg_replace('/\.php$/', '', (string) ($item['url'] ?? ''));
                 $itemAttentionKey = (string) ($item['attention_key'] ?? '');
                 $itemAttentionCount = !empty($item['attention']) ? $projectInsightsAttentionCount : 0;
                 $itemAttentionTitle = !empty($item['attention']) ? $projectInsightsAttentionTitle : '';
@@ -225,7 +229,7 @@ function isSidebarItemActive(array $item, string $currentPage, string $currentPa
                 }
             ?>
             <a
-                href="<?php echo BASE_URL . ltrim($item['url'], '/'); ?>"
+                href="<?php echo BASE_URL . ltrim($menuUrl, '/'); ?>"
                 class="menu-item <?php echo isSidebarItemActive($item, $currentPage, $currentPath) ? 'active' : ''; ?> <?php echo $itemAttentionCount > 0 ? 'has-attention' : ''; ?>"
             >
                 <i class="fas fa-<?php echo htmlspecialchars($item['icon']); ?> menu-icon"></i>
