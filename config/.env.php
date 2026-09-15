@@ -17,7 +17,7 @@ if (is_file($localConfigFile)) {
 // Detect environment - check multiple indicators
 $host = strtolower($_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? '');
 $isCliMode = php_sapi_name() === 'cli' || php_sapi_name() === 'cli-server';
-$isRender = !empty(getenv('RENDER'));
+$isRender = !empty(getenv('RENDER')) || str_contains($host, 'onrender.com');
 $appRootPath = realpath(dirname(__DIR__)) ?: dirname(__DIR__);
 
 // Determine if running locally
