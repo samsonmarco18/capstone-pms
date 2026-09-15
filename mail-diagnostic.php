@@ -15,9 +15,9 @@ if (($_POST['send_test'] ?? $_GET['send_test'] ?? '') !== '') {
 
     $testResult = sendSystemEmail(
         $recipient,
-        'EVORTIX PMS Mail Test',
-        '<p>This is a test email from EVORTIX PMS mail diagnostics.</p>',
-        'This is a test email from EVORTIX PMS mail diagnostics.'
+        'ERNI Development Center Philippines Inc. Mail Test',
+        '<p>This is a test email from ERNI Development Center Philippines Inc. mail diagnostics.</p>',
+        'This is a test email from ERNI Development Center Philippines Inc. mail diagnostics.'
     );
 }
 

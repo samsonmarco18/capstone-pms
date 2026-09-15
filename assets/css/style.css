@@ -1798,8 +1798,8 @@ body {
 }
 
 .brand-mark {
-    width: 75px;
-    height: 75px;
+    width: 44px;
+    height: 44px;
     border-radius: 18px;
     background: transparent;
     display: flex;
@@ -1826,14 +1826,15 @@ body {
 
 .brand-copy .brand-title {
     color: #1193cf !important;
-    font-size: 1.3rem;
+    font-size: 1.1rem;
     font-weight: 700;
-    letter-spacing: -0.03em;
+    letter-spacing: 0;
 }
 
 .brand-copy small {
+    display: block;
     color: #6f879f !important;
-    font-size: 0.74rem;
+    font-size: 0.64rem;
     line-height: 1.35;
 }
 
