@@ -131,6 +131,13 @@ function detectAppUrl(string $appRootPath, bool $isRender): string
     $scheme = $isHttps ? 'https' : 'http';
     $host = trim((string) ($_SERVER['HTTP_HOST'] ?? 'localhost'));
 
+    // Render proxies requests to the container's internal PORT (commonly
+    // 10000). That port is not publicly reachable and must never become part
+    // of a browser-facing URL when APP_URL is unavailable.
+    if ($isRender) {
+        $host = preg_replace('/:\d+$/', '', $host) ?: $host;
+    }
+
     $basePathOverride = trim((string) getEnvOrDefault('APP_BASE_PATH', ''));
     if ($basePathOverride !== '') {
         return $scheme . '://' . $host . '/' . trim($basePathOverride, '/') . '/';
@@ -157,6 +164,14 @@ function detectAppUrl(string $appRootPath, bool $isRender): string
 $appUrl = getEnvOrDefault('APP_URL', null);
 if (!$appUrl) {
     $appUrl = detectAppUrl($appRootPath, $isRender);
+}
+
+// A Render service listens on an internal PORT, but its public URL never
+// includes that port. Normalize an accidental dashboard/environment override
+// as a final safeguard for every generated link and redirect.
+if ($isRender) {
+    $appUrl = preg_replace('#^http://#i', 'https://', (string) $appUrl) ?: $appUrl;
+    $appUrl = preg_replace('#^(https?://[^/:]+):\d+(?=/|$)#i', '$1', (string) $appUrl) ?: $appUrl;
 }
 define('APP_URL', rtrim($appUrl, '/') . '/');
 
