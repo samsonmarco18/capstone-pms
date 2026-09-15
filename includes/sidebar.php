@@ -11,8 +11,8 @@ $menuItems = [
     'admin' => [
         ['label' => 'Dashboard', 'url' => '/modules/admin/dashboard.php', 'icon' => 'tachometer-alt'],
         ['label' => 'Calendar', 'url' => '/calendar.php', 'icon' => 'calendar-alt'],
-        ['label' => 'Project Insights', 'url' => '/modules/insights/decision-center', 'icon' => 'lightbulb', 'attention' => true],
-        ['label' => 'Process History', 'url' => '/modules/insights/process-history', 'icon' => 'clock-rotate-left'],
+        ['label' => 'Project Insights', 'url' => '/modules/insights/decision-center.php', 'icon' => 'lightbulb', 'attention' => true],
+        ['label' => 'Process History', 'url' => '/modules/insights/process-history.php', 'icon' => 'clock-rotate-left'],
         ['label' => 'Tech Stack', 'url' => '/modules/admin/techstack.php', 'icon' => 'microchip'],
         ['label' => 'User Management', 'url' => '/modules/admin/user-management.php', 'icon' => 'users', 'matches' => ['/modules/admin/edit-user.php', '/modules/admin/view-user.php']],
         ['label' => 'Password Resets', 'url' => '/modules/admin/password-reset-requests.php', 'icon' => 'key'],
@@ -22,8 +22,8 @@ $menuItems = [
     'sales' => [
         ['label' => 'Dashboard', 'url' => '/modules/sales/dashboard.php', 'icon' => 'chart-line'],
         ['label' => 'Calendar', 'url' => '/calendar.php', 'icon' => 'calendar-alt'],
-        ['label' => 'Project Insights', 'url' => '/modules/insights/decision-center', 'icon' => 'lightbulb', 'attention' => true],
-        ['label' => 'Process History', 'url' => '/modules/insights/process-history', 'icon' => 'clock-rotate-left'],
+        ['label' => 'Project Insights', 'url' => '/modules/insights/decision-center.php', 'icon' => 'lightbulb', 'attention' => true],
+        ['label' => 'Process History', 'url' => '/modules/insights/process-history.php', 'icon' => 'clock-rotate-left'],
         ['label' => 'Clients', 'url' => '/modules/sales/clients.php', 'icon' => 'building'],
         ['label' => 'Estimation Approval', 'url' => '/modules/sales/estimation-approval.php', 'icon' => 'clipboard-check'],
         ['label' => 'Release Status', 'url' => '/modules/sales/release-status.php', 'icon' => 'bullhorn'],
@@ -33,9 +33,9 @@ $menuItems = [
     'architect' => [
         ['label' => 'Dashboard', 'url' => '/modules/architect/dashboard.php', 'icon' => 'drafting-compass'],
         ['label' => 'Calendar', 'url' => '/calendar.php', 'icon' => 'calendar-alt'],
-        ['label' => 'Project Insights', 'url' => '/modules/insights/decision-center', 'icon' => 'lightbulb', 'attention' => true],
+        ['label' => 'Project Insights', 'url' => '/modules/insights/decision-center.php', 'icon' => 'lightbulb', 'attention' => true],
         ['label' => 'QA Revisions', 'url' => '/modules/architect/qa-revisions.php', 'icon' => 'bell', 'attention_key' => 'qa_revisions'],
-        ['label' => 'Process History', 'url' => '/modules/insights/process-history', 'icon' => 'clock-rotate-left'],
+        ['label' => 'Process History', 'url' => '/modules/insights/process-history.php', 'icon' => 'clock-rotate-left'],
         [
             'label' => 'Projects',
             'url' => '/modules/architect/projects.php',
@@ -56,8 +56,8 @@ $menuItems = [
     'sul' => [
         ['label' => 'Dashboard', 'url' => '/modules/sul/dashboard.php', 'icon' => 'chart-pie'],
         ['label' => 'Calendar', 'url' => '/calendar.php', 'icon' => 'calendar-alt'],
-        ['label' => 'Project Insights', 'url' => '/modules/insights/decision-center', 'icon' => 'lightbulb', 'attention' => true],
-        ['label' => 'Process History', 'url' => '/modules/insights/process-history', 'icon' => 'clock-rotate-left'],
+        ['label' => 'Project Insights', 'url' => '/modules/insights/decision-center.php', 'icon' => 'lightbulb', 'attention' => true],
+        ['label' => 'Process History', 'url' => '/modules/insights/process-history.php', 'icon' => 'clock-rotate-left'],
         ['label' => 'Task Allocation', 'url' => '/modules/sul/task-allocation.php', 'icon' => 'tasks'],
         ['label' => 'Roadmap Monitoring', 'url' => '/modules/roadmap/methodology.php', 'icon' => 'route'],
         ['label' => 'Resource Management', 'url' => '/modules/sul/resource-management.php', 'icon' => 'users-cog'],
@@ -68,15 +68,15 @@ $menuItems = [
         ['label' => 'Dashboard', 'url' => '/modules/qa/dashboard.php', 'icon' => 'chart-pie'],
         ['label' => 'QA Testing', 'url' => '/modules/qa/testing.php', 'icon' => 'clipboard-check'],
         ['label' => 'Calendar', 'url' => '/calendar.php', 'icon' => 'calendar-alt'],
-        ['label' => 'Project Insights', 'url' => '/modules/insights/decision-center', 'icon' => 'lightbulb', 'attention' => true],
-        ['label' => 'Process History', 'url' => '/modules/insights/process-history', 'icon' => 'clock-rotate-left'],
+        ['label' => 'Project Insights', 'url' => '/modules/insights/decision-center.php', 'icon' => 'lightbulb', 'attention' => true],
+        ['label' => 'Process History', 'url' => '/modules/insights/process-history.php', 'icon' => 'clock-rotate-left'],
         ['label' => 'Version Control', 'url' => '/modules/version-control/repositories.php', 'icon' => 'code-branch'],
     ],
     'expert' => [
         ['label' => 'Dashboard', 'url' => '/modules/expert/dashboard.php', 'icon' => 'clipboard-list'],
         ['label' => 'Calendar', 'url' => '/calendar.php', 'icon' => 'calendar-alt'],
-        ['label' => 'Project Insights', 'url' => '/modules/insights/decision-center', 'icon' => 'lightbulb', 'attention' => true],
-        ['label' => 'Process History', 'url' => '/modules/insights/process-history', 'icon' => 'clock-rotate-left'],
+        ['label' => 'Project Insights', 'url' => '/modules/insights/decision-center.php', 'icon' => 'lightbulb', 'attention' => true],
+        ['label' => 'Process History', 'url' => '/modules/insights/process-history.php', 'icon' => 'clock-rotate-left'],
         [
             'label' => 'Project Estimation',
             'url' => '/modules/expert/feature-estimation.php',
@@ -90,8 +90,8 @@ $menuItems = [
     'developer' => [
         ['label' => 'Dashboard', 'url' => '/modules/developer/dashboard.php', 'icon' => 'code'],
         ['label' => 'Calendar', 'url' => '/calendar.php', 'icon' => 'calendar-alt'],
-        ['label' => 'Project Insights', 'url' => '/modules/insights/decision-center', 'icon' => 'lightbulb', 'attention' => true],
-        ['label' => 'Process History', 'url' => '/modules/insights/process-history', 'icon' => 'clock-rotate-left'],
+        ['label' => 'Project Insights', 'url' => '/modules/insights/decision-center.php', 'icon' => 'lightbulb', 'attention' => true],
+        ['label' => 'Process History', 'url' => '/modules/insights/process-history.php', 'icon' => 'clock-rotate-left'],
         ['label' => 'Task', 'url' => '/modules/developer/task.php', 'icon' => 'tasks'],
         ['label' => 'Version Control', 'url' => '/modules/version-control/repositories.php', 'icon' => 'code-branch'],
     ],
@@ -175,8 +175,7 @@ try {
 
 function isSidebarItemActive(array $item, string $currentPage, string $currentPath): bool
 {
-    $itemPage = basename((string) ($item['url'] ?? ''));
-    if ($currentPage === $itemPage || $currentPage === $itemPage . '.php') {
+    if ($currentPage === basename($item['url'])) {
         return true;
     }
 

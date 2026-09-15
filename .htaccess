@@ -3,30 +3,6 @@ DirectoryIndex index.php
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
-    # API endpoints retain their explicit filenames so POST/PUT requests are
-    # never redirected and therefore keep their original HTTP method.
-    RewriteRule ^api/ - [L]
-
-    # Recover browser redirects created by the earlier relative-rule version.
-    # This is deliberately temporary (302) so it is not cached permanently.
-    RewriteRule ^var/www/html/(.+)$ /$1 [R=302,L,NE]
-
-    # Keep the deployment health check on its explicitly configured endpoint.
-    RewriteRule ^healthz\.php$ - [L]
-
-    # Keep public application URLs extensionless. Direct PHP requests are
-    # canonicalized, while the extensionless URL is served by its PHP file.
-    # Build the redirect from the original request path. A relative rewrite
-    # target can otherwise be resolved against Apache's filesystem directory
-    # on Render (for example, /var/www/html/login).
-    RewriteCond %{THE_REQUEST} \s/+([^\s?]+)\.php(?:[?\s]) [NC]
-    RewriteRule ^ /%1 [R=301,L,NE]
-
-    RewriteCond %{REQUEST_FILENAME} !-d
-    RewriteCond %{REQUEST_FILENAME} !-f
-    RewriteCond %{REQUEST_FILENAME}.php -f
-    RewriteRule ^(.+?)/?$ $1.php [END]
-
     # Redirect to HTTPS outside local development hosts
     RewriteCond %{HTTP_HOST} !^(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$ [NC]
     RewriteCond %{HTTPS} off
