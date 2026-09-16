@@ -166,7 +166,7 @@ include '../../includes/navbar.php';
                         <?php endforeach; ?>
                     </div>
                 <?php endif; ?>
-                <form method="POST" action="edit-user.php?id=<?php echo (int) $selectedUser['id']; ?>" autocomplete="off" data-generic-draft-disabled="true" data-confirm-skip="true">
+                <form method="POST" action="edit-user.php?id=<?php echo (int) $selectedUser['id']; ?>" autocomplete="off" data-generic-draft-disabled="true" data-confirm-skip="true" onsubmit="this.dataset.confirmedSubmit = '1';">
                     <input type="hidden" name="id" value="<?php echo (int) $selectedUser['id']; ?>">
                     <div class="row g-3">
                         <div class="col-md-6">
@@ -235,7 +235,7 @@ include '../../includes/navbar.php';
                         </div>
                     </div>
                     <div class="mt-4">
-                        <button type="button" class="btn btn-primary" id="directSaveUserButton">Save Changes</button>
+                        <button type="submit" class="btn btn-primary" name="save_user" value="1">Save Changes</button>
                         <a href="view-user.php?id=<?php echo (int) $selectedUser['id']; ?>" class="btn btn-outline-secondary">Cancel</a>
                     </div>
                 </form>
@@ -245,23 +245,6 @@ include '../../includes/navbar.php';
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-    const form = document.querySelector('form[action^="edit-user.php"]');
-    const saveButton = document.getElementById('directSaveUserButton');
-    if (form && saveButton) {
-        saveButton.addEventListener('click', function () {
-            if (!form.checkValidity()) {
-                form.reportValidity();
-                return;
-            }
-
-            saveButton.setAttribute('aria-disabled', 'true');
-            saveButton.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Saving...';
-            HTMLFormElement.prototype.submit.call(form);
-        });
-    }
-});
-
 document.addEventListener('DOMContentLoaded', function () {
     const roleSelect = document.querySelector('select[name="role"]');
     const classificationField = document.querySelector('[data-developer-classification-field]');
