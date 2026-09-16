@@ -1710,7 +1710,7 @@ include '../../includes/navbar.php';
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form method="POST" autocomplete="off" data-app-loading data-loading-title="Creating user" data-loading-text="Please wait while the user account is created." data-confirm-skip="true" onsubmit="this.dataset.confirmedSubmit = '1';">
+            <form method="POST" autocomplete="off" novalidate data-app-loading data-loading-title="Creating user" data-loading-text="Please wait while the user account is created." data-confirm-skip="true" onsubmit="this.dataset.confirmedSubmit = '1';">
                 <div class="modal-body">
                     <input type="hidden" name="action" value="create">
                     <div class="row g-3">

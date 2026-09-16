@@ -183,7 +183,7 @@ include '../../includes/navbar.php';
                         <?php endforeach; ?>
                     </div>
                 <?php endif; ?>
-                <form method="POST" action="edit-user.php?id=<?php echo (int) $selectedUser['id']; ?>" autocomplete="off" data-generic-draft-disabled="true" data-confirm-skip="true" onsubmit="this.dataset.confirmedSubmit = '1';">
+                <form method="POST" action="edit-user.php?id=<?php echo (int) $selectedUser['id']; ?>" autocomplete="off" novalidate data-generic-draft-disabled="true" data-confirm-skip="true" onsubmit="this.dataset.confirmedSubmit = '1';">
                     <input type="hidden" name="id" value="<?php echo (int) $selectedUser['id']; ?>">
                     <div class="row g-3">
                         <div class="col-md-6">
