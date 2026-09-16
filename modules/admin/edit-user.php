@@ -15,6 +15,7 @@ $departments = getDepartmentOptions();
 $developerClassificationOptions = getDeveloperClassificationOptions();
 $errors = [];
 $formValues = [];
+$saveAttempted = false;
 
 $stmt = $conn->prepare('SELECT * FROM users WHERE id = ? LIMIT 1');
 $stmt->bind_param('i', $userId);
@@ -28,6 +29,7 @@ if (!$selectedUser) {
 }
 
 if ($isPost && $userId > 0) {
+    $saveAttempted = true;
     if ($postedUserId !== $userId) {
         $errors[] = 'The selected account changed while editing. Please reopen the user and try again.';
     }
@@ -152,6 +154,11 @@ include '../../includes/navbar.php';
                 <h5 class="mb-0">Edit User</h5>
             </div>
             <div class="card-body">
+                <?php if ($saveAttempted && !$errors): ?>
+                    <div class="alert alert-warning">
+                        The save request was received, but no update was completed. Please try again.
+                    </div>
+                <?php endif; ?>
                 <?php if ($errors): ?>
                     <div class="alert alert-danger">
                         <?php foreach ($errors as $error): ?>
@@ -159,24 +166,24 @@ include '../../includes/navbar.php';
                         <?php endforeach; ?>
                     </div>
                 <?php endif; ?>
-                <form method="POST" action="edit-user.php?id=<?php echo (int) $selectedUser['id']; ?>" autocomplete="off" data-selected-user-form data-generic-draft-disabled="true" data-confirm-skip="true">
+                <form method="POST" action="edit-user.php?id=<?php echo (int) $selectedUser['id']; ?>" autocomplete="off" data-generic-draft-disabled="true" data-confirm-skip="true">
                     <input type="hidden" name="id" value="<?php echo (int) $selectedUser['id']; ?>">
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label class="form-label">Full Name</label>
-                            <input type="text" name="full_name" class="form-control" value="<?php echo htmlspecialchars($formValues['full_name']); ?>" data-server-value="<?php echo htmlspecialchars($formValues['full_name'], ENT_QUOTES); ?>" autocomplete="new-password" required>
+                            <input type="text" name="full_name" class="form-control" value="<?php echo htmlspecialchars($formValues['full_name']); ?>" autocomplete="off" required>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Username</label>
-                            <input type="text" name="username" class="form-control" value="<?php echo htmlspecialchars($formValues['username']); ?>" data-server-value="<?php echo htmlspecialchars($formValues['username'], ENT_QUOTES); ?>" autocomplete="new-password" required>
+                            <input type="text" name="username" class="form-control" value="<?php echo htmlspecialchars($formValues['username']); ?>" autocomplete="off" required>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Email Address</label>
-                            <input type="email" name="email" class="form-control" value="<?php echo htmlspecialchars($formValues['email']); ?>" data-server-value="<?php echo htmlspecialchars($formValues['email'], ENT_QUOTES); ?>" autocomplete="new-password" required>
+                            <input type="email" name="email" class="form-control" value="<?php echo htmlspecialchars($formValues['email']); ?>" autocomplete="off" required>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Department</label>
-                            <select name="department" class="form-select" data-server-value="<?php echo htmlspecialchars($formValues['department'], ENT_QUOTES); ?>">
+                            <select name="department" class="form-select">
                                 <option value="">Select department</option>
                                 <?php $selectedDepartment = $formValues['department']; ?>
                                 <?php foreach ($departments as $department): ?>
@@ -193,7 +200,7 @@ include '../../includes/navbar.php';
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Role</label>
-                            <select name="role" class="form-select" data-server-value="<?php echo htmlspecialchars($formValues['role'], ENT_QUOTES); ?>">
+                            <select name="role" class="form-select">
                                 <?php $selectedRole = $formValues['role']; ?>
                                 <?php foreach (['admin', 'sales', 'architect', 'sul', 'qa', 'expert', 'developer'] as $role): ?>
                                     <option value="<?php echo $role; ?>" <?php echo $selectedRole === $role ? 'selected' : ''; ?>>
@@ -204,7 +211,7 @@ include '../../includes/navbar.php';
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Status</label>
-                            <select name="status" class="form-select" data-server-value="<?php echo htmlspecialchars($formValues['status'], ENT_QUOTES); ?>">
+                            <select name="status" class="form-select">
                                 <?php $selectedStatus = $formValues['status']; ?>
                                 <?php foreach (['active', 'inactive', 'suspended'] as $status): ?>
                                     <option value="<?php echo $status; ?>" <?php echo $selectedStatus === $status ? 'selected' : ''; ?>>
@@ -215,11 +222,11 @@ include '../../includes/navbar.php';
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Designation</label>
-                            <input type="text" name="designation" class="form-control" value="<?php echo htmlspecialchars($formValues['designation']); ?>" data-server-value="<?php echo htmlspecialchars($formValues['designation'], ENT_QUOTES); ?>" autocomplete="new-password">
+                            <input type="text" name="designation" class="form-control" value="<?php echo htmlspecialchars($formValues['designation']); ?>" autocomplete="off">
                         </div>
                         <div class="col-md-6<?php echo $formValues['role'] === 'developer' ? '' : ' d-none'; ?>" data-developer-classification-field>
                             <label class="form-label" for="developerClassification">Developer Classification</label>
-                            <select name="developer_classification" id="developerClassification" class="form-select" data-server-value="<?php echo htmlspecialchars($formValues['developer_classification'], ENT_QUOTES); ?>" <?php echo $formValues['role'] === 'developer' ? 'required' : 'disabled'; ?>>
+                            <select name="developer_classification" id="developerClassification" class="form-select" <?php echo $formValues['role'] === 'developer' ? 'required' : 'disabled'; ?>>
                                 <option value="">Select classification</option>
                                 <?php foreach ($developerClassificationOptions as $value => $label): ?>
                                 <option value="<?php echo htmlspecialchars($value); ?>" <?php echo $formValues['developer_classification'] === $value ? 'selected' : ''; ?>><?php echo htmlspecialchars($label); ?></option>
@@ -228,7 +235,7 @@ include '../../includes/navbar.php';
                         </div>
                     </div>
                     <div class="mt-4">
-                        <button type="submit" class="btn btn-primary" data-save-user-button>Save Changes</button>
+                        <button type="submit" class="btn btn-primary">Save Changes</button>
                         <a href="view-user.php?id=<?php echo (int) $selectedUser['id']; ?>" class="btn btn-outline-secondary">Cancel</a>
                     </div>
                 </form>
@@ -238,17 +245,6 @@ include '../../includes/navbar.php';
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-    const form = document.querySelector('[data-selected-user-form]');
-    const saveButton = document.querySelector('[data-save-user-button]');
-    if (!form || !saveButton) return;
-
-    form.addEventListener('submit', function () {
-        saveButton.setAttribute('aria-disabled', 'true');
-        saveButton.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Saving...';
-    });
-});
-
 document.addEventListener('DOMContentLoaded', function () {
     const roleSelect = document.querySelector('select[name="role"]');
     const classificationField = document.querySelector('[data-developer-classification-field]');
