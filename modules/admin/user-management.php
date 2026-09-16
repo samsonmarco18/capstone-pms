@@ -11,63 +11,118 @@ $hasDeveloperClassification = ensureUserDeveloperClassificationColumn();
 // Handle user creation
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
     if ($_POST['action'] == 'create') {
-        $username = $_POST['username'];
-        $email = $_POST['email'];
-        $password = password_hash($_POST['password'], PASSWORD_DEFAULT);
-        $full_name = $_POST['full_name'];
+        $username = trim((string) ($_POST['username'] ?? ''));
+        $email = trim((string) ($_POST['email'] ?? ''));
+        $passwordInput = (string) ($_POST['password'] ?? '');
+        $password = password_hash($passwordInput, PASSWORD_DEFAULT);
+        $full_name = trim((string) ($_POST['full_name'] ?? ''));
         $department = trim((string) $_POST['department']);
         $role = trim((string) $_POST['role']);
-        $developerClassification = normalizeDeveloperClassification($_POST['developer_classification'] ?? null);
+        $developerClassification = $role === 'developer'
+            ? normalizeDeveloperClassification($_POST['developer_classification'] ?? null)
+            : null;
         $hasPasswordChangedAt = ensureUserPasswordSecurityColumns();
 
-        if ($role === 'sul' && $department === '') {
+        if ($username === '' || $full_name === '' || $passwordInput === '') {
+            $_SESSION['error'] = 'Username, full name, and password are required.';
+        } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $_SESSION['error'] = 'Enter a valid email address.';
+        } elseif (!in_array($role, ['admin', 'sales', 'architect', 'sul', 'qa', 'expert', 'developer'], true)) {
+            $_SESSION['error'] = 'Select a valid role.';
+        } elseif ($role === 'sul' && $department === '') {
             $_SESSION['error'] = "SUL users must be assigned to a department.";
         } elseif ($role === 'developer' && $developerClassification === null) {
             $_SESSION['error'] = 'Select a developer classification.';
         } elseif (!$hasDeveloperClassification) {
             $_SESSION['error'] = 'Unable to prepare developer classifications. Please try again.';
         } else {
-            $sql = $hasPasswordChangedAt
-                ? "INSERT INTO users (username, email, password, full_name, department, role, developer_classification, password_changed_at) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
-                : "INSERT INTO users (username, email, password, full_name, department, role, developer_classification) VALUES (?, ?, ?, ?, ?, ?, ?)";
-            $stmt = $conn->prepare($sql);
-            $stmt->bind_param("sssssss", $username, $email, $password, $full_name, $department, $role, $developerClassification);
-
-            if ($stmt->execute()) {
-                $userId = $stmt->insert_id;
-                logActivity($user['id'], 'create_user', 'users', $userId, null, $_POST);
-                $_SESSION['success'] = "User created successfully";
+            $uniqueStmt = $conn->prepare('SELECT id FROM users WHERE username = ? OR email = ? LIMIT 1');
+            if ($uniqueStmt === false) {
+                $_SESSION['error'] = 'Unable to validate the new user. Please try again.';
+                error_log('user-management create unique prepare failed: ' . ($conn->error ?? 'unknown error'));
             } else {
-                $_SESSION['error'] = "Error creating user: " . $conn->error;
+                $uniqueStmt->bind_param('ss', $username, $email);
+                $uniqueStmt->execute();
+                $duplicateExists = $uniqueStmt->get_result()->num_rows > 0;
+                $uniqueStmt->close();
+
+                if ($duplicateExists) {
+                    $_SESSION['error'] = 'Username or email is already used by another account.';
+                } else {
+                    $sql = $hasPasswordChangedAt
+                        ? "INSERT INTO users (username, email, password, full_name, department, role, developer_classification, password_changed_at) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
+                        : "INSERT INTO users (username, email, password, full_name, department, role, developer_classification) VALUES (?, ?, ?, ?, ?, ?, ?)";
+                    $stmt = $conn->prepare($sql);
+                    if ($stmt === false) {
+                        $_SESSION['error'] = 'Unable to prepare user creation. Please try again.';
+                        error_log('user-management create prepare failed: ' . ($conn->error ?? 'unknown error'));
+                    } else {
+                        $stmt->bind_param("sssssss", $username, $email, $password, $full_name, $department, $role, $developerClassification);
+
+                        if ($stmt->execute()) {
+                            $userId = $stmt->insert_id;
+                            logActivity((int) $user['id'], 'create_user', 'users', (int) $userId, null, [
+                                'username' => $username,
+                                'email' => $email,
+                                'full_name' => $full_name,
+                                'department' => $department,
+                                'role' => $role,
+                                'developer_classification' => $developerClassification,
+                            ]);
+                            $_SESSION['success'] = "User created successfully";
+                        } else {
+                            $_SESSION['error'] = "Error creating user: " . ($stmt->error ?: ($conn->error ?? 'database error'));
+                        }
+                        $stmt->close();
+                    }
+                }
             }
         }
     } elseif ($_POST['action'] == 'update') {
-        $id = $_POST['id'];
-        $full_name = $_POST['full_name'];
+        $id = (int) ($_POST['id'] ?? 0);
+        $full_name = trim((string) ($_POST['full_name'] ?? ''));
         $department = trim((string) $_POST['department']);
         $role = trim((string) $_POST['role']);
-        $status = $_POST['status'];
+        $status = trim((string) ($_POST['status'] ?? ''));
         $developerClassification = $role === 'developer'
             ? normalizeDeveloperClassification($_POST['developer_classification'] ?? null)
             : null;
         
-        if ($role === 'sul' && $department === '') {
+        if ($id <= 0 || $full_name === '') {
+            $_SESSION['error'] = 'Select a valid user and enter a full name.';
+        } elseif (!in_array($role, ['admin', 'sales', 'architect', 'sul', 'qa', 'expert', 'developer'], true)) {
+            $_SESSION['error'] = 'Select a valid role.';
+        } elseif (!in_array($status, ['active', 'inactive', 'suspended'], true)) {
+            $_SESSION['error'] = 'Select a valid account status.';
+        } elseif ($role === 'sul' && $department === '') {
             $_SESSION['error'] = "SUL users must be assigned to a department.";
         } elseif ($role === 'developer' && $developerClassification === null) {
             $_SESSION['error'] = 'Select a developer classification.';
         } elseif (!$hasDeveloperClassification) {
             $_SESSION['error'] = 'Unable to prepare developer classifications. Please try again.';
         } else {
-            $oldData = $conn->query("SELECT * FROM users WHERE id = $id")->fetch_assoc();
+            $oldData = $conn->query("SELECT * FROM users WHERE id = {$id}")->fetch_assoc();
 
             $stmt = $conn->prepare("UPDATE users SET full_name=?, department=?, role=?, status=?, developer_classification=? WHERE id=?");
-            $stmt->bind_param("sssssi", $full_name, $department, $role, $status, $developerClassification, $id);
-
-            if ($stmt->execute()) {
-                logActivity($user['id'], 'update_user', 'users', $id, $oldData, $_POST);
-                $_SESSION['success'] = "User updated successfully";
+            if ($stmt === false) {
+                $_SESSION['error'] = 'Unable to prepare user update. Please try again.';
+                error_log('user-management update prepare failed: ' . ($conn->error ?? 'unknown error'));
             } else {
-                $_SESSION['error'] = "Error updating user";
+                $stmt->bind_param("sssssi", $full_name, $department, $role, $status, $developerClassification, $id);
+
+                if ($stmt->execute()) {
+                    logActivity((int) $user['id'], 'update_user', 'users', $id, $oldData, [
+                        'full_name' => $full_name,
+                        'department' => $department,
+                        'role' => $role,
+                        'status' => $status,
+                        'developer_classification' => $developerClassification,
+                    ]);
+                    $_SESSION['success'] = "User updated successfully";
+                } else {
+                    $_SESSION['error'] = "Error updating user: " . ($stmt->error ?: ($conn->error ?? 'database error'));
+                }
+                $stmt->close();
             }
         }
     } elseif ($_POST['action'] == 'delete') {
@@ -1358,6 +1413,17 @@ include '../../includes/navbar.php';
 </style>
 
 <div class="container-fluid px-4 py-4">
+    <?php if (isset($_SESSION['success'])): ?>
+        <div class="alert alert-success shadow-sm">
+            <?php echo htmlspecialchars((string) $_SESSION['success']); unset($_SESSION['success']); ?>
+        </div>
+    <?php endif; ?>
+    <?php if (isset($_SESSION['error'])): ?>
+        <div class="alert alert-danger shadow-sm">
+            <?php echo htmlspecialchars((string) $_SESSION['error']); unset($_SESSION['error']); ?>
+        </div>
+    <?php endif; ?>
+
     <!-- Page Header -->
     <div class="page-header-modern">
         <div class="d-flex flex-wrap justify-content-between align-items-center">
@@ -1460,6 +1526,7 @@ include '../../includes/navbar.php';
                         <th>User</th>
                         <th>Department</th>
                         <th>Role</th>
+                        <th>Developer Class</th>
                         <th>Status</th>
                         <th>Created</th>
                         <th>Actions</th>
@@ -1491,6 +1558,15 @@ include '../../includes/navbar.php';
                             <span class="badge-role <?php echo $row['role']; ?>">
                                 <?php echo strtoupper($row['role']); ?>
                             </span>
+                        </td>
+                        <td>
+                            <?php if (($row['role'] ?? '') === 'developer'): ?>
+                                <span class="badge-role developer">
+                                    <?php echo htmlspecialchars(getDeveloperClassificationLabel($row['developer_classification'] ?? null)); ?>
+                                </span>
+                            <?php else: ?>
+                                <span class="text-muted">-</span>
+                            <?php endif; ?>
                         </td>
                         <td>
                             <span class="badge-status <?php echo $row['status']; ?>">
@@ -1656,6 +1732,7 @@ include '../../includes/navbar.php';
                         <div class="col-md-6">
                             <label class="form-label">Role</label>
                             <select name="role" class="form-select" data-create-user-role required>
+                                <option value="admin">Admin</option>
                                 <option value="sales">Sales</option>
                                 <option value="architect">Architect</option>
                                 <option value="sul">Service Unit Leader</option>
@@ -1731,7 +1808,11 @@ function toggleCreateDeveloperClassification() {
     if (createDeveloperClassificationSelect) {
         createDeveloperClassificationSelect.disabled = !isDeveloper;
         createDeveloperClassificationSelect.required = isDeveloper;
-        if (!isDeveloper) createDeveloperClassificationSelect.value = '';
+        if (!isDeveloper) {
+            createDeveloperClassificationSelect.value = '';
+        } else if (!createDeveloperClassificationSelect.value) {
+            createDeveloperClassificationSelect.value = 'professional';
+        }
     }
 }
 
