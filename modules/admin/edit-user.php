@@ -252,7 +252,7 @@ include '../../includes/navbar.php';
                         </div>
                     </div>
                     <div class="mt-4">
-                        <button type="submit" class="btn btn-primary" name="save_user" value="1">Save Changes</button>
+                        <button type="button" class="btn btn-primary" name="save_user" value="1" onclick="HTMLFormElement.prototype.submit.call(this.form);">Save Changes</button>
                         <a href="view-user.php?id=<?php echo (int) $selectedUser['id']; ?>" class="btn btn-outline-secondary">Cancel</a>
                     </div>
                 </form>

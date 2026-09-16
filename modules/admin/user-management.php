@@ -1771,7 +1771,7 @@ include '../../includes/navbar.php';
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="modal-secondary-action" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn-primary-modern">Create User</button>
+                    <button type="button" class="btn-primary-modern" onclick="HTMLFormElement.prototype.submit.call(this.form);">Create User</button>
                 </div>
             </form>
         </div>
