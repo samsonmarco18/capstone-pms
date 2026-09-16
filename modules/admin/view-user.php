@@ -348,6 +348,16 @@ include '../../includes/navbar.php';
 
 <div class="container-fluid px-4 py-4">
     <div class="user-profile-shell">
+        <?php if (isset($_SESSION['success'])): ?>
+            <div class="alert alert-success shadow-sm mb-0">
+                <?php echo htmlspecialchars((string) $_SESSION['success']); unset($_SESSION['success']); ?>
+            </div>
+        <?php endif; ?>
+        <?php if (isset($_SESSION['error'])): ?>
+            <div class="alert alert-danger shadow-sm mb-0">
+                <?php echo htmlspecialchars((string) $_SESSION['error']); unset($_SESSION['error']); ?>
+            </div>
+        <?php endif; ?>
         <section class="profile-hero">
             <div class="profile-hero-top">
                 <div class="profile-identity">

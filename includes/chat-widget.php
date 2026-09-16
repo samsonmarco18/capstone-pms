@@ -1715,19 +1715,3 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 });
 </script>
-<?php if ($evortixCompilationImpact): ?>
-<script>
-document.addEventListener('DOMContentLoaded', () => {
-    const impact = <?php echo json_encode($evortixCompilationImpact, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
-    const items = Object.entries(impact.items || {}).filter(([, message]) => message !== 'No recalculation required.');
-    const message = items.length
-        ? items.map(([area, detail]) => `${area}: ${detail}`).join(' ')
-        : 'The saved plan did not require downstream recalculation.';
-    window.setTimeout(() => window.evortixAnnounceNotification?.(
-        `New compilation #${impact.compilation_no}`,
-        message,
-        ''
-    ), 900);
-});
-</script>
-<?php endif; ?>

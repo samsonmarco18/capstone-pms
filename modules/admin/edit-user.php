@@ -79,33 +79,49 @@ if ($isPost && $userId > 0) {
 
     if (!$errors) {
         $stmt = $conn->prepare('UPDATE users SET full_name = ?, username = ?, email = ?, department = ?, role = ?, status = ?, designation = ?, developer_classification = ? WHERE id = ?');
-        $stmt->bind_param(
-            'ssssssssi',
-            $fullName,
-            $username,
-            $email,
-            $department,
-            $role,
-            $status,
-            $designation,
-            $developerClassification,
-            $userId
-        );
-        $stmt->execute();
-        $stmt->close();
+        if ($stmt === false) {
+            $errors[] = 'Unable to prepare the user update. Please try again.';
+            error_log('edit-user prepare failed: ' . ($conn->error ?? 'unknown error'));
+        } else {
+            $stmt->bind_param(
+                'ssssssssi',
+                $fullName,
+                $username,
+                $email,
+                $department,
+                $role,
+                $status,
+                $designation,
+                $developerClassification,
+                $userId
+            );
 
-        logActivity((int) $admin['id'], 'edit_user', 'users', $userId, null, [
-            'full_name' => $fullName,
-            'username' => $username,
-            'email' => $email,
-            'department' => $department,
-            'role' => $role,
-            'status' => $status,
-            'designation' => $designation,
-            'developer_classification' => $developerClassification,
-        ]);
-        header('Location: view-user.php?id=' . $userId);
-        exit();
+            if (!$stmt->execute()) {
+                $errors[] = 'Unable to save changes: ' . ($stmt->error ?: 'database update failed');
+                error_log('edit-user execute failed for user_id=' . $userId . ': ' . ($stmt->error ?: 'unknown error'));
+            } else {
+                $changedRows = $stmt->affected_rows;
+                logActivity((int) $admin['id'], 'edit_user', 'users', $userId, null, [
+                    'full_name' => $fullName,
+                    'username' => $username,
+                    'email' => $email,
+                    'department' => $department,
+                    'role' => $role,
+                    'status' => $status,
+                    'designation' => $designation,
+                    'developer_classification' => $developerClassification,
+                ]);
+
+                $_SESSION['success'] = $changedRows > 0
+                    ? 'User profile updated successfully.'
+                    : 'No changes were detected for this user.';
+                $stmt->close();
+                header('Location: view-user.php?id=' . $userId);
+                exit();
+            }
+
+            $stmt->close();
+        }
     }
     $stmt = $conn->prepare('SELECT * FROM users WHERE id = ? LIMIT 1');
     $stmt->bind_param('i', $userId);

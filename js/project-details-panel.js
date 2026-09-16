@@ -168,6 +168,13 @@ function renderArchitectSection(project) {
     const summary = project.architecture_summary || {};
     const documents = Array.isArray(project.architecture_documents) ? project.architecture_documents : [];
     const technologies = Array.isArray(project.technology_recommendations) ? project.technology_recommendations : [];
+    const canOpenArchitectPages = project.current_user_role === 'architect';
+    const architectActions = canOpenArchitectPages
+        ? `
+            ${summary.summary_url ? `<a href="${escapeHtml(summary.summary_url)}" class="btn-primary-modern btn-sm"><i class="fas fa-external-link-alt"></i> Open Full Summary</a>` : ''}
+            ${summary.review_url ? `<a href="${escapeHtml(summary.review_url)}" class="btn-outline-modern btn-sm ms-2"><i class="fas fa-clipboard-check"></i> Project Review</a>` : ''}
+        `
+        : '<div class="project-context-empty">Full Summary and Project Review are available to Architect accounts.</div>';
 
     return `
         <div class="project-context-section">
@@ -194,8 +201,7 @@ function renderArchitectSection(project) {
                 ${renderProjectTextBlock('Additional Services', project.additional_services)}
             </div>
             <div class="project-context-list">
-                ${summary.summary_url ? `<a href="${escapeHtml(summary.summary_url)}" target="_blank" class="btn-primary-modern btn-sm"><i class="fas fa-external-link-alt"></i> Open Full Summary</a>` : ''}
-                ${summary.review_url ? `<a href="${escapeHtml(summary.review_url)}" target="_blank" class="btn-outline-modern btn-sm ms-2"><i class="fas fa-clipboard-check"></i> Project Review</a>` : ''}
+                ${architectActions}
             </div>
             <div class="project-context-list">
                 <label>Recommended Technologies</label>
