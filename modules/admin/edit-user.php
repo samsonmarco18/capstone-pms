@@ -170,20 +170,20 @@ include '../../includes/navbar.php';
                     <input type="hidden" name="id" value="<?php echo (int) $selectedUser['id']; ?>">
                     <div class="row g-3">
                         <div class="col-md-6">
-                            <label class="form-label">Full Name</label>
-                            <input type="text" name="full_name" class="form-control" value="<?php echo htmlspecialchars($formValues['full_name']); ?>" autocomplete="off" required>
+                            <label class="form-label" for="editFullName">Full Name</label>
+                            <input type="text" id="editFullName" name="full_name" class="form-control" value="<?php echo htmlspecialchars($formValues['full_name']); ?>" autocomplete="off" required>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Username</label>
-                            <input type="text" name="username" class="form-control" value="<?php echo htmlspecialchars($formValues['username']); ?>" autocomplete="off" required>
+                            <label class="form-label" for="editUsername">Username</label>
+                            <input type="text" id="editUsername" name="username" class="form-control" value="<?php echo htmlspecialchars($formValues['username']); ?>" autocomplete="off" required>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Email Address</label>
-                            <input type="email" name="email" class="form-control" value="<?php echo htmlspecialchars($formValues['email']); ?>" autocomplete="off" required>
+                            <label class="form-label" for="editEmail">Email Address</label>
+                            <input type="email" id="editEmail" name="email" class="form-control" value="<?php echo htmlspecialchars($formValues['email']); ?>" autocomplete="off" required>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Department</label>
-                            <select name="department" class="form-select">
+                            <label class="form-label" for="editDepartment">Department</label>
+                            <select name="department" id="editDepartment" class="form-select">
                                 <option value="">Select department</option>
                                 <?php $selectedDepartment = $formValues['department']; ?>
                                 <?php foreach ($departments as $department): ?>
@@ -199,8 +199,8 @@ include '../../includes/navbar.php';
                             </select>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Role</label>
-                            <select name="role" class="form-select">
+                            <label class="form-label" for="editRole">Role</label>
+                            <select name="role" id="editRole" class="form-select">
                                 <?php $selectedRole = $formValues['role']; ?>
                                 <?php foreach (['admin', 'sales', 'architect', 'sul', 'qa', 'expert', 'developer'] as $role): ?>
                                     <option value="<?php echo $role; ?>" <?php echo $selectedRole === $role ? 'selected' : ''; ?>>
@@ -210,8 +210,8 @@ include '../../includes/navbar.php';
                             </select>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Status</label>
-                            <select name="status" class="form-select">
+                            <label class="form-label" for="editStatus">Status</label>
+                            <select name="status" id="editStatus" class="form-select">
                                 <?php $selectedStatus = $formValues['status']; ?>
                                 <?php foreach (['active', 'inactive', 'suspended'] as $status): ?>
                                     <option value="<?php echo $status; ?>" <?php echo $selectedStatus === $status ? 'selected' : ''; ?>>
@@ -221,8 +221,8 @@ include '../../includes/navbar.php';
                             </select>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Designation</label>
-                            <input type="text" name="designation" class="form-control" value="<?php echo htmlspecialchars($formValues['designation']); ?>" autocomplete="off">
+                            <label class="form-label" for="editDesignation">Designation</label>
+                            <input type="text" id="editDesignation" name="designation" class="form-control" value="<?php echo htmlspecialchars($formValues['designation']); ?>" autocomplete="off">
                         </div>
                         <div class="col-md-6<?php echo $formValues['role'] === 'developer' ? '' : ' d-none'; ?>" data-developer-classification-field>
                             <label class="form-label" for="developerClassification">Developer Classification</label>
@@ -235,7 +235,7 @@ include '../../includes/navbar.php';
                         </div>
                     </div>
                     <div class="mt-4">
-                        <button type="submit" class="btn btn-primary">Save Changes</button>
+                        <button type="button" class="btn btn-primary" id="directSaveUserButton">Save Changes</button>
                         <a href="view-user.php?id=<?php echo (int) $selectedUser['id']; ?>" class="btn btn-outline-secondary">Cancel</a>
                     </div>
                 </form>
@@ -245,6 +245,23 @@ include '../../includes/navbar.php';
 </div>
 
 <script>
+document.addEventListener('DOMContentLoaded', function () {
+    const form = document.querySelector('form[action^="edit-user.php"]');
+    const saveButton = document.getElementById('directSaveUserButton');
+    if (form && saveButton) {
+        saveButton.addEventListener('click', function () {
+            if (!form.checkValidity()) {
+                form.reportValidity();
+                return;
+            }
+
+            saveButton.setAttribute('aria-disabled', 'true');
+            saveButton.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Saving...';
+            HTMLFormElement.prototype.submit.call(form);
+        });
+    }
+});
+
 document.addEventListener('DOMContentLoaded', function () {
     const roleSelect = document.querySelector('select[name="role"]');
     const classificationField = document.querySelector('[data-developer-classification-field]');
