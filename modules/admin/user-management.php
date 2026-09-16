@@ -1693,34 +1693,34 @@ include '../../includes/navbar.php';
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form method="POST" autocomplete="off" data-app-loading data-loading-title="Creating user" data-loading-text="Please wait while the user account is created.">
+            <form method="POST" autocomplete="off" data-app-loading data-loading-title="Creating user" data-loading-text="Please wait while the user account is created." data-confirm-skip="true" onsubmit="this.dataset.confirmedSubmit = '1';">
                 <div class="modal-body">
                     <input type="hidden" name="action" value="create">
                     <div class="row g-3">
                         <div class="col-md-6">
-                            <label class="form-label">Username</label>
-                            <input type="text" name="username" class="form-control" placeholder="Enter username" autocomplete="off" required>
+                            <label class="form-label" for="createUsername">Username</label>
+                            <input type="text" id="createUsername" name="username" class="form-control" placeholder="Enter username" autocomplete="off" required>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Email</label>
-                            <input type="email" name="email" class="form-control" placeholder="name@company.com" autocomplete="off" required>
+                            <label class="form-label" for="createEmail">Email</label>
+                            <input type="email" id="createEmail" name="email" class="form-control" placeholder="name@company.com" autocomplete="off" required>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Password</label>
+                            <label class="form-label" for="createPassword">Password</label>
                             <div class="password-field">
-                                <input type="password" name="password" class="form-control" placeholder="Create a secure password" autocomplete="new-password" required>
+                                <input type="password" id="createPassword" name="password" class="form-control" placeholder="Create a secure password" autocomplete="new-password" required>
                                 <button type="button" class="password-toggle-btn" data-password-toggle title="Show password">
                                     <i class="fas fa-eye" aria-hidden="true"></i>
                                 </button>
                             </div>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Full Name</label>
-                            <input type="text" name="full_name" class="form-control" placeholder="Enter full name" autocomplete="off" required>
+                            <label class="form-label" for="createFullName">Full Name</label>
+                            <input type="text" id="createFullName" name="full_name" class="form-control" placeholder="Enter full name" autocomplete="off" required>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Department</label>
-                            <select name="department" class="form-select">
+                            <label class="form-label" for="createDepartment">Department</label>
+                            <select name="department" id="createDepartment" class="form-select">
                                 <option value="">Select Department</option>
                                 <?php foreach (getDepartmentOptions() as $department): ?>
                                     <option value="<?php echo htmlspecialchars($department); ?>">
@@ -1730,8 +1730,8 @@ include '../../includes/navbar.php';
                             </select>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Role</label>
-                            <select name="role" class="form-select" data-create-user-role required>
+                            <label class="form-label" for="createRole">Role</label>
+                            <select name="role" id="createRole" class="form-select" data-create-user-role required>
                                 <option value="admin">Admin</option>
                                 <option value="sales">Sales</option>
                                 <option value="architect">Architect</option>
