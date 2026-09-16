@@ -33,7 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
             $_SESSION['error'] = "SUL users must be assigned to a department.";
         } elseif ($role === 'developer' && $developerClassification === null) {
             $_SESSION['error'] = 'Select a developer classification.';
-        } elseif (!$hasDeveloperClassification) {
+        } elseif ($role === 'developer' && !$hasDeveloperClassification) {
             $_SESSION['error'] = 'Unable to prepare developer classifications. Please try again.';
         } else {
             $uniqueStmt = $conn->prepare('SELECT id FROM users WHERE username = ? OR email = ? LIMIT 1');
@@ -49,15 +49,25 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
                 if ($duplicateExists) {
                     $_SESSION['error'] = 'Username or email is already used by another account.';
                 } else {
-                    $sql = $hasPasswordChangedAt
-                        ? "INSERT INTO users (username, email, password, full_name, department, role, developer_classification, password_changed_at) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
-                        : "INSERT INTO users (username, email, password, full_name, department, role, developer_classification) VALUES (?, ?, ?, ?, ?, ?, ?)";
+                    if ($hasDeveloperClassification) {
+                        $sql = $hasPasswordChangedAt
+                            ? "INSERT INTO users (username, email, password, full_name, department, role, developer_classification, password_changed_at) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
+                            : "INSERT INTO users (username, email, password, full_name, department, role, developer_classification) VALUES (?, ?, ?, ?, ?, ?, ?)";
+                    } elseif ($hasPasswordChangedAt) {
+                        $sql = "INSERT INTO users (username, email, password, full_name, department, role, password_changed_at) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)";
+                    } else {
+                        $sql = "INSERT INTO users (username, email, password, full_name, department, role) VALUES (?, ?, ?, ?, ?, ?)";
+                    }
                     $stmt = $conn->prepare($sql);
                     if ($stmt === false) {
                         $_SESSION['error'] = 'Unable to prepare user creation. Please try again.';
                         error_log('user-management create prepare failed: ' . ($conn->error ?? 'unknown error'));
                     } else {
-                        $stmt->bind_param("sssssss", $username, $email, $password, $full_name, $department, $role, $developerClassification);
+                        if ($hasDeveloperClassification) {
+                            $stmt->bind_param("sssssss", $username, $email, $password, $full_name, $department, $role, $developerClassification);
+                        } else {
+                            $stmt->bind_param("ssssss", $username, $email, $password, $full_name, $department, $role);
+                        }
 
                         if ($stmt->execute()) {
                             $userId = $stmt->insert_id;
@@ -98,17 +108,24 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
             $_SESSION['error'] = "SUL users must be assigned to a department.";
         } elseif ($role === 'developer' && $developerClassification === null) {
             $_SESSION['error'] = 'Select a developer classification.';
-        } elseif (!$hasDeveloperClassification) {
+        } elseif ($role === 'developer' && !$hasDeveloperClassification) {
             $_SESSION['error'] = 'Unable to prepare developer classifications. Please try again.';
         } else {
             $oldData = $conn->query("SELECT * FROM users WHERE id = {$id}")->fetch_assoc();
 
-            $stmt = $conn->prepare("UPDATE users SET full_name=?, department=?, role=?, status=?, developer_classification=? WHERE id=?");
+            $updateSql = $hasDeveloperClassification
+                ? "UPDATE users SET full_name=?, department=?, role=?, status=?, developer_classification=? WHERE id=?"
+                : "UPDATE users SET full_name=?, department=?, role=?, status=? WHERE id=?";
+            $stmt = $conn->prepare($updateSql);
             if ($stmt === false) {
                 $_SESSION['error'] = 'Unable to prepare user update. Please try again.';
                 error_log('user-management update prepare failed: ' . ($conn->error ?? 'unknown error'));
             } else {
-                $stmt->bind_param("sssssi", $full_name, $department, $role, $status, $developerClassification, $id);
+                if ($hasDeveloperClassification) {
+                    $stmt->bind_param("sssssi", $full_name, $department, $role, $status, $developerClassification, $id);
+                } else {
+                    $stmt->bind_param("ssssi", $full_name, $department, $role, $status, $id);
+                }
 
                 if ($stmt->execute()) {
                     logActivity((int) $user['id'], 'update_user', 'users', $id, $oldData, [

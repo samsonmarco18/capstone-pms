@@ -64,7 +64,7 @@ if ($isPost && $userId > 0) {
     if ($role === 'developer' && $developerClassification === null) {
         $errors[] = 'Select a developer classification.';
     }
-    if (!$hasDeveloperClassification) {
+    if ($role === 'developer' && !$hasDeveloperClassification) {
         $errors[] = 'Unable to prepare developer classifications. Please try again.';
     }
     if (!in_array($status, ['active', 'inactive', 'suspended'], true)) {
@@ -80,23 +80,40 @@ if ($isPost && $userId > 0) {
     $uniqueStmt->close();
 
     if (!$errors) {
-        $stmt = $conn->prepare('UPDATE users SET full_name = ?, username = ?, email = ?, department = ?, role = ?, status = ?, designation = ?, developer_classification = ? WHERE id = ?');
+        $updateSql = $hasDeveloperClassification
+            ? 'UPDATE users SET full_name = ?, username = ?, email = ?, department = ?, role = ?, status = ?, designation = ?, developer_classification = ? WHERE id = ?'
+            : 'UPDATE users SET full_name = ?, username = ?, email = ?, department = ?, role = ?, status = ?, designation = ? WHERE id = ?';
+        $stmt = $conn->prepare($updateSql);
         if ($stmt === false) {
             $errors[] = 'Unable to prepare the user update. Please try again.';
             error_log('edit-user prepare failed: ' . ($conn->error ?? 'unknown error'));
         } else {
-            $stmt->bind_param(
-                'ssssssssi',
-                $fullName,
-                $username,
-                $email,
-                $department,
-                $role,
-                $status,
-                $designation,
-                $developerClassification,
-                $userId
-            );
+            if ($hasDeveloperClassification) {
+                $stmt->bind_param(
+                    'ssssssssi',
+                    $fullName,
+                    $username,
+                    $email,
+                    $department,
+                    $role,
+                    $status,
+                    $designation,
+                    $developerClassification,
+                    $userId
+                );
+            } else {
+                $stmt->bind_param(
+                    'sssssssi',
+                    $fullName,
+                    $username,
+                    $email,
+                    $department,
+                    $role,
+                    $status,
+                    $designation,
+                    $userId
+                );
+            }
 
             if (!$stmt->execute()) {
                 $errors[] = 'Unable to save changes: ' . ($stmt->error ?: 'database update failed');
