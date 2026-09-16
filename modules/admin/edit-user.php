@@ -159,7 +159,7 @@ include '../../includes/navbar.php';
                         <?php endforeach; ?>
                     </div>
                 <?php endif; ?>
-                <form method="POST" action="edit-user.php?id=<?php echo (int) $selectedUser['id']; ?>" autocomplete="off" data-selected-user-form data-generic-draft-disabled="true">
+                <form method="POST" action="edit-user.php?id=<?php echo (int) $selectedUser['id']; ?>" autocomplete="off" data-selected-user-form data-generic-draft-disabled="true" data-confirm-skip="true">
                     <input type="hidden" name="id" value="<?php echo (int) $selectedUser['id']; ?>">
                     <div class="row g-3">
                         <div class="col-md-6">
@@ -244,7 +244,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!form || !saveButton) return;
 
     form.addEventListener('submit', function () {
-        saveButton.disabled = true;
+        saveButton.setAttribute('aria-disabled', 'true');
         saveButton.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Saving...';
     });
 });
