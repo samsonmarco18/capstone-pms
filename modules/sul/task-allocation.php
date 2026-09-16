@@ -16,6 +16,7 @@ methodologyRoadmapEnsureSchema($conn);
 projectWorkflowEnsureSchema($conn);
 projectEstimationEnsureSchema($conn);
 taskReopenEnsureSchema($conn);
+ensureUserDeveloperClassificationColumn();
 
 // Resource signals used by Evortix recommendations. Keep older installations compatible.
 foreach ([
@@ -143,6 +144,84 @@ function sulTaskAllocationIsUsableExternalUrl(?string $url): bool
     }
 
     return !vcIsInternalManagedRepositoryUrl($url);
+}
+
+function sulTaskAllocationDeveloperClassificationFromEstimate(string $developerType): string
+{
+    return match (projectEstimationDeveloperLevel($developerType)) {
+        'Junior Dev' => 'junior',
+        'Senior Dev' => 'senior',
+        default => 'professional',
+    };
+}
+
+function sulTaskAllocationDeveloperRequirementSummary(array $counts): string
+{
+    $labels = getDeveloperClassificationOptions();
+    $parts = [];
+    foreach (['junior', 'professional', 'senior'] as $classification) {
+        $count = (int) ($counts[$classification] ?? 0);
+        if ($count > 0) {
+            $parts[] = $count . ' ' . strtolower((string) ($labels[$classification] ?? $classification));
+        }
+    }
+
+    return $parts === [] ? 'No expert rank requirement found' : implode(', ', $parts);
+}
+
+function sulTaskAllocationDeveloperRequirements(mysqli|PgsqlMysqliCompatConnection $conn, int $projectId, string $department): array
+{
+    static $cache = [];
+
+    $department = projectEstimationDepartmentLabel($department);
+    if ($projectId <= 0 || $department === '') {
+        return [];
+    }
+
+    $cacheKey = $projectId . '|' . strtolower($department);
+    if (array_key_exists($cacheKey, $cache)) {
+        return $cache[$cacheKey];
+    }
+
+    $stmt = $conn->prepare("
+        SELECT allocation_json
+        FROM expert_project_estimations
+        WHERE project_id = ?
+          AND allocation_json IS NOT NULL
+          AND allocation_json != ''
+        ORDER BY submitted_at DESC, id DESC
+        LIMIT 1
+    ");
+    if ($stmt === false) {
+        return $cache[$cacheKey] = [];
+    }
+
+    $stmt->bind_param('i', $projectId);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc() ?: [];
+    $stmt->close();
+
+    $decoded = json_decode((string) ($row['allocation_json'] ?? ''), true);
+    if (!is_array($decoded)) {
+        return $cache[$cacheKey] = [];
+    }
+
+    $counts = ['junior' => 0, 'professional' => 0, 'senior' => 0];
+    foreach ($decoded as $entry) {
+        if (!is_array($entry)) {
+            continue;
+        }
+
+        $entryDepartment = projectEstimationDepartmentLabel((string) ($entry['department'] ?? ''));
+        if (strcasecmp($entryDepartment, $department) !== 0) {
+            continue;
+        }
+
+        $classification = sulTaskAllocationDeveloperClassificationFromEstimate((string) ($entry['developer_type'] ?? 'Professional Dev'));
+        $counts[$classification]++;
+    }
+
+    return $cache[$cacheKey] = array_filter($counts, static fn(int $count): bool => $count > 0);
 }
 
 function sulTaskAllocationRepositoryReviewUrl(array $task): string
@@ -1164,11 +1243,17 @@ if ($readyForDevTasks) {
             : 'task:' . (int) $readyDeveloperTask['id'];
 
         if (!isset($readyDeveloperAssignmentGroups[$groupKey])) {
+            $developerRequirementCounts = sulTaskAllocationDeveloperRequirements(
+                $conn,
+                (int) ($readyDeveloperTask['project_id'] ?? 0),
+                $sulDepartment
+            );
             $readyDeveloperAssignmentGroups[$groupKey] = [
                 'representative' => $readyDeveloperTask,
                 'features' => [],
                 'is_bulk' => false,
                 'required_count' => max(1, (int) ($currentRoadmapGroupTask['required_count'] ?? 1)),
+                'required_classifications' => $developerRequirementCounts,
                 'priority' => (string) ($readyDeveloperTask['priority'] ?? 'medium'),
                 'deadline' => $readyDeveloperTask['deadline'] ?? null,
             ];
@@ -1443,6 +1528,7 @@ $expertAllocationBadgeCount = ($projectId && $project) ? $selectedExpertTaskCoun
 // Get available developers
 $developers = $conn->query("
     SELECT u.id, u.full_name, u.profile_pic, u.designation, u.department,
+           COALESCE(u.developer_classification, 'professional') AS developer_classification,
            COALESCE(u.skills, '') AS skills,
            COALESCE(u.availability_status, 'available') AS availability_status,
            COALESCE(u.max_concurrent_tasks, 5) AS max_concurrent_tasks,
@@ -1452,7 +1538,7 @@ $developers = $conn->query("
     WHERE u.role = 'developer' AND u.status = 'active'
       AND COALESCE(u.availability_status, 'available') IN ('available', 'limited')
       {$sulUserDepartmentFilter}
-    GROUP BY u.id, u.full_name, u.profile_pic, u.designation, u.department, u.skills, u.availability_status, u.max_concurrent_tasks
+    GROUP BY u.id, u.full_name, u.profile_pic, u.designation, u.department, u.developer_classification, u.skills, u.availability_status, u.max_concurrent_tasks
     ORDER BY CASE COALESCE(u.availability_status, 'available') WHEN 'available' THEN 0 WHEN 'limited' THEN 1 ELSE 2 END,
              assigned_tasks ASC, u.full_name ASC
 ");
@@ -1873,7 +1959,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $developerDepartmentSql = $sulDepartment !== '' ? ' AND ' . projectWorkflowUserDepartmentClause($conn, 'users', $sulDepartment) : ' AND 1 = 0';
         $developerIdList = implode(',', $developerIds);
         $developerCheck = $conn->query("
-            SELECT id
+            SELECT id, COALESCE(developer_classification, 'professional') AS developer_classification
             FROM users
             WHERE id IN ({$developerIdList})
               AND role = 'developer'
@@ -1881,6 +1967,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
               {$developerDepartmentSql}
         ");
         $validDeveloper = $developerCheck && $developerCheck->num_rows === count($developerIds);
+        $selectedClassificationCounts = ['junior' => 0, 'professional' => 0, 'senior' => 0];
+        if ($developerCheck) {
+            while ($developerCheckRow = $developerCheck->fetch_assoc()) {
+                $classification = normalizeDeveloperClassification($developerCheckRow['developer_classification'] ?? null) ?? 'professional';
+                $selectedClassificationCounts[$classification]++;
+            }
+        }
 
         $approvalSql = $hasSalesApproval ? " AND sales_approved = 1" : "";
         $choiceSql = $hasSalesChoice ? " AND sales_estimate_days IS NOT NULL" : "";
@@ -2037,6 +2130,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $plannedHeadcount = max(1, (int) ($plannedHeadcountRow['required_count'] ?? 1));
         }
         $teamLimit = min($plannedHeadcount, count($assignmentTaskIds));
+        $requiredClassificationCounts = sulTaskAllocationDeveloperRequirements($conn, $assignmentProjectId, $sulDepartment);
+        if ($requiredClassificationCounts !== []) {
+            $requiredTotal = array_sum($requiredClassificationCounts);
+            $teamLimit = min($teamLimit, $requiredTotal);
+            foreach ($requiredClassificationCounts as $classification => $requiredCount) {
+                if ((int) ($selectedClassificationCounts[$classification] ?? 0) !== (int) $requiredCount) {
+                    $_SESSION['error'] = "Match the expert's required developer ranks: " . sulTaskAllocationDeveloperRequirementSummary($requiredClassificationCounts) . ".";
+                    header("Location: task-allocation.php?project_id=" . $assignmentProjectId);
+                    exit();
+                }
+            }
+        }
 
         $teamRows = $conn->query("
             SELECT users.id, COUNT(active_tasks.id) AS active_count
@@ -2048,6 +2153,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
               AND users.status = 'active'
               AND COALESCE(users.availability_status, 'available') IN ('available', 'limited')
               AND " . projectWorkflowUserDepartmentClause($conn, 'users', $sulDepartment) . "
+              " . ($requiredClassificationCounts !== [] ? "AND COALESCE(users.developer_classification, 'professional') IN ('" . implode("','", array_keys($requiredClassificationCounts)) . "')" : "") . "
             GROUP BY users.id
             ORDER BY CASE WHEN users.id = {$developerId} THEN 0 ELSE 1 END,
                      active_count ASC,
@@ -7501,10 +7607,18 @@ include '../../includes/navbar.php';
                                         $groupRoadmapEnd
                                     );
                                     $groupRequiredCount = max(1, (int) ($assignmentGroup['required_count'] ?? 1));
+                                    $requiredClassificationCounts = is_array($assignmentGroup['required_classifications'] ?? null)
+                                        ? $assignmentGroup['required_classifications']
+                                        : [];
+                                    $requiredClassificationSummary = sulTaskAllocationDeveloperRequirementSummary($requiredClassificationCounts);
                                     $distributionMemberCount = max(1, min($groupRequiredCount, $availableDeveloperCount, $featureCount));
                                     $distributionCopy = $distributionMemberCount > 1
                                         ? "Choose up to {$distributionMemberCount} {$deliveryAssigneePluralLower}; tasks are divided evenly among those selected"
                                         : 'Ready for ' . $deliveryAssigneeLower . ' allocation';
+                                    if ($requiredClassificationCounts !== []) {
+                                        $distributionMemberCount = min(max(1, array_sum($requiredClassificationCounts)), $availableDeveloperCount);
+                                        $distributionCopy = 'Required ranks: ' . $requiredClassificationSummary;
+                                    }
                                     $assignmentTitle = $isBulkAssignment
                                         ? 'Bulk assignment: ' . implode(', ', $featureTitles)
                                         : (string) ($task['title'] ?? 'Feature');
@@ -7529,6 +7643,9 @@ include '../../includes/navbar.php';
                                             <span class="allocation-task-secondary">
                                                 <?php echo htmlspecialchars($isBulkAssignment ? $distributionCopy : 'Ready for ' . $deliveryAssigneeLower . ' allocation'); ?>
                                             </span>
+                                            <?php if (!$isBulkAssignment && $requiredClassificationCounts !== []): ?>
+                                                <span class="allocation-task-secondary">Required ranks: <?php echo htmlspecialchars($requiredClassificationSummary); ?></span>
+                                            <?php endif; ?>
                                         </td>
                                         <td>
                                             <span class="estimation-badge"><i class="fas fa-chart-line"></i> PERT: <?php echo htmlspecialchars($pertLabel); ?></span>
@@ -7592,7 +7709,7 @@ include '../../includes/navbar.php';
                                                 <button
                                                     class="btn-primary-modern"
                                                     type="button"
-                                                    onclick="openAssignDeveloperModal(<?php echo (int) $task['id']; ?>, decodeURIComponent('<?php echo rawurlencode($assignmentTitle); ?>'), '<?php echo htmlspecialchars($assignmentDeadlineValue, ENT_QUOTES); ?>', '<?php echo htmlspecialchars($groupRoadmapStart, ENT_QUOTES); ?>', '<?php echo htmlspecialchars($groupRoadmapEnd, ENT_QUOTES); ?>', <?php echo $distributionMemberCount; ?>, <?php echo $featureCount; ?>, <?php echo htmlspecialchars(json_encode(array_values(array_map(static fn(array $feature): int => (int) $feature['id'], $features))), ENT_QUOTES, 'UTF-8'); ?>)"
+                                                    onclick="openAssignDeveloperModal(<?php echo (int) $task['id']; ?>, decodeURIComponent('<?php echo rawurlencode($assignmentTitle); ?>'), '<?php echo htmlspecialchars($assignmentDeadlineValue, ENT_QUOTES); ?>', '<?php echo htmlspecialchars($groupRoadmapStart, ENT_QUOTES); ?>', '<?php echo htmlspecialchars($groupRoadmapEnd, ENT_QUOTES); ?>', <?php echo $distributionMemberCount; ?>, <?php echo $featureCount; ?>, <?php echo htmlspecialchars(json_encode(array_values(array_map(static fn(array $feature): int => (int) $feature['id'], $features))), ENT_QUOTES, 'UTF-8'); ?>, <?php echo htmlspecialchars(json_encode($requiredClassificationCounts), ENT_QUOTES, 'UTF-8'); ?>)"
                                                 >
                                                     <i class="fas fa-user-plus"></i> <?php echo htmlspecialchars($deliveryAssignmentAction); ?>
                                                 </button>
@@ -8364,6 +8481,8 @@ include '../../includes/navbar.php';
                                         $developerName = (string) ($developer['full_name'] ?? $deliveryAssigneeFallback);
                                         $developerRole = trim((string) ($developer['designation'] ?? ''));
                                         $developerRole = $developerRole !== '' ? $developerRole : $deliveryAssigneeFallback;
+                                        $developerClassification = normalizeDeveloperClassification($developer['developer_classification'] ?? null) ?? 'professional';
+                                        $developerClassificationLabel = getDeveloperClassificationLabel($developerClassification);
                                         $profileUrl = sulTaskAllocationProfileUrl($developer['profile_pic'] ?? null);
                                         $isRecommended = $developerPosition === 0;
                                 ?>
@@ -8374,6 +8493,7 @@ include '../../includes/navbar.php';
                                         aria-checked="false"
                                         data-developer-choice
                                         data-developer-name="<?php echo htmlspecialchars($developerName, ENT_QUOTES, 'UTF-8'); ?>"
+                                        data-developer-classification="<?php echo htmlspecialchars($developerClassification, ENT_QUOTES, 'UTF-8'); ?>"
                                         data-member-skills="<?php echo htmlspecialchars((string) ($developer['skills'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
                                         data-member-availability="<?php echo htmlspecialchars((string) ($developer['availability_status'] ?? 'available'), ENT_QUOTES, 'UTF-8'); ?>"
                                         data-member-load="<?php echo $activeTaskCount; ?>"
@@ -8387,9 +8507,9 @@ include '../../includes/navbar.php';
                                                         <img src="<?php echo htmlspecialchars($profileUrl, ENT_QUOTES, 'UTF-8'); ?>" alt="" loading="lazy">
                                                     <?php endif; ?>
                                                 </span>
-                                                <span>
-                                                    <span class="expert-name"><?php echo htmlspecialchars($developerName); ?></span>
-                                                    <span class="expert-role"><?php echo htmlspecialchars($developerRole); ?></span>
+                                                    <span>
+                                                        <span class="expert-name"><?php echo htmlspecialchars($developerName); ?></span>
+                                                    <span class="expert-role"><?php echo htmlspecialchars($developerRole); ?> · <?php echo htmlspecialchars($developerClassificationLabel); ?></span>
                                                     <?php if ($isRecommended): ?>
                                                         <span class="expert-recommended"><i class="fas fa-star me-1" aria-hidden="true"></i>Lightest workload</span>
                                                     <?php endif; ?>
@@ -8906,6 +9026,52 @@ const deliveryAssignmentReadyMessage = <?php echo json_encode('The task will bec
 const deliveryAssignmentLoadingMessage = <?php echo json_encode('Please wait while the task is prepared for ' . $deliveryAssigneeLower . ' assignment.'); ?>;
 let developerSelectionLimit = 1;
 let developerBulkFeatureCount = 1;
+let developerRequiredClassifications = {};
+
+const developerClassificationLabels = {
+    junior: 'Junior Developer',
+    professional: 'Professional Developer',
+    senior: 'Senior Developer'
+};
+
+function summarizeDeveloperRequirements(requirements) {
+    const parts = ['junior', 'professional', 'senior']
+        .map(key => {
+            const count = Number(requirements?.[key] || 0);
+            return count > 0 ? `${count} ${developerClassificationLabels[key].toLowerCase()}` : '';
+        })
+        .filter(Boolean);
+
+    return parts.length ? parts.join(', ') : '';
+}
+
+function visibleDeveloperChoiceRows() {
+    return developerChoiceRows.filter(row => !row.hidden);
+}
+
+function selectedDeveloperClassificationCounts() {
+    const counts = { junior: 0, professional: 0, senior: 0 };
+    developerChoiceRows
+        .filter(row => row.querySelector('.developer-choice-input')?.checked)
+        .forEach(row => {
+            const classification = row.dataset.developerClassification || 'professional';
+            counts[classification] = (counts[classification] || 0) + 1;
+        });
+
+    return counts;
+}
+
+function developerSelectionMatchesRequiredRanks() {
+    const requiredKeys = Object.keys(developerRequiredClassifications || {})
+        .filter(key => Number(developerRequiredClassifications[key] || 0) > 0);
+
+    if (!requiredKeys.length) {
+        return true;
+    }
+
+    const selectedCounts = selectedDeveloperClassificationCounts();
+    return requiredKeys.every(key => Number(selectedCounts[key] || 0) === Number(developerRequiredClassifications[key] || 0));
+}
 
 function updateDeveloperSelectionState() {
     const selectedRows = developerChoiceRows.filter(row => row.querySelector('.developer-choice-input')?.checked);
@@ -8915,13 +9081,18 @@ function updateDeveloperSelectionState() {
         row.setAttribute('aria-checked', checked ? 'true' : 'false');
     });
 
-    const selectionComplete = selectedRows.length > 0 && selectedRows.length <= developerSelectionLimit;
+    const requiredSummary = summarizeDeveloperRequirements(developerRequiredClassifications);
+    const selectionComplete = selectedRows.length > 0
+        && selectedRows.length <= developerSelectionLimit
+        && developerSelectionMatchesRequiredRanks();
     if (confirmDeveloperAssignment) confirmDeveloperAssignment.disabled = !selectionComplete;
     if (developerSelectionSummary) {
         if (!selectedRows.length) {
-            developerSelectionSummary.textContent = developerSelectionLimit > 1
-                ? `Select 1 to ${developerSelectionLimit} developers`
-                : deliveryNoSelectionText;
+            developerSelectionSummary.textContent = requiredSummary
+                ? `Required: ${requiredSummary}`
+                : (developerSelectionLimit > 1
+                    ? `Select 1 to ${developerSelectionLimit} developers`
+                    : deliveryNoSelectionText);
             return;
         }
         const names = selectedRows.map(row => row.dataset.developerName || deliveryAssigneeFallback);
@@ -8933,7 +9104,9 @@ function updateDeveloperSelectionState() {
         const distributionLabel = remainder === 0
             ? `${tasksPerDeveloper} task${tasksPerDeveloper === 1 ? '' : 's'} each`
             : `${tasksPerDeveloper}–${tasksPerDeveloper + 1} tasks each`;
-        developerSelectionSummary.textContent = `Selected: ${names.join(', ')} · ${distributionLabel}`;
+        developerSelectionSummary.textContent = requiredSummary
+            ? `Selected: ${names.join(', ')} - Required: ${requiredSummary}`
+            : `Selected: ${names.join(', ')} - ${distributionLabel}`;
     }
 }
 
@@ -8958,7 +9131,7 @@ function selectDeveloperChoice(row) {
     if (developerSelectionLimit === 1) {
         developerChoiceRows.forEach(choice => {
             const choiceInput = choice.querySelector('.developer-choice-input');
-            if (choiceInput) choiceInput.checked = choice === row;
+            if (choiceInput) choiceInput.checked = !choice.hidden && choice === row;
         });
         updateDeveloperSelectionState();
         return;
@@ -8967,7 +9140,7 @@ function selectDeveloperChoice(row) {
     if (input.checked) {
         input.checked = false;
     } else {
-        const selectedCount = developerChoiceRows.filter(choice => choice.querySelector('.developer-choice-input')?.checked).length;
+        const selectedCount = visibleDeveloperChoiceRows().filter(choice => choice.querySelector('.developer-choice-input')?.checked).length;
         if (selectedCount >= developerSelectionLimit) {
             window.appToast?.('Selection limit', `Select up to ${developerSelectionLimit} developers for this assignment.`, 'warning');
             return;
@@ -8987,7 +9160,7 @@ developerChoiceRows.forEach(row => {
     });
 });
 
-function openAssignDeveloperModal(taskId, taskTitle, deadline, minDate = '', maxDate = '', selectionLimit = 1, featureCount = 1, taskIds = []) {
+function openAssignDeveloperModal(taskId, taskTitle, deadline, minDate = '', maxDate = '', selectionLimit = 1, featureCount = 1, taskIds = [], requiredClassifications = {}) {
     document.getElementById('devTaskId').value = taskId;
     document.getElementById('devTaskIds').value = (Array.isArray(taskIds) && taskIds.length ? taskIds : [taskId])
         .map(Number)
@@ -9033,7 +9206,31 @@ function openAssignDeveloperModal(taskId, taskTitle, deadline, minDate = '', max
         }
     }
 
-    developerSelectionLimit = Math.max(1, Math.min(Number(selectionLimit) || 1, developerChoiceRows.length || 1));
+    developerRequiredClassifications = requiredClassifications && typeof requiredClassifications === 'object'
+        ? requiredClassifications
+        : {};
+    const requiredKeys = Object.keys(developerRequiredClassifications)
+        .filter(key => Number(developerRequiredClassifications[key] || 0) > 0);
+
+    developerChoiceRows.forEach(row => {
+        const classification = row.dataset.developerClassification || 'professional';
+        const shouldShow = !requiredKeys.length || requiredKeys.includes(classification);
+        row.hidden = !shouldShow;
+        row.classList.toggle('d-none', !shouldShow);
+        const input = row.querySelector('.developer-choice-input');
+        if (input) {
+            input.disabled = !shouldShow;
+            if (!shouldShow) input.checked = false;
+        }
+    });
+
+    const visibleRows = visibleDeveloperChoiceRows();
+    const requiredTotal = requiredKeys.reduce((sum, key) => sum + Number(developerRequiredClassifications[key] || 0), 0);
+    developerSelectionLimit = Math.max(1, Math.min(
+        Number(selectionLimit) || 1,
+        requiredTotal || Number(selectionLimit) || 1,
+        visibleRows.length || 1
+    ));
     developerBulkFeatureCount = resolvedFeatureCount;
     const deadlineInput = document.getElementById('devDeadline');
     deadlineInput.min = minDate || '';

@@ -112,9 +112,7 @@ if ($isPost && $userId > 0) {
                     'developer_classification' => $developerClassification,
                 ]);
 
-                $_SESSION['success'] = $changedRows > 0
-                    ? 'User profile updated successfully.'
-                    : 'No changes were detected for this user.';
+                $_SESSION['success'] = 'User profile saved successfully.';
                 $stmt->close();
                 header('Location: view-user.php?id=' . $userId);
                 exit();
@@ -161,7 +159,7 @@ include '../../includes/navbar.php';
                         <?php endforeach; ?>
                     </div>
                 <?php endif; ?>
-                <form method="POST" action="edit-user.php?id=<?php echo (int) $selectedUser['id']; ?>" autocomplete="off" data-selected-user-form data-generic-draft-disabled="true" data-restore-server-values="<?php echo $usePostedValues ? '0' : '1'; ?>">
+                <form method="POST" action="edit-user.php?id=<?php echo (int) $selectedUser['id']; ?>" autocomplete="off" data-selected-user-form data-generic-draft-disabled="true">
                     <input type="hidden" name="id" value="<?php echo (int) $selectedUser['id']; ?>">
                     <div class="row g-3">
                         <div class="col-md-6">
@@ -230,7 +228,7 @@ include '../../includes/navbar.php';
                         </div>
                     </div>
                     <div class="mt-4">
-                        <button type="submit" class="btn btn-primary">Save Changes</button>
+                        <button type="submit" class="btn btn-primary" data-save-user-button>Save Changes</button>
                         <a href="view-user.php?id=<?php echo (int) $selectedUser['id']; ?>" class="btn btn-outline-secondary">Cancel</a>
                     </div>
                 </form>
@@ -242,20 +240,13 @@ include '../../includes/navbar.php';
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const form = document.querySelector('[data-selected-user-form]');
-    if (!form || form.dataset.restoreServerValues !== '1') {
-        return;
-    }
+    const saveButton = document.querySelector('[data-save-user-button]');
+    if (!form || !saveButton) return;
 
-    const restoreServerValues = function () {
-        form.querySelectorAll('[data-server-value]').forEach(function (field) {
-            field.value = field.dataset.serverValue || '';
-        });
-        form.querySelector('select[name="role"]')?.dispatchEvent(new Event('change'));
-    };
-
-    restoreServerValues();
-    window.setTimeout(restoreServerValues, 100);
-    window.setTimeout(restoreServerValues, 500);
+    form.addEventListener('submit', function () {
+        saveButton.disabled = true;
+        saveButton.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Saving...';
+    });
 });
 
 document.addEventListener('DOMContentLoaded', function () {
