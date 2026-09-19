@@ -173,11 +173,69 @@ function folderApiCanAccessProject(mysqli|PgsqlMysqliCompatConnection $conn, int
     return $canAccess;
 }
 
+function folderApiCanAccessClient(mysqli|PgsqlMysqliCompatConnection $conn, int $clientId, array $user): bool
+{
+    if ($clientId <= 0) {
+        return false;
+    }
+
+    if ((string) ($user['role'] ?? '') === 'admin') {
+        return true;
+    }
+
+    $userId = (int) ($user['id'] ?? 0);
+    if ($userId <= 0) {
+        return false;
+    }
+
+    $clientStmt = $conn->prepare('SELECT created_by FROM clients WHERE id = ? LIMIT 1');
+    if ($clientStmt === false) {
+        error_log('Client folder access prepare failed: ' . ($conn->error ?? 'unknown error'));
+        return false;
+    }
+
+    $clientStmt->bind_param('i', $clientId);
+    $clientStmt->execute();
+    $client = $clientStmt->get_result()->fetch_assoc();
+    $clientStmt->close();
+    if (!$client) {
+        return false;
+    }
+    if ((int) ($client['created_by'] ?? 0) === $userId) {
+        return true;
+    }
+
+    $projectStmt = $conn->prepare('SELECT id FROM projects WHERE client_id = ?');
+    if ($projectStmt === false) {
+        error_log('Client project folder access prepare failed: ' . ($conn->error ?? 'unknown error'));
+        return false;
+    }
+
+    $projectStmt->bind_param('i', $clientId);
+    $projectStmt->execute();
+    $projectRows = $projectStmt->get_result();
+    while ($project = $projectRows->fetch_assoc()) {
+        if (folderApiCanAccessProject($conn, (int) ($project['id'] ?? 0), $user)) {
+            $projectStmt->close();
+            return true;
+        }
+    }
+
+    $projectStmt->close();
+
+    return false;
+}
+
 function folderApiCanAccessFolderWithProject(mysqli|PgsqlMysqliCompatConnection $conn, array $folder, array $user): bool
 {
     $projectId = (int) ($folder['project_id'] ?? 0);
     if ($projectId > 0) {
         return folderApiCanAccessProject($conn, $projectId, $user);
+    }
+
+    $clientId = (int) ($folder['client_id'] ?? 0);
+    if ($clientId > 0) {
+        return folderApiCanAccessClient($conn, $clientId, $user);
     }
 
     return folderApiCanAccessFolder($folder, $user);

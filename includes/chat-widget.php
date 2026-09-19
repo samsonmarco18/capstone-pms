@@ -95,6 +95,9 @@ if (
             $adminTechnologyCount = 0;
             $adminUserCount = 0;
             $adminSecurityReports = 0;
+            $adminExpiringTechnologyCount = 0;
+            $adminExpiringTechnologies = [];
+            $adminLoginThreat = null;
             $adminOverviewItem = null;
             if ($summaryRole === 'admin') {
                 $adminPasswordRequests = dbTableExists($summaryConn, 'password_reset_requests')
@@ -102,8 +105,83 @@ if (
                     : 0;
                 $adminTechnologyCount = $summaryCount("SELECT COUNT(*) AS count FROM technologies");
                 $adminUserCount = $summaryCount("SELECT COUNT(*) AS count FROM users");
-                $adminSecurityReports = $summaryCount("SELECT COUNT(*) AS count FROM audit_logs WHERE action LIKE '%security%'");
-                if ($adminPasswordRequests > 0) {
+                $adminSecurityReports = $summaryCount("SELECT COUNT(*) AS count FROM audit_logs WHERE action LIKE '%security%' OR action LIKE 'login_failed%'");
+                $adminExpiringTechnologyCount = $summaryCount("
+                    SELECT COUNT(*) AS count
+                    FROM technologies
+                    WHERE status IN ('expiring', 'expired')
+                       OR (expiry_date IS NOT NULL AND expiry_date <= DATE_ADD(CURDATE(), INTERVAL 30 DAY))
+                ");
+                $adminExpiringResult = $summaryConn->query("
+                    SELECT id, name, category, status, expiry_date,
+                           CASE WHEN expiry_date IS NULL THEN NULL ELSE DATEDIFF(expiry_date, CURDATE()) END AS days_left
+                    FROM technologies
+                    WHERE status IN ('expiring', 'expired')
+                       OR (expiry_date IS NOT NULL AND expiry_date <= DATE_ADD(CURDATE(), INTERVAL 30 DAY))
+                    ORDER BY CASE WHEN expiry_date IS NULL THEN 1 ELSE 0 END, expiry_date ASC, id ASC
+                    LIMIT 5
+                ");
+                if ($adminExpiringResult) {
+                    while ($expiringTechnology = $adminExpiringResult->fetch_assoc()) {
+                        $adminExpiringTechnologies[] = $expiringTechnology;
+                    }
+                }
+
+                $loginThreatResult = $summaryConn->query("
+                    SELECT al.user_id, al.ip_address, MAX(al.created_at) AS last_seen,
+                           COUNT(*) AS attempt_count,
+                           SUM(CASE WHEN al.action = 'login_failed_locked' THEN 1 ELSE 0 END) AS lock_count,
+                           u.full_name, u.email
+                    FROM audit_logs al
+                    LEFT JOIN users u ON u.id = al.user_id
+                    WHERE al.action IN (
+                        'login_failed_wrong_password',
+                        'login_failed_inactive',
+                        'login_failed_locked',
+                        'login_failed_user_not_found'
+                    )
+                      AND al.created_at > DATE_SUB(NOW(), INTERVAL 15 MINUTE)
+                    GROUP BY al.user_id, al.ip_address, u.full_name, u.email
+                    HAVING attempt_count >= 3 OR lock_count > 0
+                    ORDER BY lock_count DESC, attempt_count DESC, last_seen DESC
+                    LIMIT 1
+                ");
+                $adminLoginThreat = $loginThreatResult ? ($loginThreatResult->fetch_assoc() ?: null) : null;
+
+                if ($adminLoginThreat) {
+                    $threatName = trim((string) ($adminLoginThreat['full_name'] ?? ''));
+                    $threatEmail = trim((string) ($adminLoginThreat['email'] ?? ''));
+                    $threatTarget = $threatName !== ''
+                        ? $threatName
+                        : ($threatEmail !== '' ? $threatEmail : 'Unknown account');
+                    $threatIp = trim((string) ($adminLoginThreat['ip_address'] ?? 'Unknown IP'));
+                    $lockCount = (int) ($adminLoginThreat['lock_count'] ?? 0);
+                    $attemptCount = (int) ($adminLoginThreat['attempt_count'] ?? 0);
+                    $adminOverviewItem = [
+                        'icon' => 'fa-user-lock',
+                        'title' => 'Brute-force lockout watch: ' . $threatTarget,
+                        'meta' => $attemptCount . ' failed attempt' . ($attemptCount === 1 ? '' : 's')
+                            . ($lockCount > 0 ? ' · ' . $lockCount . ' lockout' . ($lockCount === 1 ? '' : 's') : '')
+                            . ' · ' . $threatIp,
+                        'action_url' => BASE_URL . 'modules/admin/audit-log.php?search=login_failed#auditDirectory',
+                    ];
+                } elseif ($adminExpiringTechnologies !== []) {
+                    $expiringTechnology = $adminExpiringTechnologies[0];
+                    $daysLeft = isset($expiringTechnology['days_left']) ? (int) $expiringTechnology['days_left'] : null;
+                    $expiryLabel = $daysLeft === null
+                        ? 'expiry date needs review'
+                        : ($daysLeft < 0
+                            ? 'expired ' . abs($daysLeft) . ' day' . (abs($daysLeft) === 1 ? '' : 's') . ' ago'
+                            : ($daysLeft === 0 ? 'expires today' : 'expires in ' . $daysLeft . ' day' . ($daysLeft === 1 ? '' : 's')));
+                    $adminOverviewItem = [
+                        'icon' => 'fa-clock-rotate-left',
+                        'title' => 'Renew: ' . (string) ($expiringTechnology['name'] ?? 'technology stack'),
+                        'meta' => (string) ($expiringTechnology['category'] ?? 'Technology')
+                            . ' · ' . $expiryLabel
+                            . ' · ' . $adminExpiringTechnologyCount . ' renewal signal' . ($adminExpiringTechnologyCount === 1 ? '' : 's'),
+                        'action_url' => BASE_URL . 'modules/admin/techstack.php?status=expiring#technologyDirectory',
+                    ];
+                } elseif ($adminPasswordRequests > 0) {
                     $adminOverviewItem = [
                         'icon' => 'fa-heart-pulse',
                         'title' => 'Review password requests',
@@ -130,7 +208,7 @@ if (
                 'admin' => [
                     'variant' => 'compact',
                     'title' => 'Live Overview',
-                    'intro' => "{$adminPasswordRequests} password requests, {$adminTechnologyCount} services, {$adminUserCount} users, and {$adminSecurityReports} security reports.",
+                    'intro' => "{$adminPasswordRequests} password requests, {$adminExpiringTechnologyCount} expiring technologies, {$adminUserCount} users, and {$adminSecurityReports} login/security events.",
                     'item' => $adminOverviewItem,
                     'metrics' => [],
                 ],

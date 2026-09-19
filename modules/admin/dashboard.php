@@ -10,9 +10,49 @@ $conn = getConnection();
 // Get statistics
 $techCount = $conn->query("SELECT COUNT(*) as count FROM technologies")->fetch_assoc()['count'];
 $userCount = $conn->query("SELECT COUNT(*) as count FROM users")->fetch_assoc()['count'];
-$securityReports = $conn->query("SELECT COUNT(*) as count FROM audit_logs WHERE action LIKE '%security%'")->fetch_assoc()['count'];
+$securityReports = $conn->query("SELECT COUNT(*) as count FROM audit_logs WHERE action LIKE '%security%' OR action LIKE 'login_failed%'")->fetch_assoc()['count'];
 $passwordResetCounts = getPasswordResetRequestCounts();
 $passwordResetPending = (int) ($passwordResetCounts['pending'] ?? 0);
+$adminExpiringTechnologies = [];
+$adminExpiringResult = $conn->query("
+    SELECT id, name, category, status, expiry_date,
+           CASE WHEN expiry_date IS NULL THEN NULL ELSE DATEDIFF(expiry_date, CURDATE()) END AS days_left
+    FROM technologies
+    WHERE status IN ('expiring', 'expired')
+       OR (expiry_date IS NOT NULL AND expiry_date <= DATE_ADD(CURDATE(), INTERVAL 30 DAY))
+    ORDER BY CASE WHEN expiry_date IS NULL THEN 1 ELSE 0 END, expiry_date ASC, id ASC
+    LIMIT 4
+");
+if ($adminExpiringResult) {
+    while ($row = $adminExpiringResult->fetch_assoc()) {
+        $adminExpiringTechnologies[] = $row;
+    }
+}
+$adminLoginThreats = [];
+$adminLoginThreatResult = $conn->query("
+    SELECT al.user_id, al.ip_address, MAX(al.created_at) AS last_seen,
+           COUNT(*) AS attempt_count,
+           SUM(CASE WHEN al.action = 'login_failed_locked' THEN 1 ELSE 0 END) AS lock_count,
+           u.full_name, u.email
+    FROM audit_logs al
+    LEFT JOIN users u ON u.id = al.user_id
+    WHERE al.action IN (
+        'login_failed_wrong_password',
+        'login_failed_inactive',
+        'login_failed_locked',
+        'login_failed_user_not_found'
+    )
+      AND al.created_at > DATE_SUB(NOW(), INTERVAL 15 MINUTE)
+    GROUP BY al.user_id, al.ip_address, u.full_name, u.email
+    HAVING attempt_count >= 3 OR lock_count > 0
+    ORDER BY lock_count DESC, attempt_count DESC, last_seen DESC
+    LIMIT 4
+");
+if ($adminLoginThreatResult) {
+    while ($row = $adminLoginThreatResult->fetch_assoc()) {
+        $adminLoginThreats[] = $row;
+    }
+}
 
 // Get data for charts
 $techStatus = $conn->query("SELECT status, COUNT(*) as count FROM technologies GROUP BY status");
@@ -206,6 +246,87 @@ html:not([data-theme="dark"]) #page-content-wrapper {
 .dashboard-chart-title {
     color: var(--dashboard-heading) !important;
 }
+
+.admin-evortix-grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.admin-evortix-card {
+    background: var(--dashboard-surface);
+    border: 1px solid var(--dashboard-border);
+    border-radius: 14px;
+    box-shadow: var(--dashboard-shadow);
+    overflow: hidden;
+}
+
+.admin-evortix-card__head,
+.admin-evortix-row {
+    align-items: center;
+    display: flex;
+    gap: 0.75rem;
+}
+
+.admin-evortix-card__head {
+    border-bottom: 1px solid var(--dashboard-border);
+    justify-content: space-between;
+    padding: 1rem 1.1rem;
+}
+
+.admin-evortix-card__title {
+    color: var(--dashboard-heading);
+    font-size: 0.9rem;
+    font-weight: 700;
+    margin: 0;
+}
+
+.admin-evortix-card__eyebrow {
+    color: var(--theme-primary);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.admin-evortix-card__body {
+    display: grid;
+    gap: 0.6rem;
+    padding: 0.9rem 1.1rem 1.1rem;
+}
+
+.admin-evortix-row {
+    background: var(--dashboard-surface-alt);
+    border: 1px solid var(--dashboard-border);
+    border-radius: 10px;
+    justify-content: space-between;
+    padding: 0.75rem 0.85rem;
+}
+
+.admin-evortix-row strong {
+    color: var(--dashboard-heading);
+    display: block;
+    font-size: 0.86rem;
+}
+
+.admin-evortix-row small {
+    color: var(--dashboard-muted);
+    display: block;
+    font-size: 0.72rem;
+    margin-top: 0.12rem;
+}
+
+.admin-evortix-empty {
+    color: var(--dashboard-muted);
+    font-size: 0.82rem;
+    margin: 0;
+}
+
+@media (max-width: 991.98px) {
+    .admin-evortix-grid {
+        grid-template-columns: 1fr;
+    }
+}
 </style>
 
 <div class="container-fluid px-4 py-3 role-dashboard-shell">
@@ -282,6 +403,71 @@ html:not([data-theme="dark"]) #page-content-wrapper {
                 <p class="admin-stat-sub">Audit-backed monitoring and recovery</p>
             </div>
         </div>
+    </div>
+
+    <div class="admin-evortix-grid mb-4">
+        <section class="admin-evortix-card" aria-labelledby="adminRenewalWatchTitle">
+            <div class="admin-evortix-card__head">
+                <div>
+                    <div class="admin-evortix-card__eyebrow">Evortix</div>
+                    <h2 class="admin-evortix-card__title" id="adminRenewalWatchTitle">Renewal Watch</h2>
+                </div>
+                <a class="btn btn-sm btn-outline-primary" href="techstack.php?status=expiring#technologyDirectory">Open stack</a>
+            </div>
+            <div class="admin-evortix-card__body">
+                <?php if ($adminExpiringTechnologies !== []): ?>
+                    <?php foreach ($adminExpiringTechnologies as $technology):
+                        $daysLeft = isset($technology['days_left']) ? (int) $technology['days_left'] : null;
+                        $expiryText = $daysLeft === null
+                            ? 'Expiry date needs review'
+                            : ($daysLeft < 0
+                                ? 'Expired ' . abs($daysLeft) . ' day' . (abs($daysLeft) === 1 ? '' : 's') . ' ago'
+                                : ($daysLeft === 0 ? 'Expires today' : 'Expires in ' . $daysLeft . ' day' . ($daysLeft === 1 ? '' : 's')));
+                    ?>
+                    <div class="admin-evortix-row">
+                        <span>
+                            <strong><?php echo htmlspecialchars((string) ($technology['name'] ?? 'Technology stack')); ?></strong>
+                            <small><?php echo htmlspecialchars((string) ($technology['category'] ?? 'Technology')); ?> · <?php echo htmlspecialchars($expiryText); ?></small>
+                        </span>
+                        <i class="fas fa-clock-rotate-left text-warning" aria-hidden="true"></i>
+                    </div>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <p class="admin-evortix-empty">No technology stack is expiring in the next 30 days.</p>
+                <?php endif; ?>
+            </div>
+        </section>
+
+        <section class="admin-evortix-card" aria-labelledby="adminLoginWatchTitle">
+            <div class="admin-evortix-card__head">
+                <div>
+                    <div class="admin-evortix-card__eyebrow">Evortix</div>
+                    <h2 class="admin-evortix-card__title" id="adminLoginWatchTitle">Login Attack Watch</h2>
+                </div>
+                <a class="btn btn-sm btn-outline-primary" href="audit-log.php?search=login_failed#auditDirectory">Open audit</a>
+            </div>
+            <div class="admin-evortix-card__body">
+                <?php if ($adminLoginThreats !== []): ?>
+                    <?php foreach ($adminLoginThreats as $threat):
+                        $targetName = trim((string) ($threat['full_name'] ?? ''));
+                        $targetEmail = trim((string) ($threat['email'] ?? ''));
+                        $targetLabel = $targetName !== '' ? $targetName : ($targetEmail !== '' ? $targetEmail : 'Unknown account');
+                        $attemptCount = (int) ($threat['attempt_count'] ?? 0);
+                        $lockCount = (int) ($threat['lock_count'] ?? 0);
+                    ?>
+                    <div class="admin-evortix-row">
+                        <span>
+                            <strong><?php echo htmlspecialchars($targetLabel); ?></strong>
+                            <small><?php echo $attemptCount; ?> failed attempt<?php echo $attemptCount === 1 ? '' : 's'; ?><?php echo $lockCount > 0 ? ' · ' . $lockCount . ' lockout' . ($lockCount === 1 ? '' : 's') : ''; ?> · <?php echo htmlspecialchars((string) ($threat['ip_address'] ?? 'Unknown IP')); ?></small>
+                        </span>
+                        <i class="fas fa-user-lock text-danger" aria-hidden="true"></i>
+                    </div>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <p class="admin-evortix-empty">No brute-force lockout pattern detected in the last 15 minutes.</p>
+                <?php endif; ?>
+            </div>
+        </section>
     </div>
 
     <?php
