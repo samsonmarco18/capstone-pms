@@ -1108,7 +1108,7 @@ document.addEventListener('DOMContentLoaded', function () {
     };
 
     const evortixRoleDashboardSummary = <?php echo json_encode($evortixRoleDashboardSummary, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
-    if (evortixEnabled && evortixSuggestionsEnabled && evortixRoleDashboardSummary && botFloat) {
+    if (evortixEnabled && evortixRoleDashboardSummary && botFloat) {
         window.setTimeout(() => {
             const speech = botFloat.querySelector('.chat-bot-speech');
             if (!speech) return;
@@ -1228,6 +1228,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 speech.hidden = true;
                 speech.setAttribute('aria-hidden', 'true');
             });
+            document.dispatchEvent(new CustomEvent('evortix:dashboard-welcome-complete'));
         }, 800);
     }
 
