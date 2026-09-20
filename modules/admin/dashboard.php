@@ -247,41 +247,38 @@ html:not([data-theme="dark"]) #page-content-wrapper {
     color: var(--dashboard-heading) !important;
 }
 
-.admin-evortix-grid {
+.admin-evortix-announcements {
     display: grid;
-    gap: 1rem;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.85rem;
 }
 
-.admin-evortix-card {
-    background: var(--dashboard-surface);
-    border: 1px solid var(--dashboard-border);
-    border-radius: 14px;
-    box-shadow: var(--dashboard-shadow);
-    overflow: hidden;
-}
-
-.admin-evortix-card__head,
+.admin-evortix-announcement,
 .admin-evortix-row {
     align-items: center;
     display: flex;
     gap: 0.75rem;
 }
 
-.admin-evortix-card__head {
-    border-bottom: 1px solid var(--dashboard-border);
+.admin-evortix-announcement {
+    background: transparent;
+    border: 0;
     justify-content: space-between;
-    padding: 1rem 1.1rem;
+    padding: 0.25rem 0;
 }
 
-.admin-evortix-card__title {
+.admin-evortix-copy {
+    min-width: 0;
+}
+
+.admin-evortix-title {
     color: var(--dashboard-heading);
-    font-size: 0.9rem;
+    font-size: 0.92rem;
     font-weight: 700;
-    margin: 0;
+    line-height: 1.35;
+    margin: 0.1rem 0 0;
 }
 
-.admin-evortix-card__eyebrow {
+.admin-evortix-eyebrow {
     color: var(--theme-primary);
     font-size: 0.68rem;
     font-weight: 700;
@@ -289,18 +286,17 @@ html:not([data-theme="dark"]) #page-content-wrapper {
     text-transform: uppercase;
 }
 
-.admin-evortix-card__body {
+.admin-evortix-list {
     display: grid;
-    gap: 0.6rem;
-    padding: 0.9rem 1.1rem 1.1rem;
+    gap: 0.45rem;
+    margin-top: 0.45rem;
 }
 
 .admin-evortix-row {
-    background: var(--dashboard-surface-alt);
-    border: 1px solid var(--dashboard-border);
-    border-radius: 10px;
+    background: transparent;
+    border: 0;
     justify-content: space-between;
-    padding: 0.75rem 0.85rem;
+    padding: 0;
 }
 
 .admin-evortix-row strong {
@@ -322,9 +318,32 @@ html:not([data-theme="dark"]) #page-content-wrapper {
     margin: 0;
 }
 
-@media (max-width: 991.98px) {
-    .admin-evortix-grid {
-        grid-template-columns: 1fr;
+.admin-evortix-action {
+    align-items: center;
+    border: 1px solid rgba(31, 99, 146, 0.22);
+    border-radius: 999px;
+    color: var(--theme-primary);
+    display: inline-flex;
+    flex: 0 0 auto;
+    font-size: 0.78rem;
+    font-weight: 700;
+    gap: 0.4rem;
+    line-height: 1;
+    padding: 0.55rem 0.8rem;
+    text-decoration: none;
+}
+
+.admin-evortix-action:hover,
+.admin-evortix-action:focus-visible {
+    background: rgba(31, 99, 146, 0.08);
+    color: var(--theme-dark);
+    text-decoration: none;
+}
+
+@media (max-width: 575.98px) {
+    .admin-evortix-announcement {
+        align-items: flex-start;
+        flex-direction: column;
     }
 }
 </style>
@@ -405,16 +424,12 @@ html:not([data-theme="dark"]) #page-content-wrapper {
         </div>
     </div>
 
-    <div class="admin-evortix-grid mb-4">
-        <section class="admin-evortix-card" aria-labelledby="adminRenewalWatchTitle">
-            <div class="admin-evortix-card__head">
-                <div>
-                    <div class="admin-evortix-card__eyebrow">Evortix</div>
-                    <h2 class="admin-evortix-card__title" id="adminRenewalWatchTitle">Renewal Watch</h2>
-                </div>
-                <a class="btn btn-sm btn-outline-primary" href="techstack.php?status=expiring#technologyDirectory">Open stack</a>
-            </div>
-            <div class="admin-evortix-card__body">
+    <div class="admin-evortix-announcements mb-4" aria-label="Evortix admin announcements">
+        <section class="admin-evortix-announcement" aria-labelledby="adminRenewalWatchTitle">
+            <div class="admin-evortix-copy">
+                <div class="admin-evortix-eyebrow">Evortix announcement</div>
+                <h2 class="admin-evortix-title" id="adminRenewalWatchTitle">Renewal Watch</h2>
+                <div class="admin-evortix-list">
                 <?php if ($adminExpiringTechnologies !== []): ?>
                     <?php foreach ($adminExpiringTechnologies as $technology):
                         $daysLeft = isset($technology['days_left']) ? (int) $technology['days_left'] : null;
@@ -435,18 +450,16 @@ html:not([data-theme="dark"]) #page-content-wrapper {
                 <?php else: ?>
                     <p class="admin-evortix-empty">No technology stack is expiring in the next 30 days.</p>
                 <?php endif; ?>
+                </div>
             </div>
+            <a class="admin-evortix-action" href="techstack.php?status=expiring#technologyDirectory"><i class="fas fa-layer-group" aria-hidden="true"></i>Open stack</a>
         </section>
 
-        <section class="admin-evortix-card" aria-labelledby="adminLoginWatchTitle">
-            <div class="admin-evortix-card__head">
-                <div>
-                    <div class="admin-evortix-card__eyebrow">Evortix</div>
-                    <h2 class="admin-evortix-card__title" id="adminLoginWatchTitle">Login Attack Watch</h2>
-                </div>
-                <a class="btn btn-sm btn-outline-primary" href="audit-log.php?search=login_failed#auditDirectory">Open audit</a>
-            </div>
-            <div class="admin-evortix-card__body">
+        <section class="admin-evortix-announcement" aria-labelledby="adminLoginWatchTitle">
+            <div class="admin-evortix-copy">
+                <div class="admin-evortix-eyebrow">Evortix announcement</div>
+                <h2 class="admin-evortix-title" id="adminLoginWatchTitle">Login Attack Watch</h2>
+                <div class="admin-evortix-list">
                 <?php if ($adminLoginThreats !== []): ?>
                     <?php foreach ($adminLoginThreats as $threat):
                         $targetName = trim((string) ($threat['full_name'] ?? ''));
@@ -466,7 +479,9 @@ html:not([data-theme="dark"]) #page-content-wrapper {
                 <?php else: ?>
                     <p class="admin-evortix-empty">No brute-force lockout pattern detected in the last 15 minutes.</p>
                 <?php endif; ?>
+                </div>
             </div>
+            <a class="admin-evortix-action" href="audit-log.php?search=login_failed#auditDirectory"><i class="fas fa-shield-halved" aria-hidden="true"></i>Open audit</a>
         </section>
     </div>
 
