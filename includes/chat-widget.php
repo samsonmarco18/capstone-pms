@@ -100,6 +100,7 @@ if (
             $adminLoginThreat = null;
             $adminOverviewItem = null;
             $adminOverviewItems = [];
+            $adminWatchGroups = [];
             if ($summaryRole === 'admin') {
                 $adminPasswordRequests = dbTableExists($summaryConn, 'password_reset_requests')
                     ? $summaryCount("SELECT COUNT(*) AS count FROM password_reset_requests WHERE status = 'pending'")
@@ -242,14 +243,78 @@ if (
                         'action_url' => BASE_URL . 'modules/admin/audit-log.php?search=login_failed#auditDirectory',
                     ];
                 }
+                $adminRenewalRows = [];
+                foreach ($adminExpiringTechnologies as $renewalRow) {
+                    $rowDaysLeft = isset($renewalRow['days_left']) ? (int) $renewalRow['days_left'] : null;
+                    $rowExpiryLabel = $rowDaysLeft === null
+                        ? 'Expiry date needs review'
+                        : ($rowDaysLeft < 0
+                            ? 'Expired ' . abs($rowDaysLeft) . ' day' . (abs($rowDaysLeft) === 1 ? '' : 's') . ' ago'
+                            : ($rowDaysLeft === 0 ? 'Expires today' : 'Expires in ' . $rowDaysLeft . ' day' . ($rowDaysLeft === 1 ? '' : 's')));
+                    $adminRenewalRows[] = [
+                        'name' => (string) ($renewalRow['name'] ?? 'Technology stack'),
+                        'meta' => (string) ($renewalRow['category'] ?? 'Technology') . ' - ' . $rowExpiryLabel,
+                        'url' => BASE_URL . 'modules/admin/techstack.php?status=expiring#technologyDirectory',
+                    ];
+                }
+
+                $adminLoginRows = [];
+                if ($adminLoginThreat) {
+                    $adminLoginRows[] = [
+                        'name' => 'Login Attack Watch',
+                        'meta' => (string) ($adminOverviewItems[1]['meta'] ?? 'Review recent failed login activity.'),
+                        'url' => BASE_URL . 'modules/admin/audit-log.php?search=login_failed#auditDirectory',
+                    ];
+                }
+
+                $adminRecoveryRows = [];
+                if ($adminPasswordRequests > 0) {
+                    $adminRecoveryRows[] = [
+                        'name' => 'Password reset requests',
+                        'meta' => $adminPasswordRequests . ' pending account recovery',
+                        'url' => BASE_URL . 'modules/admin/password-reset-requests.php',
+                    ];
+                }
+
+                $adminWatchGroups = [
+                    'renewals' => [
+                        'label' => 'Renewals',
+                        'icon' => 'fa-clock-rotate-left',
+                        'total' => $adminExpiringTechnologyCount,
+                        'list_title' => 'Renewal Watch',
+                        'entity_label' => 'technology',
+                        'empty' => 'No technology stack is expiring in the next 30 days.',
+                        'items' => $adminRenewalRows,
+                    ],
+                    'login' => [
+                        'label' => 'Login',
+                        'icon' => 'fa-user-lock',
+                        'total' => $adminLoginThreat ? 1 : 0,
+                        'list_title' => 'Login Attack Watch',
+                        'entity_label' => 'signal',
+                        'empty' => 'No brute-force lockout pattern detected in the last 15 minutes.',
+                        'items' => $adminLoginRows,
+                    ],
+                    'recovery' => [
+                        'label' => 'Recovery',
+                        'icon' => 'fa-heart-pulse',
+                        'total' => $adminPasswordRequests,
+                        'list_title' => 'Password Recovery',
+                        'entity_label' => 'request',
+                        'empty' => 'No password recovery requests are pending.',
+                        'items' => $adminRecoveryRows,
+                    ],
+                ];
             }
             $roleSummaries = [
                 'admin' => [
-                    'variant' => 'compact',
+                    'variant' => 'tabbed',
                     'title' => 'Live Overview',
                     'intro' => "{$adminPasswordRequests} password requests, {$adminExpiringTechnologyCount} expiring technologies, {$adminUserCount} users, and {$adminSecurityReports} login/security events.",
                     'item' => $adminOverviewItem,
                     'items' => $adminOverviewItems,
+                    'tab_groups' => $adminWatchGroups,
+                    'tab_order' => ['renewals', 'login', 'recovery'],
                     'metrics' => [],
                 ],
                 'architect' => [
@@ -1059,6 +1124,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     <div class="evortix-role-summary-meta">${escapeSummary(metric.meta)}</div>
                 </div>`).join('');
             const isCompactSummary = evortixRoleDashboardSummary.variant === 'compact';
+            const isTabbedSummary = evortixRoleDashboardSummary.variant === 'tabbed';
             const compactItem = evortixRoleDashboardSummary.item || {};
             const compactItems = Array.isArray(evortixRoleDashboardSummary.items) && evortixRoleDashboardSummary.items.length
                 ? evortixRoleDashboardSummary.items
@@ -1073,25 +1139,86 @@ document.addEventListener('DOMContentLoaded', function () {
                     ${item.action_url ? '<i class="fas fa-arrow-right evortix-role-summary-item-arrow" aria-hidden="true"></i>' : ''}
                 </${itemTag}>`;
             }).join('');
-            speech.className = `chat-bot-speech evortix-role-dashboard-summary${isCompactSummary ? ' is-compact' : ''}`;
+            const tabGroups = evortixRoleDashboardSummary.tab_groups || {};
+            const tabOrder = Array.isArray(evortixRoleDashboardSummary.tab_order)
+                ? evortixRoleDashboardSummary.tab_order.filter(key => tabGroups[key])
+                : Object.keys(tabGroups);
+            const initialTab = tabOrder.find(key => Number(tabGroups[key]?.total || 0) > 0) || tabOrder[0] || '';
+            const tabbedMarkup = isTabbedSummary ? `
+                <div class="evortix-role-summary-head is-compact"><strong class="evortix-role-summary-title">${escapeSummary(evortixRoleDashboardSummary.title)}</strong><button type="button" class="evortix-role-summary-close" aria-label="Dismiss dashboard overview"><i class="fas fa-xmark"></i></button></div>
+                <div class="evortix-role-summary-intro is-compact">${escapeSummary(evortixRoleDashboardSummary.intro)}</div>
+                <div class="evortix-project-status-tabs" role="tablist" aria-label="Evortix dashboard status">
+                    ${tabOrder.map(key => {
+                        const group = tabGroups[key] || {};
+                        return `
+                        <button type="button" class="evortix-project-status-tab" data-evortix-summary-tab="${escapeSummary(key)}" role="tab" aria-selected="false">
+                            <i class="fas ${escapeSummary(group.icon || 'fa-circle-info')}" aria-hidden="true"></i>
+                            <span>${escapeSummary(group.label || key)}</span>
+                            <strong>${escapeSummary(group.total ?? 0)}</strong>
+                        </button>`;
+                    }).join('')}
+                </div>
+                <div class="evortix-project-list-head">
+                    <strong data-evortix-summary-list-title></strong>
+                    <span data-evortix-summary-list-count></span>
+                </div>
+                <div class="evortix-project-list" data-evortix-summary-list></div>` : '';
+            speech.className = `chat-bot-speech evortix-role-dashboard-summary${(isCompactSummary || isTabbedSummary) ? ' is-compact' : ''}${isTabbedSummary ? ' has-project-list' : ''}`;
             speech.hidden = false;
             speech.style.pointerEvents = 'auto';
             speech.setAttribute('aria-hidden', 'false');
             speech.setAttribute('role', 'status');
-            speech.innerHTML = isCompactSummary ? `
+            speech.innerHTML = isTabbedSummary ? tabbedMarkup : (isCompactSummary ? `
                 <div class="evortix-role-summary-head is-compact"><strong class="evortix-role-summary-title">${escapeSummary(evortixRoleDashboardSummary.title)}</strong><button type="button" class="evortix-role-summary-close" aria-label="Dismiss dashboard overview"><i class="fas fa-xmark"></i></button></div>
                 <div class="evortix-role-summary-intro is-compact">${escapeSummary(evortixRoleDashboardSummary.intro)}</div>
                 ${compactItemsMarkup}` : `
                 <div class="evortix-role-summary-head"><div><div class="evortix-role-summary-eyebrow">Live overview</div><strong class="evortix-role-summary-title">${escapeSummary(evortixRoleDashboardSummary.title)}</strong></div><button type="button" class="evortix-role-summary-close" aria-label="Dismiss dashboard overview"><i class="fas fa-xmark"></i></button></div>
                 <div class="evortix-role-summary-intro">Here is the information most relevant to your role right now.</div>
                 <div class="evortix-role-summary-grid">${metricMarkup}</div>
-                ${evortixRoleDashboardSummary.suggestion ? `<div class="evortix-role-planning-suggestion"><div class="evortix-role-planning-eyebrow">${escapeSummary(evortixRoleDashboardSummary.suggestion.eyebrow)}</div><strong class="evortix-role-planning-title">${escapeSummary(evortixRoleDashboardSummary.suggestion.title)}</strong><p class="evortix-role-planning-copy">${escapeSummary(evortixRoleDashboardSummary.suggestion.message)}</p>${evortixRoleDashboardSummary.suggestion.action_url ? `<a class="evortix-role-planning-action" href="${escapeSummary(evortixRoleDashboardSummary.suggestion.action_url)}"><i class="fas fa-arrow-right"></i>${escapeSummary(evortixRoleDashboardSummary.suggestion.action_label)}</a>` : ''}</div>` : ''}`;
+                ${evortixRoleDashboardSummary.suggestion ? `<div class="evortix-role-planning-suggestion"><div class="evortix-role-planning-eyebrow">${escapeSummary(evortixRoleDashboardSummary.suggestion.eyebrow)}</div><strong class="evortix-role-planning-title">${escapeSummary(evortixRoleDashboardSummary.suggestion.title)}</strong><p class="evortix-role-planning-copy">${escapeSummary(evortixRoleDashboardSummary.suggestion.message)}</p>${evortixRoleDashboardSummary.suggestion.action_url ? `<a class="evortix-role-planning-action" href="${escapeSummary(evortixRoleDashboardSummary.suggestion.action_url)}"><i class="fas fa-arrow-right"></i>${escapeSummary(evortixRoleDashboardSummary.suggestion.action_label)}</a>` : ''}</div>` : ''}`);
+            if (isTabbedSummary) {
+                const renderSummaryTab = key => {
+                    const group = tabGroups[key] || {};
+                    const items = Array.isArray(group.items) ? group.items : [];
+                    speech.querySelectorAll('[data-evortix-summary-tab]').forEach(tab => {
+                        const isSelected = tab.dataset.evortixSummaryTab === key;
+                        tab.classList.toggle('is-active', isSelected);
+                        tab.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+                    });
+                    const title = speech.querySelector('[data-evortix-summary-list-title]');
+                    const count = speech.querySelector('[data-evortix-summary-list-count]');
+                    const list = speech.querySelector('[data-evortix-summary-list]');
+                    if (title) title.textContent = group.list_title || group.label || 'Status';
+                    if (count) {
+                        const label = group.entity_label || 'item';
+                        count.textContent = `${items.length} ${label}${items.length === 1 ? '' : 's'}`;
+                    }
+                    if (!list) return;
+                    list.innerHTML = items.length
+                        ? items.map(item => `
+                            <a class="evortix-project-link" href="${escapeSummary(item.url || '#')}">
+                                <span class="evortix-project-link-copy">
+                                    <strong>${escapeSummary(item.name || item.title || 'Item')}</strong>
+                                    <small>${escapeSummary(item.meta || '')}</small>
+                                </span>
+                                <i class="fas fa-arrow-right" aria-hidden="true"></i>
+                            </a>
+                        `).join('')
+                        : `<div class="evortix-project-list-empty">${escapeSummary(group.empty || 'No items need attention.')}</div>`;
+                };
+                speech.querySelectorAll('[data-evortix-summary-tab]').forEach(tab => {
+                    tab.addEventListener('click', () => renderSummaryTab(tab.dataset.evortixSummaryTab));
+                });
+                if (initialTab) renderSummaryTab(initialTab);
+            }
             window.chatBotWidgetRobot?.setMode?.('empty-bed');
             window.chatBotFloatRobot?.setMode?.('standing');
             botFloat.hidden = false;
             botFloat.setAttribute('aria-hidden', 'false');
             const metricSpeech = isCompactSummary
                 ? `${evortixRoleDashboardSummary.intro || ''} ${compactItems.map(item => `${item.title || ''}. ${item.meta || ''}`).join(' ')}`
+                : isTabbedSummary
+                    ? `${evortixRoleDashboardSummary.intro || ''} ${tabOrder.map(key => `${tabGroups[key]?.label || key}: ${tabGroups[key]?.total || 0}.`).join(' ')}`
                 : (evortixRoleDashboardSummary.metrics || [])
                     .map(metric => `${metric.label}: ${metric.value}. ${metric.meta || ''}`)
                     .join(' ');
