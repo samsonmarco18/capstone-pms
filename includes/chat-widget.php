@@ -99,6 +99,7 @@ if (
             $adminExpiringTechnologies = [];
             $adminLoginThreat = null;
             $adminOverviewItem = null;
+            $adminOverviewItems = [];
             if ($summaryRole === 'admin') {
                 $adminPasswordRequests = dbTableExists($summaryConn, 'password_reset_requests')
                     ? $summaryCount("SELECT COUNT(*) AS count FROM password_reset_requests WHERE status = 'pending'")
@@ -203,6 +204,44 @@ if (
                         'action_url' => BASE_URL . 'modules/admin/user-management.php',
                     ];
                 }
+                if ($adminExpiringTechnologies !== []) {
+                    $renewalTechnology = $adminExpiringTechnologies[0];
+                    $renewalDaysLeft = isset($renewalTechnology['days_left']) ? (int) $renewalTechnology['days_left'] : null;
+                    $renewalExpiryLabel = $renewalDaysLeft === null
+                        ? 'Expiry date needs review'
+                        : ($renewalDaysLeft < 0
+                            ? 'Expired ' . abs($renewalDaysLeft) . ' day' . (abs($renewalDaysLeft) === 1 ? '' : 's') . ' ago'
+                            : ($renewalDaysLeft === 0 ? 'Expires today' : 'Expires in ' . $renewalDaysLeft . ' day' . ($renewalDaysLeft === 1 ? '' : 's')));
+                    $adminOverviewItems[] = [
+                        'icon' => 'fa-clock-rotate-left',
+                        'title' => 'Renewal Watch',
+                        'meta' => (string) ($renewalTechnology['name'] ?? 'Technology stack') . ' - ' . $renewalExpiryLabel,
+                        'action_url' => BASE_URL . 'modules/admin/techstack.php?status=expiring#technologyDirectory',
+                    ];
+                } else {
+                    $adminOverviewItems[] = [
+                        'icon' => 'fa-circle-check',
+                        'title' => 'Renewal Watch',
+                        'meta' => 'No technology stack is expiring in the next 30 days.',
+                        'action_url' => BASE_URL . 'modules/admin/techstack.php?status=expiring#technologyDirectory',
+                    ];
+                }
+
+                if ($adminLoginThreat) {
+                    $adminOverviewItems[] = [
+                        'icon' => 'fa-user-lock',
+                        'title' => 'Login Attack Watch',
+                        'meta' => (string) ($adminOverviewItem['meta'] ?? 'Review recent failed login activity.'),
+                        'action_url' => BASE_URL . 'modules/admin/audit-log.php?search=login_failed#auditDirectory',
+                    ];
+                } else {
+                    $adminOverviewItems[] = [
+                        'icon' => 'fa-shield-halved',
+                        'title' => 'Login Attack Watch',
+                        'meta' => 'No brute-force lockout pattern detected in the last 15 minutes.',
+                        'action_url' => BASE_URL . 'modules/admin/audit-log.php?search=login_failed#auditDirectory',
+                    ];
+                }
             }
             $roleSummaries = [
                 'admin' => [
@@ -210,6 +249,7 @@ if (
                     'title' => 'Live Overview',
                     'intro' => "{$adminPasswordRequests} password requests, {$adminExpiringTechnologyCount} expiring technologies, {$adminUserCount} users, and {$adminSecurityReports} login/security events.",
                     'item' => $adminOverviewItem,
+                    'items' => $adminOverviewItems,
                     'metrics' => [],
                 ],
                 'architect' => [
@@ -480,6 +520,7 @@ document.addEventListener('DOMContentLoaded', () => {
 .chat-bot-speech .evortix-role-summary-head.is-compact .evortix-role-summary-title { font-size:1rem }
 .evortix-role-summary-intro.is-compact { margin:.65rem 0 .75rem; font-size:.73rem; line-height:1.45 }
 .evortix-role-summary-item { align-items:center; background:rgba(255,255,255,.82); border:1px solid rgba(8,123,185,.16); border-radius:13px; color:inherit; display:grid; gap:.68rem; grid-template-columns:32px minmax(0,1fr) auto; padding:.68rem .78rem; text-decoration:none; transition:transform .18s ease,background .18s ease,border-color .18s ease }
+.evortix-role-summary-item + .evortix-role-summary-item { margin-top:.45rem }
 .evortix-role-summary-item:hover { background:#fff; border-color:rgba(8,123,185,.3); color:inherit; transform:translateY(-1px) }
 .evortix-role-summary-item:focus-visible { border-color:rgba(8,123,185,.45); box-shadow:0 0 0 3px rgba(19,126,179,.14); outline:0 }
 .chat-bot-speech .evortix-role-summary-item-icon { align-items:center; align-self:center; background:#e4f4fb; border:1px solid rgba(8,123,185,.14); border-radius:9px; color:#157baa; display:inline-flex; font-size:.78rem; height:32px; justify-content:center; margin:0; padding:0; position:static; transform:none; width:32px }
@@ -1019,8 +1060,19 @@ document.addEventListener('DOMContentLoaded', function () {
                 </div>`).join('');
             const isCompactSummary = evortixRoleDashboardSummary.variant === 'compact';
             const compactItem = evortixRoleDashboardSummary.item || {};
-            const compactItemTag = compactItem.action_url ? 'a' : 'div';
-            const compactItemHref = compactItem.action_url ? ` href="${escapeSummary(compactItem.action_url)}"` : '';
+            const compactItems = Array.isArray(evortixRoleDashboardSummary.items) && evortixRoleDashboardSummary.items.length
+                ? evortixRoleDashboardSummary.items
+                : [compactItem];
+            const compactItemsMarkup = compactItems.map(item => {
+                const itemTag = item.action_url ? 'a' : 'div';
+                const itemHref = item.action_url ? ` href="${escapeSummary(item.action_url)}"` : '';
+                return `
+                <${itemTag} class="evortix-role-summary-item"${itemHref}>
+                    <span class="evortix-role-summary-item-icon"><i class="fas ${escapeSummary(item.icon || 'fa-circle-info')}"></i></span>
+                    <span class="evortix-role-summary-item-copy"><strong class="evortix-role-summary-item-title">${escapeSummary(item.title)}</strong><span class="evortix-role-summary-item-meta">${escapeSummary(item.meta)}</span></span>
+                    ${item.action_url ? '<i class="fas fa-arrow-right evortix-role-summary-item-arrow" aria-hidden="true"></i>' : ''}
+                </${itemTag}>`;
+            }).join('');
             speech.className = `chat-bot-speech evortix-role-dashboard-summary${isCompactSummary ? ' is-compact' : ''}`;
             speech.hidden = false;
             speech.style.pointerEvents = 'auto';
@@ -1029,11 +1081,7 @@ document.addEventListener('DOMContentLoaded', function () {
             speech.innerHTML = isCompactSummary ? `
                 <div class="evortix-role-summary-head is-compact"><strong class="evortix-role-summary-title">${escapeSummary(evortixRoleDashboardSummary.title)}</strong><button type="button" class="evortix-role-summary-close" aria-label="Dismiss dashboard overview"><i class="fas fa-xmark"></i></button></div>
                 <div class="evortix-role-summary-intro is-compact">${escapeSummary(evortixRoleDashboardSummary.intro)}</div>
-                <${compactItemTag} class="evortix-role-summary-item"${compactItemHref}>
-                    <span class="evortix-role-summary-item-icon"><i class="fas ${escapeSummary(compactItem.icon || 'fa-circle-info')}"></i></span>
-                    <span class="evortix-role-summary-item-copy"><strong class="evortix-role-summary-item-title">${escapeSummary(compactItem.title)}</strong><span class="evortix-role-summary-item-meta">${escapeSummary(compactItem.meta)}</span></span>
-                    ${compactItem.action_url ? '<i class="fas fa-arrow-right evortix-role-summary-item-arrow" aria-hidden="true"></i>' : ''}
-                </${compactItemTag}>` : `
+                ${compactItemsMarkup}` : `
                 <div class="evortix-role-summary-head"><div><div class="evortix-role-summary-eyebrow">Live overview</div><strong class="evortix-role-summary-title">${escapeSummary(evortixRoleDashboardSummary.title)}</strong></div><button type="button" class="evortix-role-summary-close" aria-label="Dismiss dashboard overview"><i class="fas fa-xmark"></i></button></div>
                 <div class="evortix-role-summary-intro">Here is the information most relevant to your role right now.</div>
                 <div class="evortix-role-summary-grid">${metricMarkup}</div>
@@ -1043,7 +1091,7 @@ document.addEventListener('DOMContentLoaded', function () {
             botFloat.hidden = false;
             botFloat.setAttribute('aria-hidden', 'false');
             const metricSpeech = isCompactSummary
-                ? `${evortixRoleDashboardSummary.intro || ''} ${compactItem.title || ''}. ${compactItem.meta || ''}`
+                ? `${evortixRoleDashboardSummary.intro || ''} ${compactItems.map(item => `${item.title || ''}. ${item.meta || ''}`).join(' ')}`
                 : (evortixRoleDashboardSummary.metrics || [])
                     .map(metric => `${metric.label}: ${metric.value}. ${metric.meta || ''}`)
                     .join(' ');
