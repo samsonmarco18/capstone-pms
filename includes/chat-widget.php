@@ -1108,10 +1108,10 @@ document.addEventListener('DOMContentLoaded', function () {
     };
 
     const evortixRoleDashboardSummary = <?php echo json_encode($evortixRoleDashboardSummary, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
-    if (evortixEnabled && evortixRoleDashboardSummary && botFloat) {
-        window.setTimeout(() => {
+    const showEvortixRoleDashboardSummary = function () {
+        if (!evortixEnabled || !evortixRoleDashboardSummary || !botFloat) return false;
             const speech = botFloat.querySelector('.chat-bot-speech');
-            if (!speech) return;
+            if (!speech) return false;
             const escapeSummary = value => {
                 const node = document.createElement('div');
                 node.textContent = String(value ?? '');
@@ -1229,7 +1229,13 @@ document.addEventListener('DOMContentLoaded', function () {
                 speech.setAttribute('aria-hidden', 'true');
             });
             document.dispatchEvent(new CustomEvent('evortix:dashboard-welcome-complete'));
-        }, 800);
+            return true;
+    };
+    if (evortixEnabled && evortixRoleDashboardSummary && botFloat) {
+        window.setTimeout(showEvortixRoleDashboardSummary, 900);
+        document.addEventListener('chatbot:controllable-robot-ready', () => {
+            window.setTimeout(showEvortixRoleDashboardSummary, 160);
+        }, { once: true });
     }
 
     if (botFloat && evortixSoundEnabled) {
@@ -1432,7 +1438,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 botFloat.classList.remove('is-leaving-bed');
                 botFloat.classList.remove('is-preparing-speech');
                 botFloat.classList.add('is-speaking');
-                typeBotSpeech(260);
+                if (!showEvortixRoleDashboardSummary()) {
+                    typeBotSpeech(260);
+                }
                 botTransitionTimer = window.setTimeout(function () {
                     botFloat.classList.remove('is-speaking');
                 }, 520);
