@@ -65,7 +65,7 @@ if (function_exists('isLoggedIn') && isLoggedIn()) {
 
 $evortixRequestPath = (string) parse_url((string) ($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH);
 if (
-    preg_match('#/modules/(admin|sales|architect|sul|qa|expert|developer)/dashboard\.php$#', $evortixRequestPath, $evortixDashboardMatch)
+    preg_match('#/modules/(admin|sales|architect|sul|qa|expert|developer)/dashboard(?:\.php)?/?$#', $evortixRequestPath, $evortixDashboardMatch)
 ) {
     try {
         $summaryUser = getCurrentUser();
@@ -554,7 +554,7 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 <script>
 (() => {
-    const dashboardMatch = window.location.pathname.match(/\/modules\/(admin|sales|architect|qa|expert|developer)\/dashboard\.php$/i);
+    const dashboardMatch = window.location.pathname.match(/\/modules\/(admin|sales|architect|qa|expert|developer)\/dashboard(?:\.php)?\/?$/i);
     if (!dashboardMatch) return;
 
     const role = dashboardMatch[1].toLowerCase();
@@ -651,7 +651,7 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 <script>
 (() => {
-    const isRoleDashboard = () => /\/modules\/(admin|sales|architect|qa|expert|developer)\/dashboard\.php$/i.test(window.location.pathname);
+    const isRoleDashboard = () => /\/modules\/(admin|sales|architect|qa|expert|developer)\/dashboard(?:\.php)?\/?$/i.test(window.location.pathname);
     if (!isRoleDashboard()) return;
 
     const escapeEvortixText = value => {
@@ -693,7 +693,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const announceRoleDashboard = () => {
-        const roleMatch = window.location.pathname.match(/\/modules\/([^/]+)\/dashboard\.php$/i);
+        const roleMatch = window.location.pathname.match(/\/modules\/([^/]+)\/dashboard(?:\.php)?\/?$/i);
         const role = (roleMatch?.[1] || 'dashboard').toLowerCase();
         const float = document.getElementById('chat-bot-float');
         const speech = float?.querySelector('.chat-bot-speech');
@@ -1352,9 +1352,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const evortixRoleDashboardSummary = <?php echo json_encode($evortixRoleDashboardSummary, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
     const buildDomDashboardSummary = function () {
-        const dashboardMatch = window.location.pathname.match(/\/modules\/([^/]+)\/dashboard\.php$/i);
+        const dashboardMatch = window.location.pathname.match(/\/modules\/([^/]+)\/dashboard(?:\.php)?\/?$/i);
         if (!dashboardMatch) return null;
-        if (/\/modules\/sul\/dashboard\.php$/i.test(window.location.pathname)) return null;
+        if (/\/modules\/sul\/dashboard(?:\.php)?\/?$/i.test(window.location.pathname)) return null;
         const dashboardRole = (dashboardMatch[1] || 'dashboard').toLowerCase();
         const roleNames = {
             admin: 'Administration',
@@ -1682,8 +1682,8 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     const forceEvortixDashboardOverview = function () {
-        const dashboardMatch = window.location.pathname.match(/\/modules\/([^/]+)\/dashboard\.php$/i);
-        if (!dashboardMatch || /\/modules\/sul\/dashboard\.php$/i.test(window.location.pathname)) return false;
+        const dashboardMatch = window.location.pathname.match(/\/modules\/([^/]+)\/dashboard(?:\.php)?\/?$/i);
+        if (!dashboardMatch || /\/modules\/sul\/dashboard(?:\.php)?\/?$/i.test(window.location.pathname)) return false;
         if (!evortixEnabled || !botFloat) return false;
         const speech = botFloat.querySelector('.chat-bot-speech');
         if (!speech) return false;
@@ -2565,7 +2565,7 @@ document.addEventListener('DOMContentLoaded', function () {
 </script>
 <script>
 (() => {
-    const dashboardMatch = window.location.pathname.match(/\/modules\/(admin|sales|architect|qa|expert|developer)\/dashboard\.php$/i);
+    const dashboardMatch = window.location.pathname.match(/\/modules\/(admin|sales|architect|qa|expert|developer)\/dashboard(?:\.php)?\/?$/i);
     if (!dashboardMatch) return;
 
     const role = dashboardMatch[1].toLowerCase();
