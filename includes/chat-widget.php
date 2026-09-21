@@ -1301,9 +1301,27 @@ document.addEventListener('DOMContentLoaded', function () {
             return true;
     };
     if (evortixEnabled && activeEvortixRoleDashboardSummary && botFloat) {
-        const scheduleDashboardSummary = function (delay = 0, force = false) {
-            window.setTimeout(() => showEvortixRoleDashboardSummary({ force }), delay);
+        const openEvortixDashboardAnnouncer = function (force = false) {
+            clearTimeout(botTransitionTimer);
+            clearTimeout(botTypeTimer);
+            botFloat.hidden = false;
+            botFloat.setAttribute('aria-hidden', 'false');
+            botFloat.classList.remove('is-returning-bed', 'is-preparing-speech');
+            botFloat.classList.add('is-leaving-bed', 'is-speaking');
+            window.chatBotWidgetRobot?.wake?.();
+            window.chatBotFloatRobot?.setMode?.('standing');
+            window.setTimeout(() => {
+                botFloat.classList.remove('is-leaving-bed');
+                showEvortixRoleDashboardSummary({ force });
+                window.chatBotFloatRobot?.point?.('left', 6500);
+                window.setTimeout(() => botFloat.classList.remove('is-speaking'), 620);
+            }, 180);
         };
+        const scheduleDashboardSummary = function (delay = 0, force = false) {
+            window.setTimeout(() => openEvortixDashboardAnnouncer(force), delay);
+        };
+        document.body.classList.add('evortix-dashboard-announcer-ready');
+        scheduleDashboardSummary(240, true);
         scheduleDashboardSummary(650, true);
         scheduleDashboardSummary(1600, false);
         document.addEventListener('chatbot:controllable-robot-ready', () => {
@@ -1312,7 +1330,7 @@ document.addEventListener('DOMContentLoaded', function () {
         window.addEventListener('pageshow', () => scheduleDashboardSummary(260, true));
         const dashboardSpeechObserver = new MutationObserver(() => {
             const speech = botFloat.querySelector('.chat-bot-speech');
-            if (!speech || speech.hidden || botFloat.hidden) return;
+            if (!speech || speech.hidden) return;
             if (speech.classList.contains('evortix-role-dashboard-summary')) return;
             if (Date.now() - evortixDashboardSummaryLastRender < 400) return;
             const text = speech.textContent.replace(/\s+/g, ' ').trim().toLowerCase();
