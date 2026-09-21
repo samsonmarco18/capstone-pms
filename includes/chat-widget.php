@@ -1110,51 +1110,143 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const evortixRoleDashboardSummary = <?php echo json_encode($evortixRoleDashboardSummary, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
     const buildDomDashboardSummary = function () {
-        if (!/\/modules\/[^/]+\/dashboard\.php$/i.test(window.location.pathname)) return null;
+        const dashboardMatch = window.location.pathname.match(/\/modules\/([^/]+)\/dashboard\.php$/i);
+        if (!dashboardMatch) return null;
         if (/\/modules\/sul\/dashboard\.php$/i.test(window.location.pathname)) return null;
+        const dashboardRole = (dashboardMatch[1] || 'dashboard').toLowerCase();
+        const roleNames = {
+            admin: 'Administration',
+            sales: 'Sales',
+            architect: 'Architecture',
+            qa: 'QA',
+            expert: 'Expert',
+            developer: 'Developer'
+        };
+        const readNumber = text => {
+            const number = String(text || '').match(/-?\d+/);
+            return number ? Number(number[0]) : 0;
+        };
 
-        const statCards = [...document.querySelectorAll('.admin-stat-card, .stat-card-modern, .role-stats-row .card, .stats-grid .card')]
+        const statCards = [...document.querySelectorAll('.admin-stat-card, .admin-metric-card, .stat-card-modern, .dashboard-stat-card, .role-stats-row .card, .stats-grid .card, .admin-stats-grid > *, .stats-grid > *')]
             .map(card => {
-                const label = card.querySelector('.admin-stat-label, .stat-label, .text-uppercase, h6, small')?.textContent?.replace(/\s+/g, ' ').trim() || '';
-                const value = card.querySelector('.admin-stat-value, .stat-value, .h1, h3, h2')?.textContent?.replace(/\s+/g, ' ').trim() || '';
-                const meta = card.querySelector('.admin-stat-sub, .stat-description, p, small:last-child')?.textContent?.replace(/\s+/g, ' ').trim() || '';
-                return label && value ? { name: label, meta: `${value}${meta ? ` - ${meta}` : ''}`, url: '' } : null;
+                const label = card.querySelector('.admin-stat-label, .stat-label, .text-uppercase, h6, small, [class*="label"], [class*="title"]')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+                const value = card.querySelector('.admin-stat-value, .stat-value, .h1, h3, h2, [class*="value"], [class*="count"], .display-4')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+                const meta = card.querySelector('.admin-stat-sub, .stat-description, p, small:last-child, [class*="meta"], [class*="desc"]')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+                const normalizedLabel = label || card.getAttribute('aria-label') || '';
+                return normalizedLabel && value ? {
+                    name: normalizedLabel,
+                    meta: `${value}${meta && meta !== normalizedLabel && meta !== value ? ` - ${meta}` : ''}`,
+                    value: readNumber(value),
+                    url: ''
+                } : null;
             })
             .filter(Boolean)
             .slice(0, 8);
 
-        if (!statCards.length) return null;
+        const findStat = patterns => statCards.find(card => patterns.some(pattern => pattern.test(card.name))) || null;
+        const makeGroup = (key, label, icon, listTitle, empty, patterns, entityLabel = 'signal') => {
+            const matched = patterns.length ? statCards.filter(card => patterns.some(pattern => pattern.test(card.name))) : statCards;
+            const items = matched.map(card => ({ name: card.name, meta: card.meta, url: card.url || '#' }));
+            return {
+                label,
+                icon,
+                total: matched.reduce((sum, card) => sum + (Number.isFinite(card.value) ? card.value : 0), 0),
+                list_title: listTitle,
+                entity_label: entityLabel,
+                empty,
+                items
+            };
+        };
+
+        if (dashboardRole === 'admin') {
+            const renewals = makeGroup(
+                'renewals',
+                'Renewals',
+                'fa-clock-rotate-left',
+                'Renewal Watch',
+                'No technology stack is expiring in the next 30 days.',
+                [/technolog/i, /service/i, /active service/i],
+                'technology'
+            );
+            const login = makeGroup(
+                'login',
+                'Login',
+                'fa-user-lock',
+                'Login Attack Watch',
+                'No brute-force lockout pattern detected in the last 15 minutes.',
+                [/security/i, /audit/i, /login/i],
+                'signal'
+            );
+            const recovery = makeGroup(
+                'recovery',
+                'Recovery',
+                'fa-heart-pulse',
+                'Password Recovery',
+                'No password recovery requests are pending.',
+                [/password/i, /recovery/i],
+                'request'
+            );
+            return {
+                variant: 'tabbed',
+                title: 'Live Overview',
+                intro: 'Administration overview is ready. Review renewals, login security, and recovery requests.',
+                tab_order: ['renewals', 'login', 'recovery'],
+                tab_groups: { renewals, login, recovery },
+                metrics: []
+            };
+        }
+
+        const relatedTabsByRole = {
+            sales: [
+                ['projects', 'Projects', 'fa-diagram-project', 'Project Watch', 'No project signals need attention.', [/project/i], 'project'],
+                ['clients', 'Clients', 'fa-users', 'Client Watch', 'No client signals need attention.', [/client/i], 'client'],
+                ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Watch', 'No overdue projects need attention.', [/overdue/i], 'project']
+            ],
+            architect: [
+                ['review', 'Review', 'fa-folder-open', 'Architecture Review', 'No architecture reviews need attention.', [/review|pending/i], 'project'],
+                ['progress', 'Progress', 'fa-gears', 'Planning Progress', 'No planning work needs attention.', [/progress|active/i], 'project'],
+                ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Watch', 'No overdue architecture work was detected.', [/overdue/i], 'item']
+            ],
+            qa: [
+                ['testing', 'Testing', 'fa-vial', 'Testing Queue', 'No tasks are waiting for QA.', [/testing|ready/i], 'task'],
+                ['failed', 'Failed', 'fa-circle-xmark', 'Failed Checks', 'No failed QA checks need attention.', [/failed/i], 'task'],
+                ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue QA', 'No overdue QA items were detected.', [/overdue/i], 'task']
+            ],
+            expert: [
+                ['tasks', 'Tasks', 'fa-list-check', 'Assigned Tasks', 'No assigned tasks need attention.', [/assigned|task/i], 'task'],
+                ['estimate', 'Estimate', 'fa-calculator', 'Estimation Queue', 'No estimation items need attention.', [/estimate/i], 'task'],
+                ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Work', 'No overdue expert work was detected.', [/overdue/i], 'task']
+            ],
+            developer: [
+                ['tasks', 'Tasks', 'fa-list-check', 'Assigned Tasks', 'No assigned tasks need attention.', [/assigned|task/i], 'task'],
+                ['progress', 'Progress', 'fa-play', 'In Progress', 'No active in-progress tasks were detected.', [/progress|active/i], 'task'],
+                ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Work', 'No overdue developer work was detected.', [/overdue/i], 'task']
+            ]
+        };
+        const tabDefinitions = relatedTabsByRole[dashboardRole] || [
+            ['overview', 'Overview', 'fa-chart-line', 'Dashboard Signals', 'No dashboard signals are available.', [], 'signal'],
+            ['attention', 'Attention', 'fa-triangle-exclamation', 'Items Needing Attention', 'No urgent dashboard items were detected.', [/overdue|pending|failed|risk/i], 'item'],
+            ['activity', 'Activity', 'fa-wave-square', 'Recent Activity', 'No recent dashboard activity was detected.', [/active|completed|total/i], 'item']
+        ];
+        const tabGroups = {};
+        tabDefinitions.forEach(([key, label, icon, listTitle, empty, patterns, entityLabel]) => {
+            tabGroups[key] = makeGroup(key, label, icon, listTitle, empty, patterns, entityLabel);
+        });
 
         const roleLabel = document.querySelector('[class*="overview-badge"], .sidebar-role, .role-label')?.textContent?.replace(/\s+/g, ' ').trim() || 'Dashboard';
         return {
             variant: 'tabbed',
             title: 'Live Overview',
-            intro: `${roleLabel} overview is ready. Review the current dashboard signals.`,
-            tab_order: ['overview', 'attention'],
-            tab_groups: {
-                overview: {
-                    label: 'Overview',
-                    icon: 'fa-chart-line',
-                    total: statCards.length,
-                    list_title: 'Dashboard signals',
-                    entity_label: 'signal',
-                    empty: 'No dashboard signals are available.',
-                    items: statCards
-                },
-                attention: {
-                    label: 'Attention',
-                    icon: 'fa-triangle-exclamation',
-                    total: 0,
-                    list_title: 'Items needing attention',
-                    entity_label: 'item',
-                    empty: 'No urgent dashboard items were detected.',
-                    items: []
-                }
-            },
+            intro: `${roleNames[dashboardRole] || roleLabel} overview is ready. Review the current dashboard signals.`,
+            tab_order: tabDefinitions.map(tab => tab[0]),
+            tab_groups: tabGroups,
             metrics: []
         };
     };
-    const activeEvortixRoleDashboardSummary = evortixRoleDashboardSummary || buildDomDashboardSummary();
+    const domEvortixRoleDashboardSummary = buildDomDashboardSummary();
+    const activeEvortixRoleDashboardSummary = evortixRoleDashboardSummary?.variant === 'tabbed'
+        ? evortixRoleDashboardSummary
+        : (domEvortixRoleDashboardSummary || evortixRoleDashboardSummary);
     let evortixDashboardSummaryLastRender = 0;
     const showEvortixRoleDashboardSummary = function (options = {}) {
         if (!evortixEnabled || !activeEvortixRoleDashboardSummary || !botFloat) return false;
