@@ -1351,6 +1351,7 @@ document.addEventListener('DOMContentLoaded', function () {
     };
 
     const evortixRoleDashboardSummary = <?php echo json_encode($evortixRoleDashboardSummary, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+    window.__evortixRoleDashboardSummary = evortixRoleDashboardSummary;
     const buildDomDashboardSummary = function () {
         const dashboardMatch = window.location.pathname.match(/\/modules\/([^/]+)\/dashboard(?:\.php)?\/?$/i);
         if (!dashboardMatch) return null;
@@ -1491,7 +1492,7 @@ document.addEventListener('DOMContentLoaded', function () {
         : (domEvortixRoleDashboardSummary || evortixRoleDashboardSummary);
     let evortixDashboardSummaryLastRender = 0;
     const showEvortixRoleDashboardSummary = function (options = {}) {
-        if (!evortixEnabled || !activeEvortixRoleDashboardSummary || !botFloat) return false;
+        if (!evortixEnabled || !activeEvortixRoleDashboardSummary || !botFloat || window.__evortixDashboardAutoRendered) return false;
             const speech = botFloat.querySelector('.chat-bot-speech');
             if (!speech) return false;
             if (speech.dataset.dashboardSummaryDismissed === 'true' && !options.force) return false;
@@ -1634,7 +1635,7 @@ document.addEventListener('DOMContentLoaded', function () {
             document.dispatchEvent(new CustomEvent('evortix:dashboard-welcome-complete'));
             return true;
     };
-    if (evortixEnabled && activeEvortixRoleDashboardSummary && botFloat) {
+    if (false && evortixEnabled && activeEvortixRoleDashboardSummary && botFloat) {
         const openEvortixDashboardAnnouncer = function (force = false) {
             clearTimeout(botTransitionTimer);
             clearTimeout(botTypeTimer);
@@ -1684,9 +1685,10 @@ document.addEventListener('DOMContentLoaded', function () {
     const forceEvortixDashboardOverview = function () {
         const dashboardMatch = window.location.pathname.match(/\/modules\/([^/]+)\/dashboard(?:\.php)?\/?$/i);
         if (!dashboardMatch || /\/modules\/sul\/dashboard(?:\.php)?\/?$/i.test(window.location.pathname)) return false;
-        if (!evortixEnabled || !botFloat) return false;
+        if (!evortixEnabled || !botFloat || window.__evortixDashboardAutoRendered) return false;
         const speech = botFloat.querySelector('.chat-bot-speech');
         if (!speech) return false;
+        if (speech.dataset.evortixDashboardDismissed === 'true') return false;
 
         const role = (dashboardMatch[1] || 'dashboard').toLowerCase();
         const escapeHtml = value => {
@@ -1819,7 +1821,7 @@ document.addEventListener('DOMContentLoaded', function () {
         document.dispatchEvent(new CustomEvent('evortix:dashboard-welcome-complete'));
         return true;
     };
-    if (evortixEnabled && botFloat) {
+    if (false && evortixEnabled && botFloat) {
         [350, 900, 1800, 3200].forEach(delay => window.setTimeout(forceEvortixDashboardOverview, delay));
         document.addEventListener('chatbot:controllable-robot-ready', () => window.setTimeout(forceEvortixDashboardOverview, 120), { once: true });
     }
@@ -2586,19 +2588,81 @@ document.addEventListener('DOMContentLoaded', function () {
         const float = document.getElementById('chat-bot-float');
         const speech = float?.querySelector('.chat-bot-speech');
         if (!float || !speech) return false;
+        if (speech.dataset.evortixDashboardDismissed === 'true' || window.__evortixDashboardAutoRendered) return false;
 
-        const tabs = tabsByRole[role] || tabsByRole.sales;
+        const serverSummary = window.__evortixRoleDashboardSummary?.variant === 'tabbed'
+            ? window.__evortixRoleDashboardSummary
+            : null;
+        const serverGroups = serverSummary?.tab_groups || {};
+        const serverOrder = Array.isArray(serverSummary?.tab_order)
+            ? serverSummary.tab_order.filter(key => serverGroups[key])
+            : Object.keys(serverGroups);
+        const tabs = serverOrder.length
+            ? serverOrder.map(key => {
+                const group = serverGroups[key] || {};
+                return [
+                    key,
+                    group.label || key,
+                    group.icon || 'fa-circle-info',
+                    group.list_title || group.label || 'Status',
+                    group.empty || 'No items need attention.',
+                    Array.isArray(group.items) ? group.items : []
+                ];
+            })
+            : (tabsByRole[role] || tabsByRole.sales);
         const cards = [...document.querySelectorAll('.admin-stat-card, .admin-metric-card, .stat-card-modern, .dashboard-stat-card, .stats-grid > *, .role-stats-row .card')]
             .map(card => {
                 const label = card.querySelector('.admin-stat-label, .stat-label, h6, small, [class*="label"], [class*="title"]')?.textContent?.replace(/\s+/g, ' ').trim() || '';
                 const value = card.querySelector('.admin-stat-value, .stat-value, h2, h3, .h1, .display-4, [class*="value"], [class*="count"]')?.textContent?.replace(/\s+/g, ' ').trim() || '';
                 const meta = card.querySelector('.admin-stat-sub, .stat-description, p, small:last-child, [class*="meta"], [class*="desc"]')?.textContent?.replace(/\s+/g, ' ').trim() || '';
-                return label && value ? { label, meta: `${value}${meta && meta !== label && meta !== value ? ` - ${meta}` : ''}` } : null;
+                const numericValue = Number((value.match(/-?\d+/) || ['0'])[0]);
+                return label && value ? { label, meta: `${value}${meta && meta !== label && meta !== value ? ` - ${meta}` : ''}`, value: numericValue } : null;
             })
             .filter(Boolean)
             .slice(0, 6);
+        const fallbackPatterns = {
+            admin: {
+                renewals: [/expir|renew|technolog|service/i],
+                login: [/login|security|audit|attack/i],
+                recovery: [/password|recovery|reset/i]
+            },
+            sales: {
+                projects: [/project/i],
+                clients: [/client/i],
+                overdue: [/overdue|late|delay/i]
+            },
+            architect: {
+                review: [/review|pending/i],
+                progress: [/progress|active/i],
+                overdue: [/overdue|late|delay/i]
+            },
+            qa: {
+                testing: [/testing|ready/i],
+                failed: [/failed|revision/i],
+                overdue: [/overdue|late|delay/i]
+            },
+            expert: {
+                tasks: [/assigned|task/i],
+                estimate: [/estimate|estimation/i],
+                overdue: [/overdue|late|delay/i]
+            },
+            developer: {
+                tasks: [/assigned|task/i],
+                progress: [/progress|active/i],
+                overdue: [/overdue|late|delay/i]
+            }
+        };
         const renderTab = tab => {
-            const items = cards.slice(0, 3);
+            const serverItems = Array.isArray(tab[5]) ? tab[5].map(item => ({
+                label: item.name || item.title || 'Item',
+                meta: item.meta || '',
+                url: item.url || item.action_url || '#'
+            })) : [];
+            const patterns = fallbackPatterns[role]?.[tab[0]] || [];
+            const fallbackItems = patterns.length
+                ? cards.filter(card => card.value > 0 && patterns.some(pattern => pattern.test(card.label)))
+                : cards.filter(card => card.value > 0);
+            const items = (serverSummary ? serverItems : fallbackItems).slice(0, 5);
             speech.querySelectorAll('[data-evortix-tail-tab]').forEach(button => {
                 const active = button.dataset.evortixTailTab === tab[0];
                 button.classList.toggle('is-active', active);
@@ -2608,7 +2672,7 @@ document.addEventListener('DOMContentLoaded', function () {
             speech.querySelector('[data-evortix-tail-title]').textContent = tab[3];
             speech.querySelector('[data-evortix-tail-count]').textContent = `${items.length} item${items.length === 1 ? '' : 's'}`;
             speech.querySelector('[data-evortix-tail-list]').innerHTML = items.length
-                ? items.map(item => `<a class="evortix-project-link" href="#"><span class="evortix-project-link-copy"><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.meta)}</small></span><i class="fas fa-arrow-right" aria-hidden="true"></i></a>`).join('')
+                ? items.map(item => `<a class="evortix-project-link" href="${escapeHtml(item.url || '#')}"><span class="evortix-project-link-copy"><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.meta)}</small></span><i class="fas fa-arrow-right" aria-hidden="true"></i></a>`).join('')
                 : `<div class="evortix-project-list-empty">${escapeHtml(tab[4])}</div>`;
         };
 
@@ -2620,15 +2684,18 @@ document.addEventListener('DOMContentLoaded', function () {
         speech.style.pointerEvents = 'auto';
         speech.innerHTML = `
             <div class="evortix-role-summary-head is-compact"><strong class="evortix-role-summary-title">Live Overview</strong><button type="button" class="evortix-role-summary-close" aria-label="Dismiss dashboard overview"><i class="fas fa-xmark"></i></button></div>
-            <div class="evortix-role-summary-intro is-compact">${escapeHtml(role.charAt(0).toUpperCase() + role.slice(1))} overview is ready. Review the current dashboard signals.</div>
-            <div class="evortix-project-status-tabs" role="tablist" aria-label="Evortix dashboard status">${tabs.map(tab => `<button type="button" class="evortix-project-status-tab" data-evortix-tail-tab="${escapeHtml(tab[0])}" role="tab" aria-selected="false"><i class="fas ${escapeHtml(tab[2])}" aria-hidden="true"></i><span>${escapeHtml(tab[1])}</span><strong>0</strong></button>`).join('')}</div>
+            <div class="evortix-role-summary-intro is-compact">${escapeHtml(serverSummary?.intro || `${role.charAt(0).toUpperCase() + role.slice(1)} overview is ready. Review the needed actions.`)}</div>
+            <div class="evortix-project-status-tabs" role="tablist" aria-label="Evortix dashboard status">${tabs.map(tab => `<button type="button" class="evortix-project-status-tab" data-evortix-tail-tab="${escapeHtml(tab[0])}" role="tab" aria-selected="false"><i class="fas ${escapeHtml(tab[2])}" aria-hidden="true"></i><span>${escapeHtml(tab[1])}</span><strong>${escapeHtml(serverSummary ? (Array.isArray(tab[5]) ? tab[5].length : 0) : 0)}</strong></button>`).join('')}</div>
             <div class="evortix-project-list-head"><strong data-evortix-tail-title></strong><span data-evortix-tail-count></span></div>
             <div class="evortix-project-list" data-evortix-tail-list></div>`;
         speech.querySelectorAll('[data-evortix-tail-tab]').forEach(button => {
             const tab = tabs.find(item => item[0] === button.dataset.evortixTailTab) || tabs[0];
             button.addEventListener('click', () => renderTab(tab));
         });
-        renderTab(tabs[0]);
+        const initialTab = serverSummary
+            ? (tabs.find(tab => Array.isArray(tab[5]) && tab[5].length > 0) || tabs[0])
+            : tabs[0];
+        renderTab(initialTab);
 
         float.hidden = false;
         float.removeAttribute('hidden');
@@ -2636,11 +2703,14 @@ document.addEventListener('DOMContentLoaded', function () {
         float.style.display = 'block';
         float.classList.remove('is-returning-bed', 'is-preparing-speech');
         float.classList.add('is-speaking');
+        window.__evortixDashboardAutoRendered = true;
         window.chatBotWidgetRobot?.setMode?.('empty-bed');
         window.chatBotFloatRobot?.setMode?.('standing');
         window.setTimeout(() => float.classList.remove('is-speaking'), 700);
         speech.querySelector('.evortix-role-summary-close')?.addEventListener('click', event => {
             event.stopPropagation();
+            speech.dataset.evortixDashboardDismissed = 'true';
+            window.__evortixDashboardAutoRendered = true;
             speech.hidden = true;
             speech.setAttribute('aria-hidden', 'true');
         });
