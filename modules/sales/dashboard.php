@@ -8,7 +8,7 @@ requireRole('sales');
 $conn = getConnection();
 $user = getCurrentUser();
 $currentUserId = (int) $user['id'];
-$showEvortixLoginWelcome = true;
+$showEvortixLoginWelcome = false;
 unset($_SESSION['evortix_sales_dashboard_welcome_pending']);
 $hasProjectStartTime = dbColumnExists($conn, 'projects', 'timeline_start_time');
 $hasProjectEndTime = dbColumnExists($conn, 'projects', 'timeline_end_time');

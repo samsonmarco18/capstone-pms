@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 $isSulRoute = str_contains($_SERVER['REQUEST_URI'] ?? '', '/modules/sul/');
 $evortixProjectTeamNotification = null;
 $evortixSulRevisionNotification = null;
@@ -65,7 +65,7 @@ if (function_exists('isLoggedIn') && isLoggedIn()) {
 
 $evortixRequestPath = (string) parse_url((string) ($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH);
 if (
-    preg_match('#/modules/(admin|architect|qa|expert|developer)/dashboard\.php$#', $evortixRequestPath, $evortixDashboardMatch)
+    preg_match('#/modules/(admin|sales|architect|sul|qa|expert|developer)/dashboard\.php$#', $evortixRequestPath, $evortixDashboardMatch)
 ) {
     try {
         $summaryUser = getCurrentUser();
@@ -1108,8 +1108,54 @@ document.addEventListener('DOMContentLoaded', function () {
     };
 
     const evortixRoleDashboardSummary = <?php echo json_encode($evortixRoleDashboardSummary, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+    const buildDomDashboardSummary = function () {
+        if (!/\/modules\/[^/]+\/dashboard\.php$/i.test(window.location.pathname)) return null;
+        if (/\/modules\/sul\/dashboard\.php$/i.test(window.location.pathname)) return null;
+
+        const statCards = [...document.querySelectorAll('.admin-stat-card, .stat-card-modern, .role-stats-row .card, .stats-grid .card')]
+            .map(card => {
+                const label = card.querySelector('.admin-stat-label, .stat-label, .text-uppercase, h6, small')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+                const value = card.querySelector('.admin-stat-value, .stat-value, .h1, h3, h2')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+                const meta = card.querySelector('.admin-stat-sub, .stat-description, p, small:last-child')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+                return label && value ? { name: label, meta: `${value}${meta ? ` - ${meta}` : ''}`, url: '' } : null;
+            })
+            .filter(Boolean)
+            .slice(0, 8);
+
+        if (!statCards.length) return null;
+
+        const roleLabel = document.querySelector('[class*="overview-badge"], .sidebar-role, .role-label')?.textContent?.replace(/\s+/g, ' ').trim() || 'Dashboard';
+        return {
+            variant: 'tabbed',
+            title: 'Live Overview',
+            intro: `${roleLabel} overview is ready. Review the current dashboard signals.`,
+            tab_order: ['overview', 'attention'],
+            tab_groups: {
+                overview: {
+                    label: 'Overview',
+                    icon: 'fa-chart-line',
+                    total: statCards.length,
+                    list_title: 'Dashboard signals',
+                    entity_label: 'signal',
+                    empty: 'No dashboard signals are available.',
+                    items: statCards
+                },
+                attention: {
+                    label: 'Attention',
+                    icon: 'fa-triangle-exclamation',
+                    total: 0,
+                    list_title: 'Items needing attention',
+                    entity_label: 'item',
+                    empty: 'No urgent dashboard items were detected.',
+                    items: []
+                }
+            },
+            metrics: []
+        };
+    };
+    const activeEvortixRoleDashboardSummary = evortixRoleDashboardSummary || buildDomDashboardSummary();
     const showEvortixRoleDashboardSummary = function () {
-        if (!evortixEnabled || !evortixRoleDashboardSummary || !botFloat) return false;
+        if (!evortixEnabled || !activeEvortixRoleDashboardSummary || !botFloat) return false;
             const speech = botFloat.querySelector('.chat-bot-speech');
             if (!speech) return false;
             const escapeSummary = value => {
@@ -1117,17 +1163,16 @@ document.addEventListener('DOMContentLoaded', function () {
                 node.textContent = String(value ?? '');
                 return node.innerHTML;
             };
-            const metricMarkup = (evortixRoleDashboardSummary.metrics || []).map(metric => `
+            const metricMarkup = (activeEvortixRoleDashboardSummary.metrics || []).map(metric => `
                 <div class="evortix-role-summary-metric${metric.overdue ? ' is-overdue' : ''}">
                     <div class="evortix-role-summary-top"><i class="fas ${escapeSummary(metric.icon)}"></i><strong class="evortix-role-summary-value">${escapeSummary(metric.value)}</strong></div>
                     <div class="evortix-role-summary-label">${escapeSummary(metric.label)}</div>
                     <div class="evortix-role-summary-meta">${escapeSummary(metric.meta)}</div>
                 </div>`).join('');
-            const isCompactSummary = evortixRoleDashboardSummary.variant === 'compact';
-            const isTabbedSummary = evortixRoleDashboardSummary.variant === 'tabbed';
-            const compactItem = evortixRoleDashboardSummary.item || {};
-            const compactItems = Array.isArray(evortixRoleDashboardSummary.items) && evortixRoleDashboardSummary.items.length
-                ? evortixRoleDashboardSummary.items
+            const isServerTabbedSummary = activeEvortixRoleDashboardSummary.variant === 'tabbed';
+            const compactItem = activeEvortixRoleDashboardSummary.item || {};
+            const compactItems = Array.isArray(activeEvortixRoleDashboardSummary.items) && activeEvortixRoleDashboardSummary.items.length
+                ? activeEvortixRoleDashboardSummary.items
                 : [compactItem];
             const compactItemsMarkup = compactItems.map(item => {
                 const itemTag = item.action_url ? 'a' : 'div';
@@ -1139,14 +1184,33 @@ document.addEventListener('DOMContentLoaded', function () {
                     ${item.action_url ? '<i class="fas fa-arrow-right evortix-role-summary-item-arrow" aria-hidden="true"></i>' : ''}
                 </${itemTag}>`;
             }).join('');
-            const tabGroups = evortixRoleDashboardSummary.tab_groups || {};
-            const tabOrder = Array.isArray(evortixRoleDashboardSummary.tab_order)
-                ? evortixRoleDashboardSummary.tab_order.filter(key => tabGroups[key])
+            const compactTabGroups = activeEvortixRoleDashboardSummary.variant === 'compact' ? {
+                overview: {
+                    label: compactItem.title || 'Overview',
+                    icon: compactItem.icon || 'fa-circle-info',
+                    total: compactItems.length,
+                    list_title: compactItem.title || 'Live Overview',
+                    entity_label: 'item',
+                    empty: 'No dashboard items need attention.',
+                    items: compactItems.map(item => ({
+                        name: item.title || 'Current status',
+                        meta: item.meta || '',
+                        url: item.action_url || ''
+                    }))
+                }
+            } : {};
+            const tabGroups = isServerTabbedSummary
+                ? (activeEvortixRoleDashboardSummary.tab_groups || {})
+                : compactTabGroups;
+            const isTabbedSummary = isServerTabbedSummary || Object.keys(compactTabGroups).length > 0;
+            const isCompactSummary = false;
+            const tabOrder = Array.isArray(activeEvortixRoleDashboardSummary.tab_order)
+                ? activeEvortixRoleDashboardSummary.tab_order.filter(key => tabGroups[key])
                 : Object.keys(tabGroups);
             const initialTab = tabOrder.find(key => Number(tabGroups[key]?.total || 0) > 0) || tabOrder[0] || '';
             const tabbedMarkup = isTabbedSummary ? `
-                <div class="evortix-role-summary-head is-compact"><strong class="evortix-role-summary-title">${escapeSummary(evortixRoleDashboardSummary.title)}</strong><button type="button" class="evortix-role-summary-close" aria-label="Dismiss dashboard overview"><i class="fas fa-xmark"></i></button></div>
-                <div class="evortix-role-summary-intro is-compact">${escapeSummary(evortixRoleDashboardSummary.intro)}</div>
+                <div class="evortix-role-summary-head is-compact"><strong class="evortix-role-summary-title">${escapeSummary(activeEvortixRoleDashboardSummary.title)}</strong><button type="button" class="evortix-role-summary-close" aria-label="Dismiss dashboard overview"><i class="fas fa-xmark"></i></button></div>
+                <div class="evortix-role-summary-intro is-compact">${escapeSummary(activeEvortixRoleDashboardSummary.intro)}</div>
                 <div class="evortix-project-status-tabs" role="tablist" aria-label="Evortix dashboard status">
                     ${tabOrder.map(key => {
                         const group = tabGroups[key] || {};
@@ -1169,13 +1233,13 @@ document.addEventListener('DOMContentLoaded', function () {
             speech.setAttribute('aria-hidden', 'false');
             speech.setAttribute('role', 'status');
             speech.innerHTML = isTabbedSummary ? tabbedMarkup : (isCompactSummary ? `
-                <div class="evortix-role-summary-head is-compact"><strong class="evortix-role-summary-title">${escapeSummary(evortixRoleDashboardSummary.title)}</strong><button type="button" class="evortix-role-summary-close" aria-label="Dismiss dashboard overview"><i class="fas fa-xmark"></i></button></div>
-                <div class="evortix-role-summary-intro is-compact">${escapeSummary(evortixRoleDashboardSummary.intro)}</div>
+                <div class="evortix-role-summary-head is-compact"><strong class="evortix-role-summary-title">${escapeSummary(activeEvortixRoleDashboardSummary.title)}</strong><button type="button" class="evortix-role-summary-close" aria-label="Dismiss dashboard overview"><i class="fas fa-xmark"></i></button></div>
+                <div class="evortix-role-summary-intro is-compact">${escapeSummary(activeEvortixRoleDashboardSummary.intro)}</div>
                 ${compactItemsMarkup}` : `
-                <div class="evortix-role-summary-head"><div><div class="evortix-role-summary-eyebrow">Live overview</div><strong class="evortix-role-summary-title">${escapeSummary(evortixRoleDashboardSummary.title)}</strong></div><button type="button" class="evortix-role-summary-close" aria-label="Dismiss dashboard overview"><i class="fas fa-xmark"></i></button></div>
+                <div class="evortix-role-summary-head"><div><div class="evortix-role-summary-eyebrow">Live overview</div><strong class="evortix-role-summary-title">${escapeSummary(activeEvortixRoleDashboardSummary.title)}</strong></div><button type="button" class="evortix-role-summary-close" aria-label="Dismiss dashboard overview"><i class="fas fa-xmark"></i></button></div>
                 <div class="evortix-role-summary-intro">Here is the information most relevant to your role right now.</div>
                 <div class="evortix-role-summary-grid">${metricMarkup}</div>
-                ${evortixRoleDashboardSummary.suggestion ? `<div class="evortix-role-planning-suggestion"><div class="evortix-role-planning-eyebrow">${escapeSummary(evortixRoleDashboardSummary.suggestion.eyebrow)}</div><strong class="evortix-role-planning-title">${escapeSummary(evortixRoleDashboardSummary.suggestion.title)}</strong><p class="evortix-role-planning-copy">${escapeSummary(evortixRoleDashboardSummary.suggestion.message)}</p>${evortixRoleDashboardSummary.suggestion.action_url ? `<a class="evortix-role-planning-action" href="${escapeSummary(evortixRoleDashboardSummary.suggestion.action_url)}"><i class="fas fa-arrow-right"></i>${escapeSummary(evortixRoleDashboardSummary.suggestion.action_label)}</a>` : ''}</div>` : ''}`);
+                ${activeEvortixRoleDashboardSummary.suggestion ? `<div class="evortix-role-planning-suggestion"><div class="evortix-role-planning-eyebrow">${escapeSummary(activeEvortixRoleDashboardSummary.suggestion.eyebrow)}</div><strong class="evortix-role-planning-title">${escapeSummary(activeEvortixRoleDashboardSummary.suggestion.title)}</strong><p class="evortix-role-planning-copy">${escapeSummary(activeEvortixRoleDashboardSummary.suggestion.message)}</p>${activeEvortixRoleDashboardSummary.suggestion.action_url ? `<a class="evortix-role-planning-action" href="${escapeSummary(activeEvortixRoleDashboardSummary.suggestion.action_url)}"><i class="fas fa-arrow-right"></i>${escapeSummary(activeEvortixRoleDashboardSummary.suggestion.action_label)}</a>` : ''}</div>` : ''}`);
             if (isTabbedSummary) {
                 const renderSummaryTab = key => {
                     const group = tabGroups[key] || {};
@@ -1216,13 +1280,13 @@ document.addEventListener('DOMContentLoaded', function () {
             botFloat.hidden = false;
             botFloat.setAttribute('aria-hidden', 'false');
             const metricSpeech = isCompactSummary
-                ? `${evortixRoleDashboardSummary.intro || ''} ${compactItems.map(item => `${item.title || ''}. ${item.meta || ''}`).join(' ')}`
+                ? `${activeEvortixRoleDashboardSummary.intro || ''} ${compactItems.map(item => `${item.title || ''}. ${item.meta || ''}`).join(' ')}`
                 : isTabbedSummary
-                    ? `${evortixRoleDashboardSummary.intro || ''} ${tabOrder.map(key => `${tabGroups[key]?.label || key}: ${tabGroups[key]?.total || 0}.`).join(' ')}`
-                : (evortixRoleDashboardSummary.metrics || [])
+                    ? `${activeEvortixRoleDashboardSummary.intro || ''} ${tabOrder.map(key => `${tabGroups[key]?.label || key}: ${tabGroups[key]?.total || 0}.`).join(' ')}`
+                : (activeEvortixRoleDashboardSummary.metrics || [])
                     .map(metric => `${metric.label}: ${metric.value}. ${metric.meta || ''}`)
                     .join(' ');
-            announceEvortixAudio(`${evortixRoleDashboardSummary.title}. ${metricSpeech}`);
+            announceEvortixAudio(`${activeEvortixRoleDashboardSummary.title}. ${metricSpeech}`);
             window.chatBotFloatRobot?.point?.('left', 6500);
             speech.querySelector('.evortix-role-summary-close')?.addEventListener('click', () => {
                 speech.hidden = true;
@@ -1231,7 +1295,7 @@ document.addEventListener('DOMContentLoaded', function () {
             document.dispatchEvent(new CustomEvent('evortix:dashboard-welcome-complete'));
             return true;
     };
-    if (evortixEnabled && evortixRoleDashboardSummary && botFloat) {
+    if (evortixEnabled && activeEvortixRoleDashboardSummary && botFloat) {
         window.setTimeout(showEvortixRoleDashboardSummary, 900);
         document.addEventListener('chatbot:controllable-robot-ready', () => {
             window.setTimeout(showEvortixRoleDashboardSummary, 160);
