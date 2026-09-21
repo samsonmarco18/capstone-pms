@@ -554,6 +554,103 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 <script>
 (() => {
+    const dashboardMatch = window.location.pathname.match(/\/modules\/(admin|sales|architect|qa|expert|developer)\/dashboard\.php$/i);
+    if (!dashboardMatch) return;
+
+    const role = dashboardMatch[1].toLowerCase();
+    const tabSets = {
+        admin: [['renewals', 'Renewals', 'fa-clock-rotate-left', 'Renewal Watch', 'No technology stack is expiring in the next 30 days.'], ['login', 'Login', 'fa-user-lock', 'Login Attack Watch', 'No brute-force lockout pattern detected in the last 15 minutes.'], ['recovery', 'Recovery', 'fa-heart-pulse', 'Password Recovery', 'No password recovery requests are pending.']],
+        sales: [['projects', 'Projects', 'fa-diagram-project', 'Project Watch', 'No project signals need attention.'], ['clients', 'Clients', 'fa-users', 'Client Watch', 'No client signals need attention.'], ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Watch', 'No overdue projects need attention.']],
+        architect: [['review', 'Review', 'fa-folder-open', 'Architecture Review', 'No architecture reviews need attention.'], ['progress', 'Progress', 'fa-gears', 'Planning Progress', 'No planning work needs attention.'], ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Watch', 'No overdue architecture work was detected.']],
+        qa: [['testing', 'Testing', 'fa-vial', 'Testing Queue', 'No tasks are waiting for QA.'], ['failed', 'Failed', 'fa-circle-xmark', 'Failed Checks', 'No failed QA checks need attention.'], ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue QA', 'No overdue QA items were detected.']],
+        expert: [['tasks', 'Tasks', 'fa-list-check', 'Assigned Tasks', 'No assigned tasks need attention.'], ['estimate', 'Estimate', 'fa-calculator', 'Estimation Queue', 'No estimation items need attention.'], ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Work', 'No overdue expert work was detected.']],
+        developer: [['tasks', 'Tasks', 'fa-list-check', 'Assigned Tasks', 'No assigned tasks need attention.'], ['progress', 'Progress', 'fa-play', 'In Progress', 'No active in-progress tasks were detected.'], ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Work', 'No overdue developer work was detected.']]
+    };
+    const escapeHtml = value => {
+        const node = document.createElement('div');
+        node.textContent = String(value ?? '');
+        return node.innerHTML;
+    };
+    const openDashboardEvortix = () => {
+        const float = document.getElementById('chat-bot-float');
+        const speech = float?.querySelector('.chat-bot-speech');
+        if (!float || !speech) return false;
+
+        const tabs = tabSets[role] || tabSets.sales;
+        const cards = [...document.querySelectorAll('.admin-stat-card, .admin-metric-card, .stat-card-modern, .dashboard-stat-card, .stats-grid > *, .role-stats-row .card')]
+            .map(card => {
+                const label = card.querySelector('.admin-stat-label, .stat-label, h6, small, [class*="label"], [class*="title"]')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+                const value = card.querySelector('.admin-stat-value, .stat-value, h2, h3, .h1, .display-4, [class*="value"], [class*="count"]')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+                const meta = card.querySelector('.admin-stat-sub, .stat-description, p, small:last-child, [class*="meta"], [class*="desc"]')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+                return label && value ? { label, meta: `${value}${meta && meta !== label && meta !== value ? ` - ${meta}` : ''}` } : null;
+            })
+            .filter(Boolean)
+            .slice(0, 6);
+
+        const renderTab = selected => {
+            const items = cards.slice(0, 3);
+            speech.querySelectorAll('[data-evortix-auto-tab]').forEach(button => {
+                const active = button.dataset.evortixAutoTab === selected[0];
+                button.classList.toggle('is-active', active);
+                button.setAttribute('aria-selected', active ? 'true' : 'false');
+                if (active) button.querySelector('strong').textContent = String(items.length);
+            });
+            const title = speech.querySelector('[data-evortix-auto-title]');
+            const count = speech.querySelector('[data-evortix-auto-count]');
+            const list = speech.querySelector('[data-evortix-auto-list]');
+            if (title) title.textContent = selected[3];
+            if (count) count.textContent = `${items.length} item${items.length === 1 ? '' : 's'}`;
+            if (list) {
+                list.innerHTML = items.length
+                    ? items.map(item => `<a class="evortix-project-link" href="#"><span class="evortix-project-link-copy"><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.meta)}</small></span><i class="fas fa-arrow-right" aria-hidden="true"></i></a>`).join('')
+                    : `<div class="evortix-project-list-empty">${escapeHtml(selected[4])}</div>`;
+            }
+        };
+
+        speech.className = 'chat-bot-speech evortix-role-dashboard-summary is-compact has-project-list';
+        speech.hidden = false;
+        speech.removeAttribute('hidden');
+        speech.setAttribute('aria-hidden', 'false');
+        speech.setAttribute('role', 'status');
+        speech.style.pointerEvents = 'auto';
+        speech.innerHTML = `
+            <div class="evortix-role-summary-head is-compact"><strong class="evortix-role-summary-title">Live Overview</strong><button type="button" class="evortix-role-summary-close" aria-label="Dismiss dashboard overview"><i class="fas fa-xmark"></i></button></div>
+            <div class="evortix-role-summary-intro is-compact">${escapeHtml(role.charAt(0).toUpperCase() + role.slice(1))} overview is ready. Review the current dashboard signals.</div>
+            <div class="evortix-project-status-tabs" role="tablist" aria-label="Evortix dashboard status">${tabs.map(tab => `<button type="button" class="evortix-project-status-tab" data-evortix-auto-tab="${escapeHtml(tab[0])}" role="tab" aria-selected="false"><i class="fas ${escapeHtml(tab[2])}" aria-hidden="true"></i><span>${escapeHtml(tab[1])}</span><strong>0</strong></button>`).join('')}</div>
+            <div class="evortix-project-list-head"><strong data-evortix-auto-title></strong><span data-evortix-auto-count></span></div>
+            <div class="evortix-project-list" data-evortix-auto-list></div>`;
+        speech.querySelectorAll('[data-evortix-auto-tab]').forEach(button => {
+            const tab = tabs.find(item => item[0] === button.dataset.evortixAutoTab) || tabs[0];
+            button.addEventListener('click', () => renderTab(tab));
+        });
+        renderTab(tabs[0]);
+
+        float.hidden = false;
+        float.removeAttribute('hidden');
+        float.setAttribute('aria-hidden', 'false');
+        float.style.display = 'block';
+        float.classList.remove('is-returning-bed', 'is-preparing-speech');
+        float.classList.add('is-speaking');
+        window.chatBotWidgetRobot?.setMode?.('empty-bed');
+        window.chatBotFloatRobot?.setMode?.('standing');
+        window.setTimeout(() => float.classList.remove('is-speaking'), 700);
+        speech.querySelector('.evortix-role-summary-close')?.addEventListener('click', event => {
+            event.stopPropagation();
+            speech.hidden = true;
+            speech.setAttribute('aria-hidden', 'true');
+        });
+        return true;
+    };
+
+    const scheduleOpen = () => [50, 250, 700, 1400, 2600, 5000].forEach(delay => window.setTimeout(openDashboardEvortix, delay));
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', scheduleOpen, { once: true });
+    else scheduleOpen();
+    window.addEventListener('load', () => window.setTimeout(openDashboardEvortix, 120), { once: true });
+    document.addEventListener('chatbot:controllable-robot-ready', () => window.setTimeout(openDashboardEvortix, 100), { once: true });
+})();
+</script>
+<script>
+(() => {
     const isRoleDashboard = () => /\/modules\/(admin|sales|architect|qa|expert|developer)\/dashboard\.php$/i.test(window.location.pathname);
     if (!isRoleDashboard()) return;
 
@@ -2465,4 +2562,95 @@ document.addEventListener('DOMContentLoaded', function () {
         }));
     }
 });
+</script>
+<script>
+(() => {
+    const dashboardMatch = window.location.pathname.match(/\/modules\/(admin|sales|architect|qa|expert|developer)\/dashboard\.php$/i);
+    if (!dashboardMatch) return;
+
+    const role = dashboardMatch[1].toLowerCase();
+    const tabsByRole = {
+        admin: [['renewals', 'Renewals', 'fa-clock-rotate-left', 'Renewal Watch', 'No technology stack is expiring in the next 30 days.'], ['login', 'Login', 'fa-user-lock', 'Login Attack Watch', 'No brute-force lockout pattern detected in the last 15 minutes.'], ['recovery', 'Recovery', 'fa-heart-pulse', 'Password Recovery', 'No password recovery requests are pending.']],
+        sales: [['projects', 'Projects', 'fa-diagram-project', 'Project Watch', 'No project signals need attention.'], ['clients', 'Clients', 'fa-users', 'Client Watch', 'No client signals need attention.'], ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Watch', 'No overdue projects need attention.']],
+        architect: [['review', 'Review', 'fa-folder-open', 'Architecture Review', 'No architecture reviews need attention.'], ['progress', 'Progress', 'fa-gears', 'Planning Progress', 'No planning work needs attention.'], ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Watch', 'No overdue architecture work was detected.']],
+        qa: [['testing', 'Testing', 'fa-vial', 'Testing Queue', 'No tasks are waiting for QA.'], ['failed', 'Failed', 'fa-circle-xmark', 'Failed Checks', 'No failed QA checks need attention.'], ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue QA', 'No overdue QA items were detected.']],
+        expert: [['tasks', 'Tasks', 'fa-list-check', 'Assigned Tasks', 'No assigned tasks need attention.'], ['estimate', 'Estimate', 'fa-calculator', 'Estimation Queue', 'No estimation items need attention.'], ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Work', 'No overdue expert work was detected.']],
+        developer: [['tasks', 'Tasks', 'fa-list-check', 'Assigned Tasks', 'No assigned tasks need attention.'], ['progress', 'Progress', 'fa-play', 'In Progress', 'No active in-progress tasks were detected.'], ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Work', 'No overdue developer work was detected.']]
+    };
+    const escapeHtml = value => {
+        const node = document.createElement('div');
+        node.textContent = String(value ?? '');
+        return node.innerHTML;
+    };
+    const openEvortixOverview = () => {
+        const float = document.getElementById('chat-bot-float');
+        const speech = float?.querySelector('.chat-bot-speech');
+        if (!float || !speech) return false;
+
+        const tabs = tabsByRole[role] || tabsByRole.sales;
+        const cards = [...document.querySelectorAll('.admin-stat-card, .admin-metric-card, .stat-card-modern, .dashboard-stat-card, .stats-grid > *, .role-stats-row .card')]
+            .map(card => {
+                const label = card.querySelector('.admin-stat-label, .stat-label, h6, small, [class*="label"], [class*="title"]')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+                const value = card.querySelector('.admin-stat-value, .stat-value, h2, h3, .h1, .display-4, [class*="value"], [class*="count"]')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+                const meta = card.querySelector('.admin-stat-sub, .stat-description, p, small:last-child, [class*="meta"], [class*="desc"]')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+                return label && value ? { label, meta: `${value}${meta && meta !== label && meta !== value ? ` - ${meta}` : ''}` } : null;
+            })
+            .filter(Boolean)
+            .slice(0, 6);
+        const renderTab = tab => {
+            const items = cards.slice(0, 3);
+            speech.querySelectorAll('[data-evortix-tail-tab]').forEach(button => {
+                const active = button.dataset.evortixTailTab === tab[0];
+                button.classList.toggle('is-active', active);
+                button.setAttribute('aria-selected', active ? 'true' : 'false');
+                if (active) button.querySelector('strong').textContent = String(items.length);
+            });
+            speech.querySelector('[data-evortix-tail-title]').textContent = tab[3];
+            speech.querySelector('[data-evortix-tail-count]').textContent = `${items.length} item${items.length === 1 ? '' : 's'}`;
+            speech.querySelector('[data-evortix-tail-list]').innerHTML = items.length
+                ? items.map(item => `<a class="evortix-project-link" href="#"><span class="evortix-project-link-copy"><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.meta)}</small></span><i class="fas fa-arrow-right" aria-hidden="true"></i></a>`).join('')
+                : `<div class="evortix-project-list-empty">${escapeHtml(tab[4])}</div>`;
+        };
+
+        speech.className = 'chat-bot-speech evortix-role-dashboard-summary is-compact has-project-list';
+        speech.hidden = false;
+        speech.removeAttribute('hidden');
+        speech.setAttribute('aria-hidden', 'false');
+        speech.setAttribute('role', 'status');
+        speech.style.pointerEvents = 'auto';
+        speech.innerHTML = `
+            <div class="evortix-role-summary-head is-compact"><strong class="evortix-role-summary-title">Live Overview</strong><button type="button" class="evortix-role-summary-close" aria-label="Dismiss dashboard overview"><i class="fas fa-xmark"></i></button></div>
+            <div class="evortix-role-summary-intro is-compact">${escapeHtml(role.charAt(0).toUpperCase() + role.slice(1))} overview is ready. Review the current dashboard signals.</div>
+            <div class="evortix-project-status-tabs" role="tablist" aria-label="Evortix dashboard status">${tabs.map(tab => `<button type="button" class="evortix-project-status-tab" data-evortix-tail-tab="${escapeHtml(tab[0])}" role="tab" aria-selected="false"><i class="fas ${escapeHtml(tab[2])}" aria-hidden="true"></i><span>${escapeHtml(tab[1])}</span><strong>0</strong></button>`).join('')}</div>
+            <div class="evortix-project-list-head"><strong data-evortix-tail-title></strong><span data-evortix-tail-count></span></div>
+            <div class="evortix-project-list" data-evortix-tail-list></div>`;
+        speech.querySelectorAll('[data-evortix-tail-tab]').forEach(button => {
+            const tab = tabs.find(item => item[0] === button.dataset.evortixTailTab) || tabs[0];
+            button.addEventListener('click', () => renderTab(tab));
+        });
+        renderTab(tabs[0]);
+
+        float.hidden = false;
+        float.removeAttribute('hidden');
+        float.setAttribute('aria-hidden', 'false');
+        float.style.display = 'block';
+        float.classList.remove('is-returning-bed', 'is-preparing-speech');
+        float.classList.add('is-speaking');
+        window.chatBotWidgetRobot?.setMode?.('empty-bed');
+        window.chatBotFloatRobot?.setMode?.('standing');
+        window.setTimeout(() => float.classList.remove('is-speaking'), 700);
+        speech.querySelector('.evortix-role-summary-close')?.addEventListener('click', event => {
+            event.stopPropagation();
+            speech.hidden = true;
+            speech.setAttribute('aria-hidden', 'true');
+        });
+        return true;
+    };
+
+    const scheduleEvortixOverview = () => [80, 300, 800, 1500, 2800, 5200].forEach(delay => window.setTimeout(openEvortixOverview, delay));
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', scheduleEvortixOverview, { once: true });
+    else scheduleEvortixOverview();
+    window.addEventListener('load', () => window.setTimeout(openEvortixOverview, 140), { once: true });
+    document.addEventListener('chatbot:controllable-robot-ready', () => window.setTimeout(openEvortixOverview, 120), { once: true });
+})();
 </script>
