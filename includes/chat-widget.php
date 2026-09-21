@@ -101,6 +101,8 @@ if (
             $adminOverviewItem = null;
             $adminOverviewItems = [];
             $adminWatchGroups = [];
+            $salesWatchGroups = [];
+            $developerWatchGroups = [];
             if ($summaryRole === 'admin') {
                 $adminPasswordRequests = dbTableExists($summaryConn, 'password_reset_requests')
                     ? $summaryCount("SELECT COUNT(*) AS count FROM password_reset_requests WHERE status = 'pending'")
@@ -306,6 +308,174 @@ if (
                     ],
                 ];
             }
+            if ($summaryRole === 'sales') {
+                $salesEstimationRows = [];
+                $salesReleaseRows = [];
+                $salesOverdueRows = [];
+
+                if (dbTableExists($summaryConn, 'expert_project_estimations')) {
+                    $salesEstimationResult = $summaryConn->query("
+                        SELECT e.id, e.project_id, e.overall_estimated_project_cost, p.name AS project_name, c.name AS client_name
+                        FROM expert_project_estimations e
+                        JOIN projects p ON p.id = e.project_id
+                        LEFT JOIN clients c ON c.id = p.client_id
+                        WHERE e.status = 'submitted'
+                        ORDER BY e.submitted_at ASC, e.id ASC
+                        LIMIT 5
+                    ");
+                    if ($salesEstimationResult) {
+                        while ($row = $salesEstimationResult->fetch_assoc()) {
+                            $salesEstimationRows[] = [
+                                'name' => (string) ($row['project_name'] ?? 'Project estimation'),
+                                'meta' => trim((string) ($row['client_name'] ?? 'Client') . ' - Awaiting estimation approval'),
+                                'url' => BASE_URL . 'modules/sales/estimation-approval.php',
+                            ];
+                        }
+                    }
+                }
+
+                $salesReleaseResult = $summaryConn->query("
+                    SELECT t.id, t.title, t.status, p.id AS project_id, p.name AS project_name, c.name AS client_name
+                    FROM tasks t
+                    JOIN projects p ON p.id = t.project_id
+                    LEFT JOIN clients c ON c.id = p.client_id
+                    WHERE p.status != 'cancelled'
+                      AND t.status IN ('qa_passed', 'architect_review', 'merged', 'ready_for_release')
+                    ORDER BY CASE t.status
+                        WHEN 'ready_for_release' THEN 0
+                        WHEN 'merged' THEN 1
+                        WHEN 'architect_review' THEN 2
+                        ELSE 3
+                    END, t.updated_at DESC, t.id DESC
+                    LIMIT 5
+                ");
+                if ($salesReleaseResult) {
+                    while ($row = $salesReleaseResult->fetch_assoc()) {
+                        $salesReleaseRows[] = [
+                            'name' => (string) ($row['project_name'] ?? 'Release project'),
+                            'meta' => (string) ($row['title'] ?? 'Feature') . ' - ' . str_replace('_', ' ', (string) ($row['status'] ?? 'release status')),
+                            'url' => BASE_URL . 'modules/sales/release-status.php?project_id=' . (int) ($row['project_id'] ?? 0),
+                        ];
+                    }
+                }
+
+                $salesOverdueResult = $summaryConn->query("
+                    SELECT p.id, p.name AS project_name, c.name AS client_name, p.timeline_end
+                    FROM projects p
+                    LEFT JOIN clients c ON c.id = p.client_id
+                    WHERE p.timeline_end < CURRENT_DATE
+                      AND p.status NOT IN ('completed', 'cancelled')
+                    ORDER BY p.timeline_end ASC, p.id ASC
+                    LIMIT 5
+                ");
+                if ($salesOverdueResult) {
+                    while ($row = $salesOverdueResult->fetch_assoc()) {
+                        $salesOverdueRows[] = [
+                            'name' => (string) ($row['project_name'] ?? 'Overdue project'),
+                            'meta' => (string) ($row['client_name'] ?? 'Client') . ' - Due ' . (string) ($row['timeline_end'] ?? 'past deadline'),
+                            'url' => BASE_URL . 'modules/sales/clients.php?project=' . (int) ($row['id'] ?? 0),
+                        ];
+                    }
+                }
+
+                $salesWatchGroups = [
+                    'estimation' => [
+                        'label' => 'Estimation Approval',
+                        'icon' => 'fa-calculator',
+                        'total' => count($salesEstimationRows),
+                        'list_title' => 'Estimation Approval',
+                        'entity_label' => 'estimation',
+                        'empty' => 'No estimations are waiting for Sales approval.',
+                        'items' => $salesEstimationRows,
+                    ],
+                    'release' => [
+                        'label' => 'Release Status',
+                        'icon' => 'fa-bullhorn',
+                        'total' => count($salesReleaseRows),
+                        'list_title' => 'Release Status',
+                        'entity_label' => 'release',
+                        'empty' => 'No release items need Sales attention.',
+                        'items' => $salesReleaseRows,
+                    ],
+                    'overdue' => [
+                        'label' => 'Overdue',
+                        'icon' => 'fa-triangle-exclamation',
+                        'total' => count($salesOverdueRows),
+                        'list_title' => 'Overdue Projects',
+                        'entity_label' => 'project',
+                        'empty' => 'No overdue projects need attention.',
+                        'items' => $salesOverdueRows,
+                    ],
+                ];
+            }
+            if ($summaryRole === 'developer') {
+                $developerRowsByGroup = [
+                    'tasks' => [],
+                    'progress' => [],
+                    'overdue' => [],
+                ];
+                $developerTaskResult = $summaryConn->query("
+                    SELECT t.id, t.title, t.status, t.deadline, p.name AS project_name
+                    FROM tasks t
+                    JOIN projects p ON p.id = t.project_id
+                    WHERE t.assigned_to = {$summaryUserId}
+                      AND t.status != 'completed'
+                      AND p.status != 'cancelled'
+                    ORDER BY CASE
+                        WHEN t.deadline < NOW() THEN 0
+                        WHEN t.status = 'in_progress' THEN 1
+                        ELSE 2
+                    END, CASE WHEN t.deadline IS NULL THEN 1 ELSE 0 END, t.deadline ASC, t.id ASC
+                    LIMIT 10
+                ");
+                if ($developerTaskResult) {
+                    while ($row = $developerTaskResult->fetch_assoc()) {
+                        $deadline = trim((string) ($row['deadline'] ?? ''));
+                        $item = [
+                            'name' => (string) ($row['title'] ?? 'Developer task'),
+                            'meta' => (string) ($row['project_name'] ?? 'Project') . ' - ' . str_replace('_', ' ', (string) ($row['status'] ?? 'task')) . ($deadline !== '' ? ' - Due ' . $deadline : ''),
+                            'url' => BASE_URL . 'modules/developer/task.php?id=' . (int) ($row['id'] ?? 0),
+                        ];
+                        $isOverdue = $deadline !== '' && strtotime($deadline) !== false && strtotime($deadline) < time();
+                        if ($isOverdue) {
+                            $developerRowsByGroup['overdue'][] = $item;
+                        }
+                        if ((string) ($row['status'] ?? '') === 'in_progress') {
+                            $developerRowsByGroup['progress'][] = $item;
+                        }
+                        $developerRowsByGroup['tasks'][] = $item;
+                    }
+                }
+                $developerWatchGroups = [
+                    'tasks' => [
+                        'label' => 'Tasks',
+                        'icon' => 'fa-list-check',
+                        'total' => count($developerRowsByGroup['tasks']),
+                        'list_title' => 'Assigned Tasks',
+                        'entity_label' => 'task',
+                        'empty' => 'No assigned tasks need attention.',
+                        'items' => array_slice($developerRowsByGroup['tasks'], 0, 5),
+                    ],
+                    'progress' => [
+                        'label' => 'Progress',
+                        'icon' => 'fa-play',
+                        'total' => count($developerRowsByGroup['progress']),
+                        'list_title' => 'In Progress',
+                        'entity_label' => 'task',
+                        'empty' => 'No active in-progress tasks were detected.',
+                        'items' => array_slice($developerRowsByGroup['progress'], 0, 5),
+                    ],
+                    'overdue' => [
+                        'label' => 'Overdue',
+                        'icon' => 'fa-triangle-exclamation',
+                        'total' => count($developerRowsByGroup['overdue']),
+                        'list_title' => 'Overdue Work',
+                        'entity_label' => 'task',
+                        'empty' => 'No overdue developer work was detected.',
+                        'items' => array_slice($developerRowsByGroup['overdue'], 0, 5),
+                    ],
+                ];
+            }
             $roleSummaries = [
                 'admin' => [
                     'variant' => 'tabbed',
@@ -315,6 +485,16 @@ if (
                     'items' => $adminOverviewItems,
                     'tab_groups' => $adminWatchGroups,
                     'tab_order' => ['renewals', 'login', 'recovery'],
+                    'metrics' => [],
+                ],
+                'sales' => [
+                    'variant' => 'tabbed',
+                    'title' => 'Live Overview',
+                    'intro' => count($salesWatchGroups['estimation']['items'] ?? []) . ' estimation approvals, '
+                        . count($salesWatchGroups['release']['items'] ?? []) . ' release status items, and '
+                        . count($salesWatchGroups['overdue']['items'] ?? []) . ' overdue projects.',
+                    'tab_groups' => $salesWatchGroups,
+                    'tab_order' => ['estimation', 'release', 'overdue'],
                     'metrics' => [],
                 ],
                 'architect' => [
@@ -345,20 +525,20 @@ if (
                     ],
                 ],
                 'developer' => [
-                    'title' => 'Your developer dashboard snapshot',
-                    'metrics' => [
-                        ['icon' => 'fa-list-check', 'label' => 'Assigned Tasks', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM tasks t JOIN projects p ON p.id = t.project_id WHERE t.assigned_to = {$summaryUserId} AND p.status != 'cancelled'"), 'meta' => 'All assigned work'],
-                        ['icon' => 'fa-play', 'label' => 'In Progress', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM tasks t JOIN projects p ON p.id = t.project_id WHERE t.assigned_to = {$summaryUserId} AND t.status = 'in_progress' AND p.status != 'cancelled'"), 'meta' => 'Currently active'],
-                        ['icon' => 'fa-circle-check', 'label' => 'Completed', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM tasks t JOIN projects p ON p.id = t.project_id WHERE t.assigned_to = {$summaryUserId} AND t.status = 'completed' AND p.status != 'cancelled'"), 'meta' => 'Finished tasks'],
-                        ['icon' => 'fa-triangle-exclamation', 'label' => 'Overdue', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM tasks t JOIN projects p ON p.id = t.project_id WHERE t.assigned_to = {$summaryUserId} AND t.deadline < NOW() AND t.status != 'completed' AND p.status != 'cancelled'"), 'meta' => 'Needs attention', 'overdue' => true],
-                    ],
+                    'variant' => 'tabbed',
+                    'title' => 'Live Overview',
+                    'intro' => count($developerWatchGroups['tasks']['items'] ?? []) . ' assigned tasks, '
+                        . count($developerWatchGroups['progress']['items'] ?? []) . ' in progress, and '
+                        . count($developerWatchGroups['overdue']['items'] ?? []) . ' overdue.',
+                    'tab_groups' => $developerWatchGroups,
+                    'tab_order' => ['tasks', 'progress', 'overdue'],
+                    'metrics' => [],
                 ],
             ];
             $compactMetricIndexesByRole = [
                 'architect' => [1, 2, 3],
                 'qa' => [0, 1, 3],
                 'expert' => [0, 1, 3],
-                'developer' => [1, 2, 3],
             ];
             $compactActionUrlsByRole = [
                 'qa' => BASE_URL . 'modules/qa/testing.php',
@@ -560,7 +740,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const role = dashboardMatch[1].toLowerCase();
     const tabSets = {
         admin: [['renewals', 'Renewals', 'fa-clock-rotate-left', 'Renewal Watch', 'No technology stack is expiring in the next 30 days.'], ['login', 'Login', 'fa-user-lock', 'Login Attack Watch', 'No brute-force lockout pattern detected in the last 15 minutes.'], ['recovery', 'Recovery', 'fa-heart-pulse', 'Password Recovery', 'No password recovery requests are pending.']],
-        sales: [['projects', 'Projects', 'fa-diagram-project', 'Project Watch', 'No project signals need attention.'], ['clients', 'Clients', 'fa-users', 'Client Watch', 'No client signals need attention.'], ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Watch', 'No overdue projects need attention.']],
+        sales: [['estimation', 'Estimation Approval', 'fa-calculator', 'Estimation Approval', 'No estimations are waiting for Sales approval.'], ['release', 'Release Status', 'fa-bullhorn', 'Release Status', 'No release items need Sales attention.'], ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Projects', 'No overdue projects need attention.']],
         architect: [['review', 'Review', 'fa-folder-open', 'Architecture Review', 'No architecture reviews need attention.'], ['progress', 'Progress', 'fa-gears', 'Planning Progress', 'No planning work needs attention.'], ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Watch', 'No overdue architecture work was detected.']],
         qa: [['testing', 'Testing', 'fa-vial', 'Testing Queue', 'No tasks are waiting for QA.'], ['failed', 'Failed', 'fa-circle-xmark', 'Failed Checks', 'No failed QA checks need attention.'], ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue QA', 'No overdue QA items were detected.']],
         expert: [['tasks', 'Tasks', 'fa-list-check', 'Assigned Tasks', 'No assigned tasks need attention.'], ['estimate', 'Estimate', 'fa-calculator', 'Estimation Queue', 'No estimation items need attention.'], ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Work', 'No overdue expert work was detected.']],
@@ -2573,7 +2753,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const role = dashboardMatch[1].toLowerCase();
     const tabsByRole = {
         admin: [['renewals', 'Renewals', 'fa-clock-rotate-left', 'Renewal Watch', 'No technology stack is expiring in the next 30 days.'], ['login', 'Login', 'fa-user-lock', 'Login Attack Watch', 'No brute-force lockout pattern detected in the last 15 minutes.'], ['recovery', 'Recovery', 'fa-heart-pulse', 'Password Recovery', 'No password recovery requests are pending.']],
-        sales: [['projects', 'Projects', 'fa-diagram-project', 'Project Watch', 'No project signals need attention.'], ['clients', 'Clients', 'fa-users', 'Client Watch', 'No client signals need attention.'], ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Watch', 'No overdue projects need attention.']],
+        sales: [['estimation', 'Estimation Approval', 'fa-calculator', 'Estimation Approval', 'No estimations are waiting for Sales approval.'], ['release', 'Release Status', 'fa-bullhorn', 'Release Status', 'No release items need Sales attention.'], ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Projects', 'No overdue projects need attention.']],
         architect: [['review', 'Review', 'fa-folder-open', 'Architecture Review', 'No architecture reviews need attention.'], ['progress', 'Progress', 'fa-gears', 'Planning Progress', 'No planning work needs attention.'], ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Watch', 'No overdue architecture work was detected.']],
         qa: [['testing', 'Testing', 'fa-vial', 'Testing Queue', 'No tasks are waiting for QA.'], ['failed', 'Failed', 'fa-circle-xmark', 'Failed Checks', 'No failed QA checks need attention.'], ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue QA', 'No overdue QA items were detected.']],
         expert: [['tasks', 'Tasks', 'fa-list-check', 'Assigned Tasks', 'No assigned tasks need attention.'], ['estimate', 'Estimate', 'fa-calculator', 'Estimation Queue', 'No estimation items need attention.'], ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Work', 'No overdue expert work was detected.']],
