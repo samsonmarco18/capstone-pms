@@ -1023,7 +1023,8 @@ document.addEventListener('DOMContentLoaded', function () {
         speech?.querySelector('.evortix-project-notification-action')?.remove();
         let title = botFloat.querySelector('[data-chat-bot-type="title"]');
         if (!title) {
-            speech.innerHTML = '<strong data-chat-bot-type="title" data-chat-bot-text="Hi, good day!"></strong>';
+            const defaultGreeting = activeEvortixRoleDashboardSummary ? 'Live Overview' : 'Hi, good day!';
+            speech.innerHTML = `<strong data-chat-bot-type="title" data-chat-bot-text="${defaultGreeting}"></strong>`;
             title = speech.querySelector('[data-chat-bot-type="title"]');
         }
 
@@ -1154,10 +1155,12 @@ document.addEventListener('DOMContentLoaded', function () {
         };
     };
     const activeEvortixRoleDashboardSummary = evortixRoleDashboardSummary || buildDomDashboardSummary();
-    const showEvortixRoleDashboardSummary = function () {
+    let evortixDashboardSummaryLastRender = 0;
+    const showEvortixRoleDashboardSummary = function (options = {}) {
         if (!evortixEnabled || !activeEvortixRoleDashboardSummary || !botFloat) return false;
             const speech = botFloat.querySelector('.chat-bot-speech');
             if (!speech) return false;
+            if (speech.dataset.dashboardSummaryDismissed === 'true' && !options.force) return false;
             const escapeSummary = value => {
                 const node = document.createElement('div');
                 node.textContent = String(value ?? '');
@@ -1279,6 +1282,7 @@ document.addEventListener('DOMContentLoaded', function () {
             window.chatBotFloatRobot?.setMode?.('standing');
             botFloat.hidden = false;
             botFloat.setAttribute('aria-hidden', 'false');
+            evortixDashboardSummaryLastRender = Date.now();
             const metricSpeech = isCompactSummary
                 ? `${activeEvortixRoleDashboardSummary.intro || ''} ${compactItems.map(item => `${item.title || ''}. ${item.meta || ''}`).join(' ')}`
                 : isTabbedSummary
@@ -1291,15 +1295,38 @@ document.addEventListener('DOMContentLoaded', function () {
             speech.querySelector('.evortix-role-summary-close')?.addEventListener('click', () => {
                 speech.hidden = true;
                 speech.setAttribute('aria-hidden', 'true');
+                speech.dataset.dashboardSummaryDismissed = 'true';
             });
             document.dispatchEvent(new CustomEvent('evortix:dashboard-welcome-complete'));
             return true;
     };
     if (evortixEnabled && activeEvortixRoleDashboardSummary && botFloat) {
-        window.setTimeout(showEvortixRoleDashboardSummary, 900);
+        const scheduleDashboardSummary = function (delay = 0, force = false) {
+            window.setTimeout(() => showEvortixRoleDashboardSummary({ force }), delay);
+        };
+        scheduleDashboardSummary(650, true);
+        scheduleDashboardSummary(1600, false);
         document.addEventListener('chatbot:controllable-robot-ready', () => {
-            window.setTimeout(showEvortixRoleDashboardSummary, 160);
+            scheduleDashboardSummary(160, true);
         }, { once: true });
+        window.addEventListener('pageshow', () => scheduleDashboardSummary(260, true));
+        const dashboardSpeechObserver = new MutationObserver(() => {
+            const speech = botFloat.querySelector('.chat-bot-speech');
+            if (!speech || speech.hidden || botFloat.hidden) return;
+            if (speech.classList.contains('evortix-role-dashboard-summary')) return;
+            if (Date.now() - evortixDashboardSummaryLastRender < 400) return;
+            const text = speech.textContent.replace(/\s+/g, ' ').trim().toLowerCase();
+            if (!text || text.includes('hi, good day') || text === 'live overview') {
+                scheduleDashboardSummary(40, true);
+            }
+        });
+        dashboardSpeechObserver.observe(botFloat, {
+            subtree: true,
+            childList: true,
+            characterData: true,
+            attributes: true,
+            attributeFilter: ['class', 'hidden', 'aria-hidden']
+        });
     }
 
     if (botFloat && evortixSoundEnabled) {
