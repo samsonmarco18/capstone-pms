@@ -552,6 +552,151 @@ document.addEventListener('DOMContentLoaded', () => {
     ), 1200);
 });
 </script>
+<script>
+(() => {
+    const isRoleDashboard = () => /\/modules\/(admin|sales|architect|qa|expert|developer)\/dashboard\.php$/i.test(window.location.pathname);
+    if (!isRoleDashboard()) return;
+
+    const escapeEvortixText = value => {
+        const node = document.createElement('div');
+        node.textContent = String(value ?? '');
+        return node.innerHTML;
+    };
+    const roleTabs = {
+        admin: [
+            ['renewals', 'Renewals', 'fa-clock-rotate-left', 'Renewal Watch', 'No technology stack is expiring in the next 30 days.'],
+            ['login', 'Login', 'fa-user-lock', 'Login Attack Watch', 'No brute-force lockout pattern detected in the last 15 minutes.'],
+            ['recovery', 'Recovery', 'fa-heart-pulse', 'Password Recovery', 'No password recovery requests are pending.']
+        ],
+        sales: [
+            ['projects', 'Projects', 'fa-diagram-project', 'Project Watch', 'No project signals need attention.'],
+            ['clients', 'Clients', 'fa-users', 'Client Watch', 'No client signals need attention.'],
+            ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Watch', 'No overdue projects need attention.']
+        ],
+        architect: [
+            ['review', 'Review', 'fa-folder-open', 'Architecture Review', 'No architecture reviews need attention.'],
+            ['progress', 'Progress', 'fa-gears', 'Planning Progress', 'No planning work needs attention.'],
+            ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Watch', 'No overdue architecture work was detected.']
+        ],
+        qa: [
+            ['testing', 'Testing', 'fa-vial', 'Testing Queue', 'No tasks are waiting for QA.'],
+            ['failed', 'Failed', 'fa-circle-xmark', 'Failed Checks', 'No failed QA checks need attention.'],
+            ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue QA', 'No overdue QA items were detected.']
+        ],
+        expert: [
+            ['tasks', 'Tasks', 'fa-list-check', 'Assigned Tasks', 'No assigned tasks need attention.'],
+            ['estimate', 'Estimate', 'fa-calculator', 'Estimation Queue', 'No estimation items need attention.'],
+            ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Work', 'No overdue expert work was detected.']
+        ],
+        developer: [
+            ['tasks', 'Tasks', 'fa-list-check', 'Assigned Tasks', 'No assigned tasks need attention.'],
+            ['progress', 'Progress', 'fa-play', 'In Progress', 'No active in-progress tasks were detected.'],
+            ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Work', 'No overdue developer work was detected.']
+        ]
+    };
+
+    const announceRoleDashboard = () => {
+        const roleMatch = window.location.pathname.match(/\/modules\/([^/]+)\/dashboard\.php$/i);
+        const role = (roleMatch?.[1] || 'dashboard').toLowerCase();
+        const float = document.getElementById('chat-bot-float');
+        const speech = float?.querySelector('.chat-bot-speech');
+        if (!float || !speech) return false;
+
+        const tabs = roleTabs[role] || roleTabs.sales;
+        const cards = [...document.querySelectorAll('.admin-stat-card, .admin-metric-card, .stat-card-modern, .dashboard-stat-card, .stats-grid > *, .role-stats-row .card')]
+            .map(card => {
+                const label = card.querySelector('.admin-stat-label, .stat-label, h6, small, [class*="label"], [class*="title"]')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+                const value = card.querySelector('.admin-stat-value, .stat-value, h2, h3, .h1, .display-4, [class*="value"], [class*="count"]')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+                const meta = card.querySelector('.admin-stat-sub, .stat-description, p, small:last-child, [class*="meta"], [class*="desc"]')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+                return label && value ? { label, meta: `${value}${meta && meta !== label && meta !== value ? ` - ${meta}` : ''}` } : null;
+            })
+            .filter(Boolean)
+            .slice(0, 6);
+        const renderItems = tab => {
+            const matched = cards.filter(card => card.label.toLowerCase().includes(tab[1].slice(0, 5).toLowerCase()));
+            const items = (matched.length ? matched : cards).slice(0, 3);
+            const list = speech.querySelector('[data-evortix-final-list]');
+            const title = speech.querySelector('[data-evortix-final-title]');
+            const count = speech.querySelector('[data-evortix-final-count]');
+            speech.querySelectorAll('[data-evortix-final-tab]').forEach(button => {
+                const active = button.dataset.evortixFinalTab === tab[0];
+                button.classList.toggle('is-active', active);
+                button.setAttribute('aria-selected', active ? 'true' : 'false');
+                if (active) button.querySelector('strong').textContent = String(items.length);
+            });
+            if (title) title.textContent = tab[3];
+            if (count) count.textContent = `${items.length} item${items.length === 1 ? '' : 's'}`;
+            if (list) {
+                list.innerHTML = items.length
+                    ? items.map(item => `
+                        <a class="evortix-project-link" href="#">
+                            <span class="evortix-project-link-copy">
+                                <strong>${escapeEvortixText(item.label)}</strong>
+                                <small>${escapeEvortixText(item.meta)}</small>
+                            </span>
+                            <i class="fas fa-arrow-right" aria-hidden="true"></i>
+                        </a>
+                    `).join('')
+                    : `<div class="evortix-project-list-empty">${escapeEvortixText(tab[4])}</div>`;
+            }
+        };
+
+        speech.className = 'chat-bot-speech evortix-role-dashboard-summary is-compact has-project-list';
+        speech.hidden = false;
+        speech.removeAttribute('hidden');
+        speech.setAttribute('aria-hidden', 'false');
+        speech.setAttribute('role', 'status');
+        speech.style.pointerEvents = 'auto';
+        speech.innerHTML = `
+            <div class="evortix-role-summary-head is-compact"><strong class="evortix-role-summary-title">Live Overview</strong><button type="button" class="evortix-role-summary-close" aria-label="Dismiss dashboard overview"><i class="fas fa-xmark"></i></button></div>
+            <div class="evortix-role-summary-intro is-compact">${escapeEvortixText(role.charAt(0).toUpperCase() + role.slice(1))} overview is ready. Review the current dashboard signals.</div>
+            <div class="evortix-project-status-tabs" role="tablist" aria-label="Evortix dashboard status">
+                ${tabs.map(tab => `
+                    <button type="button" class="evortix-project-status-tab" data-evortix-final-tab="${escapeEvortixText(tab[0])}" role="tab" aria-selected="false">
+                        <i class="fas ${escapeEvortixText(tab[2])}" aria-hidden="true"></i>
+                        <span>${escapeEvortixText(tab[1])}</span>
+                        <strong>0</strong>
+                    </button>
+                `).join('')}
+            </div>
+            <div class="evortix-project-list-head">
+                <strong data-evortix-final-title></strong>
+                <span data-evortix-final-count></span>
+            </div>
+            <div class="evortix-project-list" data-evortix-final-list></div>`;
+        speech.querySelectorAll('[data-evortix-final-tab]').forEach(button => {
+            const tab = tabs.find(item => item[0] === button.dataset.evortixFinalTab) || tabs[0];
+            button.addEventListener('click', () => renderItems(tab));
+        });
+        renderItems(tabs[0]);
+
+        float.hidden = false;
+        float.removeAttribute('hidden');
+        float.setAttribute('aria-hidden', 'false');
+        float.style.display = 'block';
+        float.classList.remove('is-returning-bed', 'is-preparing-speech');
+        float.classList.add('is-speaking');
+        window.chatBotWidgetRobot?.setMode?.('empty-bed');
+        window.chatBotFloatRobot?.setMode?.('standing');
+        window.setTimeout(() => float.classList.remove('is-speaking'), 700);
+        speech.querySelector('.evortix-role-summary-close')?.addEventListener('click', event => {
+            event.stopPropagation();
+            speech.hidden = true;
+            speech.setAttribute('aria-hidden', 'true');
+        });
+        return true;
+    };
+
+    const runAfterReady = () => [100, 450, 1000, 2200, 4200].forEach(delay => window.setTimeout(announceRoleDashboard, delay));
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', runAfterReady, { once: true });
+    } else {
+        runAfterReady();
+    }
+    window.addEventListener('load', () => window.setTimeout(announceRoleDashboard, 250), { once: true });
+    document.addEventListener('chatbot:controllable-robot-ready', () => window.setTimeout(announceRoleDashboard, 120), { once: true });
+})();
+</script>
 <?php endif; ?>
 
 <style>
@@ -1437,6 +1582,149 @@ document.addEventListener('DOMContentLoaded', function () {
             attributes: true,
             attributeFilter: ['class', 'hidden', 'aria-hidden']
         });
+    }
+
+    const forceEvortixDashboardOverview = function () {
+        const dashboardMatch = window.location.pathname.match(/\/modules\/([^/]+)\/dashboard\.php$/i);
+        if (!dashboardMatch || /\/modules\/sul\/dashboard\.php$/i.test(window.location.pathname)) return false;
+        if (!evortixEnabled || !botFloat) return false;
+        const speech = botFloat.querySelector('.chat-bot-speech');
+        if (!speech) return false;
+
+        const role = (dashboardMatch[1] || 'dashboard').toLowerCase();
+        const escapeHtml = value => {
+            const node = document.createElement('div');
+            node.textContent = String(value ?? '');
+            return node.innerHTML;
+        };
+        const currentText = speech.textContent.replace(/\s+/g, ' ').trim().toLowerCase();
+        if (speech.classList.contains('evortix-role-dashboard-summary') && !currentText.includes('hi, good day')) {
+            botFloat.hidden = false;
+            botFloat.setAttribute('aria-hidden', 'false');
+            return true;
+        }
+
+        const roleTabs = {
+            admin: [
+                ['renewals', 'Renewals', 'fa-clock-rotate-left', 'Renewal Watch', 'No technology stack is expiring in the next 30 days.'],
+                ['login', 'Login', 'fa-user-lock', 'Login Attack Watch', 'No brute-force lockout pattern detected in the last 15 minutes.'],
+                ['recovery', 'Recovery', 'fa-heart-pulse', 'Password Recovery', 'No password recovery requests are pending.']
+            ],
+            sales: [
+                ['projects', 'Projects', 'fa-diagram-project', 'Project Watch', 'No project signals need attention.'],
+                ['clients', 'Clients', 'fa-users', 'Client Watch', 'No client signals need attention.'],
+                ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Watch', 'No overdue projects need attention.']
+            ],
+            architect: [
+                ['review', 'Review', 'fa-folder-open', 'Architecture Review', 'No architecture reviews need attention.'],
+                ['progress', 'Progress', 'fa-gears', 'Planning Progress', 'No planning work needs attention.'],
+                ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Watch', 'No overdue architecture work was detected.']
+            ],
+            qa: [
+                ['testing', 'Testing', 'fa-vial', 'Testing Queue', 'No tasks are waiting for QA.'],
+                ['failed', 'Failed', 'fa-circle-xmark', 'Failed Checks', 'No failed QA checks need attention.'],
+                ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue QA', 'No overdue QA items were detected.']
+            ],
+            expert: [
+                ['tasks', 'Tasks', 'fa-list-check', 'Assigned Tasks', 'No assigned tasks need attention.'],
+                ['estimate', 'Estimate', 'fa-calculator', 'Estimation Queue', 'No estimation items need attention.'],
+                ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Work', 'No overdue expert work was detected.']
+            ],
+            developer: [
+                ['tasks', 'Tasks', 'fa-list-check', 'Assigned Tasks', 'No assigned tasks need attention.'],
+                ['progress', 'Progress', 'fa-play', 'In Progress', 'No active in-progress tasks were detected.'],
+                ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Work', 'No overdue developer work was detected.']
+            ]
+        };
+        const tabs = roleTabs[role] || [
+            ['overview', 'Overview', 'fa-chart-line', 'Dashboard Signals', 'No dashboard signals are available.'],
+            ['attention', 'Attention', 'fa-triangle-exclamation', 'Items Needing Attention', 'No urgent dashboard items were detected.'],
+            ['activity', 'Activity', 'fa-wave-square', 'Recent Activity', 'No recent dashboard activity was detected.']
+        ];
+        const statCards = [...document.querySelectorAll('.admin-stat-card, .admin-metric-card, .stat-card-modern, .dashboard-stat-card, .role-stats-row .card, .stats-grid .card, .stats-grid > *')]
+            .map(card => {
+                const label = card.querySelector('.admin-stat-label, .stat-label, .text-uppercase, h6, small, [class*="label"], [class*="title"]')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+                const value = card.querySelector('.admin-stat-value, .stat-value, .h1, h3, h2, [class*="value"], [class*="count"], .display-4')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+                const meta = card.querySelector('.admin-stat-sub, .stat-description, p, small:last-child, [class*="meta"], [class*="desc"]')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+                return label && value ? { name: label, meta: `${value}${meta && meta !== label && meta !== value ? ` - ${meta}` : ''}` } : null;
+            })
+            .filter(Boolean);
+        const matchTabItems = label => {
+            const needle = String(label || '').toLowerCase();
+            const matched = statCards.filter(card => card.name.toLowerCase().includes(needle.slice(0, 5)));
+            return (matched.length ? matched : statCards.slice(0, 2)).slice(0, 5);
+        };
+
+        speech.className = 'chat-bot-speech evortix-role-dashboard-summary is-compact has-project-list';
+        speech.hidden = false;
+        speech.style.pointerEvents = 'auto';
+        speech.setAttribute('aria-hidden', 'false');
+        speech.setAttribute('role', 'status');
+        speech.innerHTML = `
+            <div class="evortix-role-summary-head is-compact"><strong class="evortix-role-summary-title">Live Overview</strong><button type="button" class="evortix-role-summary-close" aria-label="Dismiss dashboard overview"><i class="fas fa-xmark"></i></button></div>
+            <div class="evortix-role-summary-intro is-compact">${escapeHtml(role.charAt(0).toUpperCase() + role.slice(1))} overview is ready. Review the current dashboard signals.</div>
+            <div class="evortix-project-status-tabs" role="tablist" aria-label="Evortix dashboard status">
+                ${tabs.map(tab => `
+                    <button type="button" class="evortix-project-status-tab" data-evortix-force-tab="${escapeHtml(tab[0])}" role="tab" aria-selected="false">
+                        <i class="fas ${escapeHtml(tab[2])}" aria-hidden="true"></i>
+                        <span>${escapeHtml(tab[1])}</span>
+                        <strong>0</strong>
+                    </button>
+                `).join('')}
+            </div>
+            <div class="evortix-project-list-head">
+                <strong data-evortix-force-list-title></strong>
+                <span data-evortix-force-list-count></span>
+            </div>
+            <div class="evortix-project-list" data-evortix-force-list></div>`;
+        const renderForceTab = key => {
+            const config = tabs.find(tab => tab[0] === key) || tabs[0];
+            const items = matchTabItems(config[1]);
+            speech.querySelectorAll('[data-evortix-force-tab]').forEach(tab => {
+                const active = tab.dataset.evortixForceTab === config[0];
+                tab.classList.toggle('is-active', active);
+                tab.setAttribute('aria-selected', active ? 'true' : 'false');
+                if (active) tab.querySelector('strong').textContent = String(items.length);
+            });
+            const title = speech.querySelector('[data-evortix-force-list-title]');
+            const count = speech.querySelector('[data-evortix-force-list-count]');
+            const list = speech.querySelector('[data-evortix-force-list]');
+            if (title) title.textContent = config[3];
+            if (count) count.textContent = `${items.length} item${items.length === 1 ? '' : 's'}`;
+            if (list) {
+                list.innerHTML = items.length
+                    ? items.map(item => `
+                        <a class="evortix-project-link" href="#">
+                            <span class="evortix-project-link-copy">
+                                <strong>${escapeHtml(item.name)}</strong>
+                                <small>${escapeHtml(item.meta)}</small>
+                            </span>
+                            <i class="fas fa-arrow-right" aria-hidden="true"></i>
+                        </a>
+                    `).join('')
+                    : `<div class="evortix-project-list-empty">${escapeHtml(config[4])}</div>`;
+            }
+        };
+        speech.querySelectorAll('[data-evortix-force-tab]').forEach(tab => {
+            tab.addEventListener('click', () => renderForceTab(tab.dataset.evortixForceTab));
+        });
+        renderForceTab(tabs[0][0]);
+        botFloat.hidden = false;
+        botFloat.setAttribute('aria-hidden', 'false');
+        botFloat.classList.remove('is-returning-bed', 'is-preparing-speech');
+        window.chatBotWidgetRobot?.setMode?.('empty-bed');
+        window.chatBotFloatRobot?.setMode?.('standing');
+        speech.querySelector('.evortix-role-summary-close')?.addEventListener('click', event => {
+            event.stopPropagation();
+            speech.hidden = true;
+            speech.setAttribute('aria-hidden', 'true');
+        });
+        document.dispatchEvent(new CustomEvent('evortix:dashboard-welcome-complete'));
+        return true;
+    };
+    if (evortixEnabled && botFloat) {
+        [350, 900, 1800, 3200].forEach(delay => window.setTimeout(forceEvortixDashboardOverview, delay));
+        document.addEventListener('chatbot:controllable-robot-ready', () => window.setTimeout(forceEvortixDashboardOverview, 120), { once: true });
     }
 
     if (botFloat && evortixSoundEnabled) {
