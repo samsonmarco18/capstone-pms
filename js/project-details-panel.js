@@ -228,6 +228,23 @@ function renderArchitectSection(project) {
     `;
 }
 
+function renderProjectDepartmentTeams(project) {
+    const teams = Array.isArray(project.department_teams) ? project.department_teams : [];
+    return teams.map(team => `
+        <div class="project-context-list">
+            <h6>${escapeHtml(team.department)}</h6>
+            <div class="project-context-row">
+                <span>Service Unit Leader</span>
+                <small>${escapeHtml((team.suls || []).map(member => member.full_name).join(', ') || 'No department SUL assigned')}</small>
+            </div>
+            <label>Assigned Developers</label>
+            ${(team.developers || []).length ? team.developers.map(member => `
+                <div class="project-context-row"><span>${escapeHtml(member.full_name)}</span></div>
+            `).join('') : '<div class="project-context-empty">No developers assigned yet.</div>'}
+        </div>
+    `).join('') || '<div class="project-context-empty">No department assignments yet.</div>';
+}
+
 function renderSulSection(project) {
     const assignments = project.sul_assignments || {};
     const experts = groupAssignmentsByUser(assignments.experts || []);
@@ -244,10 +261,7 @@ function renderSulSection(project) {
     return `
         <div class="project-context-section">
             <h6><i class="fas fa-users-cog"></i> SUL — Team Assignments</h6>
-            <div class="project-detail-item project-detail-full">
-                <label>Service Unit Leader</label>
-                <div class="value">${escapeHtml(assignments.sul_name || project.sul_name || 'Unassigned')}</div>
-            </div>
+            ${renderProjectDepartmentTeams(project)}
             <div class="project-context-list">
                 <label>Assigned Experts</label>
                 ${experts.length ? experts.map(expert => `
@@ -257,7 +271,7 @@ function renderSulSection(project) {
                     </div>
                 `).join('') : '<div class="project-context-empty">No experts assigned yet.</div>'}
             </div>
-            <div class="project-context-list">
+            ${!Array.isArray(project.department_teams) ? `<div class="project-context-list">
                 <label>Assigned Developers</label>
                 ${(developerTasks.length || allocationRows) ? `
                     ${developerTasks.map(developer => `
@@ -268,7 +282,7 @@ function renderSulSection(project) {
                     `).join('')}
                     ${allocationRows}
                 ` : '<div class="project-context-empty">No developers assigned yet.</div>'}
-            </div>
+            </div>` : ''}
         </div>
     `;
 }
@@ -349,7 +363,9 @@ function renderFullProjectPanel(project, options = {}) {
                 </div>
                 <div class="project-detail-item">
                     <label>SUL</label>
-                    <div class="value">${escapeHtml(project.sul_name || 'Unassigned')}</div>
+                    <div class="value">${Array.isArray(project.department_teams) && project.department_teams.length
+                        ? project.department_teams.map(team => `<div>${escapeHtml(team.department)}: ${escapeHtml((team.suls || []).map(member => member.full_name).join(', ') || 'No department SUL assigned')}</div>`).join('')
+                        : escapeHtml(project.sul_name || 'Unassigned')}</div>
                 </div>
             </div>
 
