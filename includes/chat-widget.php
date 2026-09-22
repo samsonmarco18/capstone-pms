@@ -183,7 +183,7 @@ if (
                         'meta' => (string) ($expiringTechnology['category'] ?? 'Technology')
                             . ' · ' . $expiryLabel
                             . ' · ' . $adminExpiringTechnologyCount . ' renewal signal' . ($adminExpiringTechnologyCount === 1 ? '' : 's'),
-                        'action_url' => BASE_URL . 'modules/admin/techstack.php?status=expiring#technologyDirectory',
+                        'action_url' => BASE_URL . 'modules/admin/techstack.php?search=' . rawurlencode((string) ($expiringTechnology['name'] ?? '')) . '#technologyDirectory',
                     ];
                 } elseif ($adminPasswordRequests > 0) {
                     $adminOverviewItem = [
@@ -219,14 +219,14 @@ if (
                         'icon' => 'fa-clock-rotate-left',
                         'title' => 'Renewal Watch',
                         'meta' => (string) ($renewalTechnology['name'] ?? 'Technology stack') . ' - ' . $renewalExpiryLabel,
-                        'action_url' => BASE_URL . 'modules/admin/techstack.php?status=expiring#technologyDirectory',
+                        'action_url' => BASE_URL . 'modules/admin/techstack.php?search=' . rawurlencode((string) ($renewalTechnology['name'] ?? '')) . '#technologyDirectory',
                     ];
                 } else {
                     $adminOverviewItems[] = [
                         'icon' => 'fa-circle-check',
                         'title' => 'Renewal Watch',
                         'meta' => 'No technology stack is expiring in the next 30 days.',
-                        'action_url' => BASE_URL . 'modules/admin/techstack.php?status=expiring#technologyDirectory',
+                        'action_url' => BASE_URL . 'modules/admin/techstack.php#technologyDirectory',
                     ];
                 }
 
@@ -256,7 +256,7 @@ if (
                     $adminRenewalRows[] = [
                         'name' => (string) ($renewalRow['name'] ?? 'Technology stack'),
                         'meta' => (string) ($renewalRow['category'] ?? 'Technology') . ' - ' . $rowExpiryLabel,
-                        'url' => BASE_URL . 'modules/admin/techstack.php?status=expiring#technologyDirectory',
+                        'url' => BASE_URL . 'modules/admin/techstack.php?search=' . rawurlencode((string) ($renewalRow['name'] ?? '')) . '#technologyDirectory',
                     ];
                 }
 

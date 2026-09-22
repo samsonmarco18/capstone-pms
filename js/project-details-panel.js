@@ -328,6 +328,10 @@ function renderFullProjectPanel(project, options = {}) {
                     <div class="value">${escapeHtml(project.client_name || 'N/A')}</div>
                 </div>
                 <div class="project-detail-item">
+                    <label>Project Type</label>
+                    <div class="value">${escapeHtml(project.project_type || 'Not specified')}</div>
+                </div>
+                <div class="project-detail-item">
                     <label>Timeline</label>
                     <div class="value">${formatProjectDate(project.timeline_start)} to ${formatProjectDate(project.timeline_end)}</div>
                 </div>

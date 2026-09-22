@@ -3236,19 +3236,35 @@ foreach ($sourceQueue as $assignmentGroup) {
     $queueTask = $assignmentGroup['representative'] ?? [];
     if (!$queueTask) continue;
     if (isset($evortixReviewedTaskIds[(int) ($queueTask['id'] ?? 0)])) continue;
+    $queueFeatures = array_values($assignmentGroup['features'] ?? [$queueTask]);
+    $queueTaskIds = array_values(array_unique(array_map(static fn(array $feature): int => (int) $feature['id'], $queueFeatures)));
+    $queueStarts = array_filter(array_map(static fn(array $feature): string => sulTaskAllocationDateInputValue($feature['department_roadmap_start'] ?? null), $queueFeatures));
+    $queueEnds = array_filter(array_map(static fn(array $feature): string => sulTaskAllocationDateInputValue($feature['department_roadmap_end'] ?? null), $queueFeatures));
+    $queueStart = $queueStarts !== [] ? max($queueStarts) : '';
+    $queueEnd = $queueEnds !== [] ? min($queueEnds) : '';
+    $queueRequirements = $assignmentGroup['required_classifications'] ?? [];
+    $queueSelectionLimit = max(1, min((int) ($assignmentGroup['required_count'] ?? 1), $availableDeveloperCount, count($queueTaskIds)));
+    if ($queueRequirements !== []) {
+        $queueSelectionLimit = min(max(1, array_sum($queueRequirements)), $availableDeveloperCount);
+    }
     $evortixAssignmentQueue[] = [
         'id' => (int) ($queueTask['id'] ?? 0),
-        'title' => (string) ($queueTask['title'] ?? 'Untitled task'),
+        'title' => count($queueTaskIds) > 1
+            ? 'Bulk assignment: ' . implode(', ', array_column($queueFeatures, 'title'))
+            : (string) ($queueTask['title'] ?? 'Untitled task'),
         'project' => (string) ($queueTask['project_name'] ?? ($project['name'] ?? 'Project')),
         'priority' => (string) ($assignmentGroup['priority'] ?? 'medium'),
         'deadline' => sulTaskAllocationAssignmentDeadlineValue(
             $assignmentGroup['deadline'] ?? null,
-            $queueTask['department_roadmap_start'] ?? null,
-            $queueTask['department_roadmap_end'] ?? null
+            $queueStart,
+            $queueEnd
         ),
-        'min_date' => sulTaskAllocationDateInputValue($queueTask['department_roadmap_start'] ?? null),
-        'max_date' => sulTaskAllocationDateInputValue($queueTask['department_roadmap_end'] ?? null),
-        'features' => count($assignmentGroup['features'] ?? []),
+        'min_date' => $queueStart,
+        'max_date' => $queueEnd,
+        'features' => count($queueTaskIds),
+        'task_ids' => $queueTaskIds,
+        'selection_limit' => $queueSelectionLimit,
+        'required_classifications' => $queueRequirements,
     ];
 }
 
@@ -8650,8 +8666,18 @@ function evortixScoreCandidate(row, task) {
     return availabilityScore + (skillMatches * 12) + Math.max(-50, 30 - ((load / capacity) * 45 * deadlinePressure));
 }
 
+function evortixRecommendedRows(task) {
+    const ranked = evortixCandidateRows().sort((a, b) => evortixScoreCandidate(b, task) - evortixScoreCandidate(a, task));
+    const requirements = evortixIsExpertWorkflow ? [] : Object.entries(task.required_classifications || {})
+        .filter(([, count]) => Number(count) > 0);
+    if (!requirements.length) return ranked.slice(0, 1);
+    return requirements.flatMap(([classification, count]) => ranked
+        .filter(row => (row.dataset.developerClassification || 'professional') === classification)
+        .slice(0, Number(count)));
+}
+
 function evortixRecommendedRow(task) {
-    return evortixCandidateRows().sort((a, b) => evortixScoreCandidate(b, task) - evortixScoreCandidate(a, task))[0] || null;
+    return evortixRecommendedRows(task)[0] || null;
 }
 
 function renderEvortixBubble() {
@@ -8665,7 +8691,8 @@ function renderEvortixBubble() {
     }
     const task = evortixAllocationQueue[evortixQueueIndex];
     const recommendation = evortixRecommendedRow(task);
-    const memberName = recommendation?.dataset[evortixIsExpertWorkflow ? 'expertName' : 'developerName'] || 'No available match';
+    const memberName = evortixRecommendedRows(task)
+        .map(row => row.dataset[evortixIsExpertWorkflow ? 'expertName' : 'developerName']).join(', ') || 'No available match';
     const load = Number(recommendation?.dataset.memberLoad || 0);
     const capacity = Number(recommendation?.dataset.memberCapacity || 5);
     const availability = recommendation?.dataset.memberAvailability || 'unknown';
@@ -8710,6 +8737,7 @@ document.addEventListener('click', async event => {
     const action = event.target.closest('[data-evortix-action]')?.dataset.evortixAction;
     if (!action) return;
     const task = evortixAllocationQueue[evortixQueueIndex];
+    if (!task) return;
     const recommended = evortixRecommendedRow(task);
     if (action === 'skip') {
         try {
@@ -8733,12 +8761,13 @@ document.addEventListener('click', async event => {
             document.getElementById('assignExpertForm')?.requestSubmit();
         }
     } else {
-        openAssignDeveloperModal(task.id, task.title, task.deadline, task.min_date, task.max_date);
+        openAssignDeveloperModal(task.id, task.title, task.deadline, task.min_date, task.max_date,
+            task.selection_limit, task.features, task.task_ids, task.required_classifications);
         if (action === 'accept' && recommended) {
-            selectDeveloperChoice(recommended);
+            evortixRecommendedRows(task).forEach(selectDeveloperChoice);
             const form = document.getElementById('assignDeveloperForm');
             const submitter = document.getElementById('confirmDeveloperAssignment');
-            if (form && submitter) form.requestSubmit(submitter);
+            if (form && submitter && !submitter.disabled) form.requestSubmit(submitter);
         }
     }
 });
