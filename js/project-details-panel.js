@@ -361,12 +361,6 @@ function renderFullProjectPanel(project, options = {}) {
                     <label>Architect</label>
                     <div class="value">${escapeHtml(project.architect_name || 'Unassigned')}</div>
                 </div>
-                <div class="project-detail-item">
-                    <label>SUL</label>
-                    <div class="value">${Array.isArray(project.department_teams) && project.department_teams.length
-                        ? project.department_teams.map(team => `<div>${escapeHtml(team.department)}: ${escapeHtml((team.suls || []).map(member => member.full_name).join(', ') || 'No department SUL assigned')}</div>`).join('')
-                        : escapeHtml(project.sul_name || 'Unassigned')}</div>
-                </div>
             </div>
 
             ${renderSalesIntakeSection(project)}
