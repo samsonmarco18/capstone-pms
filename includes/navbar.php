@@ -94,18 +94,16 @@ $navbarProfileImageUrl = getUserProfileImageUrl($user['profile_pic'] ?? null);
 
 <div id="page-content-wrapper">
     <nav class="navbar app-navbar navbar-light bg-white shadow-sm sticky-top">
-        <div class="container-fluid app-navbar-inner">
+        <div class="app-navbar-inner">
             <button class="btn btn-link nav-link nav-icon-link app-toggle sidebar-toggle-btn d-inline-flex d-lg-none" id="menu-toggle-mobile" type="button" aria-label="Toggle sidebar" title="Toggle sidebar">
                 <i class="fas fa-bars"></i>
             </button>
 
-            <ul class="navbar-nav ms-auto flex-row align-items-center gap-2 flex-wrap justify-content-end">
-                <li class="nav-item d-none d-lg-inline-flex">
-                    <button class="btn btn-link nav-link nav-icon-link app-toggle sidebar-toggle-btn" id="menu-toggle-desktop" type="button" aria-label="Toggle sidebar" title="Toggle sidebar">
-                        <i class="fas fa-bars"></i>
-                    </button>
-                </li>
+            <button class="btn btn-link nav-link nav-icon-link app-toggle sidebar-toggle-btn d-none d-lg-inline-flex" id="menu-toggle-desktop" type="button" aria-label="Toggle sidebar" title="Toggle sidebar">
+                <i class="fas fa-bars"></i>
+            </button>
 
+            <ul class="navbar-nav ms-auto flex-row align-items-center gap-2 flex-nowrap justify-content-end">
                 <li class="nav-item dropdown" id="notificationsDropdown">
                     <a class="nav-link position-relative nav-icon-link" href="#" id="navbarNotifications" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="fas fa-bell"></i>
@@ -186,7 +184,7 @@ $navbarProfileImageUrl = getUserProfileImageUrl($user['profile_pic'] ?? null);
                             <?php endif; ?>
                             <i class="fas fa-user"></i>
                         </div>
-                        <div class="d-none d-md-flex flex-column text-start">
+                        <div class="nav-user-copy d-none d-md-flex flex-column text-start">
                             <span class="nav-user-name"><?php echo htmlspecialchars($user['full_name'] ?? 'User'); ?></span>
                             <small class="nav-user-role"><?php echo htmlspecialchars(getRoleDisplayName($user['role'] ?? '')); ?></small>
                         </div>

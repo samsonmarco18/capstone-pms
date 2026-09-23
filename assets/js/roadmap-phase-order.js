@@ -4,6 +4,8 @@
     if (!form || cards.length < 2) return;
     let dragged = null;
     let saving = false;
+    let preview = null;
+    const phaseName = card => card.querySelector('h5')?.textContent.trim() || 'Phase';
     const ids = () => cards.map(card => card.dataset.phaseCardId);
     function save(order) {
         if (saving || order.join(',') === ids().join(',')) return;
@@ -16,10 +18,14 @@
             form.appendChild(input);
         });
         cards.forEach(card => card.querySelector('.phase-drag-handle')?.setAttribute('disabled', ''));
-        form.requestSubmit();
+        window.appShowLoading?.('Saving phase order', 'Please wait while the roadmap is updated.');
+        // Let the loading state paint before starting navigation.
+        window.requestAnimationFrame(() => window.requestAnimationFrame(() => form.requestSubmit()));
     }
     function clear() {
-        cards.forEach(card => card.classList.remove('is-dragging', 'is-drop-target'));
+        cards.forEach(card => card.classList.remove('is-dragging', 'is-drop-target', 'drop-before', 'drop-after'));
+        preview?.remove();
+        preview = null;
         dragged = null;
     }
     cards.forEach(card => {
@@ -29,6 +35,16 @@
             dragged = card;
             event.dataTransfer.effectAllowed = 'move';
             event.dataTransfer.setData('text/plain', card.dataset.phaseCardId);
+            preview = document.createElement('div');
+            preview.className = 'phase-drag-preview';
+            preview.setAttribute('role', 'status');
+            const label = document.createElement('small');
+            label.textContent = 'Moving phase';
+            const title = document.createElement('strong');
+            title.textContent = phaseName(card);
+            preview.append(label, title);
+            document.body.appendChild(preview);
+            event.dataTransfer.setDragImage(preview, 24, 24);
             card.classList.add('is-dragging');
             event.stopPropagation();
         });
@@ -48,7 +64,15 @@
             if (!dragged || card === dragged) return;
             event.preventDefault();
             event.dataTransfer.dropEffect = 'move';
-            cards.forEach(other => other.classList.toggle('is-drop-target', other === card));
+            const rect = card.getBoundingClientRect();
+            const after = event.clientY > rect.top + rect.height / 2;
+            cards.forEach(other => {
+                other.classList.toggle('is-drop-target', other === card);
+                other.classList.toggle('drop-before', other === card && !after);
+                other.classList.toggle('drop-after', other === card && after);
+            });
+            const label = preview?.querySelector('small');
+            if (label) label.textContent = `Drop ${after ? 'after' : 'before'} ${phaseName(card)}`;
         });
         card.addEventListener('drop', event => {
             if (!dragged || dragged === card) return;
@@ -62,5 +86,12 @@
             clear();
             save(order);
         });
+    });
+    window.addEventListener('pageshow', () => {
+        clear();
+        saving = false;
+        form.querySelectorAll('[name="phase_order[]"]').forEach(input => input.remove());
+        cards.forEach(card => card.querySelector('.phase-drag-handle')?.removeAttribute('disabled'));
+        window.appHideLoading?.();
     });
 })();

@@ -1993,6 +1993,38 @@ body {
     background: rgba(255, 255, 255, 0.96) !important;
 }
 
+.app-navbar > .app-navbar-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: nowrap;
+    width: 100%;
+    min-width: 0;
+    gap: 0.75rem;
+    background: transparent !important;
+}
+
+.app-navbar-inner > .sidebar-toggle-btn,
+.app-navbar-inner > .navbar-nav > .nav-item {
+    flex-shrink: 0;
+}
+
+.app-navbar-inner > .navbar-nav {
+    min-width: 0;
+    margin-bottom: 0;
+}
+
+.app-navbar .nav-user-copy {
+    min-width: 0;
+    max-width: clamp(120px, 20vw, 240px);
+}
+
+.app-navbar .nav-user-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 #page-content-wrapper.sidebar-collapsed {
     width: calc(100vw - var(--shell-sidebar-collapsed-width));
     margin-left: var(--shell-sidebar-collapsed-width);

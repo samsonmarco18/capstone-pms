@@ -6114,7 +6114,7 @@ html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode)
         <?php endif; ?>
 
         <?php if ($canEditArchitecture): ?>
-<form method="post" id="phaseOrderForm" hidden>
+<form method="post" id="phaseOrderForm" data-confirm-skip="true" data-app-loading data-loading-title="Saving phase order" data-loading-text="Please wait while the roadmap is updated." hidden>
     <input type="hidden" name="reorder_phases" value="1">
     <input type="hidden" name="project_id" value="<?php echo (int) $selectedProjectId; ?>">
     <input type="hidden" name="order_token" value="<?php echo htmlspecialchars($_SESSION['roadmap_order_token']); ?>">
@@ -6125,6 +6125,11 @@ html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode)
 .phase-drag-handle:active { cursor: grabbing; }
 .phase-card-roadmap.is-dragging { opacity: .5; }
 .phase-card-roadmap.is-drop-target { outline: 2px solid #38bdf8; outline-offset: -2px; }
+.phase-card-roadmap.drop-before { box-shadow: inset 0 4px 0 #38bdf8; }
+.phase-card-roadmap.drop-after { box-shadow: inset 0 -4px 0 #38bdf8; }
+.phase-drag-preview { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 1100; max-width: min(360px, calc(100vw - 32px)); padding: 14px 20px; border: 1px solid #38bdf8; border-radius: 12px; background: #10334b; color: #e0f2fe; box-shadow: 0 12px 30px rgba(0,0,0,.3); pointer-events: none; }
+.phase-drag-preview small, .phase-drag-preview strong { display: block; overflow-wrap: anywhere; }
+.phase-drag-preview small { color: #8edcff; margin-bottom: 4px; font-size: .75rem; }
 </style>
 <?php endif; ?>
 <div class="modal fade roadmap-task-plan-modal" id="roadmapTaskPlanModal" tabindex="-1" aria-labelledby="roadmapTaskPlanModalTitle" aria-hidden="true">
