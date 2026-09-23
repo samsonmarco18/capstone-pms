@@ -1039,6 +1039,15 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                             </span>
                         </button>
                         <div class="estimation-panel-body" id="developerAllocationDetails" hidden>
+                            <div id="evortixClassificationReview" class="alert alert-info" data-project-id="<?php echo (int) $selectedProjectId; ?>" data-expert-id="<?php echo (int) $user['id']; ?>" data-locked="<?php echo $estimationLockedForReview ? '1' : '0'; ?>">
+                                <strong><i class="fas fa-robot me-1" aria-hidden="true"></i>Evortix developer classification</strong>
+                                <p class="mb-2">Review the recommended developer levels below before continuing to feature estimation.</p>
+                                <div class="d-flex flex-wrap gap-2">
+                                    <button type="button" class="btn btn-primary btn-sm" data-classification-choice="apply">Apply recommendations and continue</button>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" data-classification-choice="keep">Keep my selections and continue</button>
+                                </div>
+                                <small class="d-block mt-2" data-classification-status aria-live="polite"></small>
+                            </div>
                             <?php if (count($allocations) === 0): ?>
                                 <div class="text-muted">No Roadmap Architect headcount has been entered yet.</div>
                             <?php else: foreach ($allocations as $allocation): $department = (string) $allocation['department']; $required = max(0, (int) $allocation['required_count']); $derivedContribution = max(0, min(100, (int) ($allocation['contribution_percent'] ?? 100))); ?>
@@ -1054,7 +1063,7 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                                             <?php if ($required <= 0): ?>
                                                 <tr><td colspan="3" class="text-muted">This roadmap entry has no required headcount.</td></tr>
                                             <?php else: for ($i = 1; $i <= $required; $i++): $saved = $savedRows[$department][$i] ?? []; $levelSuggestion = projectEstimationSuggestedDeveloperLevel($project, $department, $i); $savedType = projectEstimationDeveloperLevel((string) ($saved['developer_type'] ?? $levelSuggestion['level'])); $savedContribution = $derivedContribution; ?>
-                                                <tr class="allocation-input-row" data-department="<?php echo htmlspecialchars($department); ?>">
+                                                <tr class="allocation-input-row" data-department="<?php echo htmlspecialchars($department); ?>" data-recommended-level="<?php echo htmlspecialchars($levelSuggestion['level'], ENT_QUOTES, 'UTF-8'); ?>" data-recommendation-reason="<?php echo htmlspecialchars($levelSuggestion['reason'], ENT_QUOTES, 'UTF-8'); ?>">
                                                     <td>
                                                         <select class="form-control-custom developer-type-input" name="allocations[<?php echo htmlspecialchars($department); ?>][<?php echo $i; ?>][developer_type]" <?php echo $estimationLockedForReview ? 'disabled' : ''; ?>>
                                                             <?php foreach (PROJECT_ESTIMATION_SALARIES as $type => $salary): ?>
@@ -1214,6 +1223,7 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
         </div>
     </div>
 
+    <script src="<?php echo BASE_URL; ?>assets/js/expert-classification-review.js"></script>
     <script>
     (function () {
         const salaries = <?php echo json_encode(PROJECT_ESTIMATION_SALARIES); ?>;

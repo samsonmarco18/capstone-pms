@@ -1025,13 +1025,6 @@ html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode)
 
     <?php include '../../includes/architect-project-review-panel.php'; ?>
 
-    <?php if (count($salesRequestedFeatures) > 0): ?>
-    <div class="architect-dss-source-controls">
-        <div><strong><i class="fas fa-robot me-1"></i> DSS feature review</strong><br><span>The assistant found <?php echo count($salesRequestedFeatures); ?> intake feature(s). They are included by default; uncheck only the items you want to skip.</span></div>
-        <div class="d-flex gap-2"><button type="button" class="btn btn-primary btn-sm" data-dss-feature-decision="accept">Accept suggestions</button><button type="button" class="btn btn-outline-secondary btn-sm" data-dss-feature-decision="skip">Skip suggestions</button></div>
-    </div>
-    <?php endif; ?>
-
     <form method="POST" class="card p-4">
         <?php if (count($existingFeatures) > 0): ?>
             <div class="feature-section-title">
@@ -1370,11 +1363,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if ($architectDssItems !== []):
     $architectDssAssistantConfig = [
         'title' => 'Feature recommendations ready',
-        'message' => 'I found ' . count($architectDssItems) . ' feature recommendation' . (count($architectDssItems) === 1 ? '' : 's') . ' from the Sales intake and project template. Review them one at a time.',
+        'message' => 'I found ' . count($architectDssItems) . ' feature recommendation' . (count($architectDssItems) === 1 ? '' : 's') . ' from the Sales intake and project template. Review them individually or accept all at once.',
         'stateKey' => 'evortix.dss.features.project.' . (int) $projectId,
         'persistDecisions' => false,
         'startDelay' => 100,
-        'showSourceControls' => true,
+        'showSourceControls' => false,
+        'allowAcceptAll' => true,
         'pointAtMessage' => true,
         'pointSide' => 'left',
         'items' => $architectDssItems,

@@ -4645,6 +4645,7 @@ function showEvortixFeatureDecision() {
 function startEvortixFeatureReview(projectId, replay = false) {
     const normalizedProjectId = String(projectId || '');
     if (!normalizedProjectId) return;
+    if (window.evortixDeveloperClassificationReady && !window.evortixDeveloperClassificationReady(normalizedProjectId)) return;
     if (evortixFeatureReviewTimer) window.clearTimeout(evortixFeatureReviewTimer);
 
     const cards = Array.from(document.querySelectorAll(`.estimation-card[data-project-id="${normalizedProjectId}"]`))

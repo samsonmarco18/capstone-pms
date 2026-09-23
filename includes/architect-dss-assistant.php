@@ -88,6 +88,17 @@ $architectDssAssistantConfig = is_array($architectDssAssistantConfig ?? null) ? 
     .evortix-dss-replay-trigger { right: 5.3rem; bottom: 1.1rem; }
     .evortix-dss-replay-trigger span { display: none; }
 }
+.evortix-dss-accept-all { grid-column: 1 / -1; }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .evortix-dss-replay-trigger,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .chat-bot-speech.evortix-architect-dss .btn-light {
+    background: #102f45;
+    color: #c5eaff;
+    border: 1px solid #32627e;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .evortix-dss-replay-trigger:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .chat-bot-speech.evortix-architect-dss .btn-light:hover {
+    background: #194560;
+}
 </style>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
@@ -224,6 +235,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="evortix-dss-actions">
                 <button type="button" class="btn btn-light btn-sm" data-evortix-dss-choice="skip">Skip this</button>
                 <button type="button" class="btn btn-primary btn-sm" data-evortix-dss-choice="accept">Accept this</button>
+                ${config.allowAcceptAll ? '<button type="button" class="btn btn-primary btn-sm evortix-dss-accept-all" data-evortix-dss-choice="accept-all">Accept all</button>' : ''}
             </div>`;
         bot.hidden = false;
         bot.setAttribute('aria-hidden', 'false');
@@ -274,6 +286,23 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!choice || reviewCompleted) return;
         event.preventDefault();
         event.stopPropagation();
+        if (choice.dataset.evortixDssChoice === 'accept-all' && config.allowAcceptAll) {
+            allItems.forEach(item => {
+                applyItemDecision(item, true);
+                savedDecisions[itemDecisionKey(item)] = 'accepted';
+            });
+            if (persistDecisions) try { localStorage.setItem(stateKey, JSON.stringify(savedDecisions)); } catch (error) {}
+            acceptedCount = allItems.length;
+            skippedCount = 0;
+            itemIndex = items.length;
+            reviewCompleted = true;
+            hideSourceControls();
+            const speech = document.querySelector('#chat-bot-float .chat-bot-speech');
+            if (speech) { speech.hidden = true; speech.setAttribute('aria-hidden', 'true'); }
+            window.chatBotFloatRobot?.setEmotion?.('happy', 900);
+            window.evortixAnnounceNotification?.(config.completedTitle || 'DSS review complete', `${acceptedCount} suggestions accepted. Review your selections before continuing.`, '');
+            return;
+        }
         const accepted = choice.dataset.evortixDssChoice === 'accept';
         const item = items[itemIndex] || null;
         applyItemDecision(item, accepted);

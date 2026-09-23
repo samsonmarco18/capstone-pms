@@ -538,7 +538,7 @@ if (
             $compactMetricIndexesByRole = [
                 'architect' => [1, 2, 3],
                 'qa' => [0, 1, 3],
-                'expert' => [0, 1, 3],
+                'expert' => [1, 3],
             ];
             $compactActionUrlsByRole = [
                 'qa' => BASE_URL . 'modules/qa/testing.php',
@@ -715,7 +715,7 @@ document.addEventListener('DOMContentLoaded', () => {
         sales: [['estimation', 'Estimation Approval', 'fa-calculator', 'Estimation Approval', 'No estimations are waiting for Sales approval.'], ['release', 'Release Status', 'fa-bullhorn', 'Release Status', 'No release items need Sales attention.'], ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Projects', 'No overdue projects need attention.']],
         architect: [['review', 'Review', 'fa-folder-open', 'Architecture Review', 'No architecture reviews need attention.'], ['progress', 'Progress', 'fa-gears', 'Planning Progress', 'No planning work needs attention.'], ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Watch', 'No overdue architecture work was detected.']],
         qa: [['testing', 'Testing', 'fa-vial', 'Testing Queue', 'No tasks are waiting for QA.'], ['failed', 'Failed', 'fa-circle-xmark', 'Failed Checks', 'No failed QA checks need attention.'], ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue QA', 'No overdue QA items were detected.']],
-        expert: [['tasks', 'Tasks', 'fa-list-check', 'Assigned Tasks', 'No assigned tasks need attention.'], ['estimate', 'Estimate', 'fa-calculator', 'Estimation Queue', 'No estimation items need attention.'], ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Work', 'No overdue expert work was detected.']],
+        expert: [['estimate', 'Estimate', 'fa-calculator', 'Estimation Queue', 'No estimation items need attention.'], ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Work', 'No overdue expert work was detected.']],
         developer: [['tasks', 'Tasks', 'fa-list-check', 'Assigned Tasks', 'No assigned tasks need attention.'], ['progress', 'Progress', 'fa-play', 'In Progress', 'No active in-progress tasks were detected.'], ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Work', 'No overdue developer work was detected.']]
     };
     const escapeHtml = value => {
@@ -833,7 +833,6 @@ document.addEventListener('DOMContentLoaded', () => {
             ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue QA', 'No overdue QA items were detected.']
         ],
         expert: [
-            ['tasks', 'Tasks', 'fa-list-check', 'Assigned Tasks', 'No assigned tasks need attention.'],
             ['estimate', 'Estimate', 'fa-calculator', 'Estimation Queue', 'No estimation items need attention.'],
             ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Work', 'No overdue expert work was detected.']
         ],
@@ -989,6 +988,7 @@ document.addEventListener('DOMContentLoaded', () => {
 .evortix-role-summary-item-meta { color:#5b7f97; display:block; font-size:.65rem; font-weight:700; line-height:1.35; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
 .evortix-role-summary-item-arrow { color:#157baa; font-size:.72rem }
 .chat-bot-speech.evortix-role-dashboard-summary.has-project-list { width:min(430px,calc(100vw - 190px)); min-width:380px }
+.evortix-project-status-tabs:not(:has(> :nth-child(3))),
 .evortix-project-status-tabs:has(> :nth-child(4)) { grid-template-columns:repeat(2,minmax(0,1fr)); }
 .evortix-project-status-tabs { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.38rem; margin-bottom:.68rem }
 .evortix-project-status-tab { align-items:center; background:rgba(255,255,255,.58); border:1px solid rgba(8,123,185,.14); border-radius:10px; color:#426f8c; display:grid; font-size:.6rem; font-weight:800; gap:.18rem; grid-template-columns:auto minmax(0,1fr) auto; min-width:0; padding:.46rem .48rem; text-align:left; transition:background .16s ease,border-color .16s ease,color .16s ease }
@@ -1609,7 +1609,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue QA', 'No overdue QA items were detected.', [/overdue/i], 'task']
             ],
             expert: [
-                ['tasks', 'Tasks', 'fa-list-check', 'Assigned Tasks', 'No assigned tasks need attention.', [/assigned|task/i], 'task'],
                 ['estimate', 'Estimate', 'fa-calculator', 'Estimation Queue', 'No estimation items need attention.', [/estimate/i], 'task'],
                 ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Work', 'No overdue expert work was detected.', [/overdue/i], 'task']
             ],
@@ -1878,7 +1877,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue QA', 'No overdue QA items were detected.']
             ],
             expert: [
-                ['tasks', 'Tasks', 'fa-list-check', 'Assigned Tasks', 'No assigned tasks need attention.'],
                 ['estimate', 'Estimate', 'fa-calculator', 'Estimation Queue', 'No estimation items need attention.'],
                 ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Work', 'No overdue expert work was detected.']
             ],
@@ -2729,7 +2727,7 @@ document.addEventListener('DOMContentLoaded', function () {
         sales: [['estimation', 'Estimation Approval', 'fa-calculator', 'Estimation Approval', 'No estimations are waiting for Sales approval.'], ['release', 'Release Status', 'fa-bullhorn', 'Release Status', 'No release items need Sales attention.'], ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Projects', 'No overdue projects need attention.']],
         architect: [['review', 'Review', 'fa-folder-open', 'Architecture Review', 'No architecture reviews need attention.'], ['progress', 'Progress', 'fa-gears', 'Planning Progress', 'No planning work needs attention.'], ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Watch', 'No overdue architecture work was detected.']],
         qa: [['testing', 'Testing', 'fa-vial', 'Testing Queue', 'No tasks are waiting for QA.'], ['failed', 'Failed', 'fa-circle-xmark', 'Failed Checks', 'No failed QA checks need attention.'], ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue QA', 'No overdue QA items were detected.']],
-        expert: [['tasks', 'Tasks', 'fa-list-check', 'Assigned Tasks', 'No assigned tasks need attention.'], ['estimate', 'Estimate', 'fa-calculator', 'Estimation Queue', 'No estimation items need attention.'], ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Work', 'No overdue expert work was detected.']],
+        expert: [['estimate', 'Estimate', 'fa-calculator', 'Estimation Queue', 'No estimation items need attention.'], ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Work', 'No overdue expert work was detected.']],
         developer: [['tasks', 'Tasks', 'fa-list-check', 'Assigned Tasks', 'No assigned tasks need attention.'], ['progress', 'Progress', 'fa-play', 'In Progress', 'No active in-progress tasks were detected.'], ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Work', 'No overdue developer work was detected.']]
     };
     const escapeHtml = value => {
