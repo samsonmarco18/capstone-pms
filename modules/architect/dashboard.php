@@ -39,7 +39,6 @@ $totalProjects = $architectOverviewData['counts']['total'];
 $pendingProjects = $architectOverviewData['counts']['review'];
 $inProgressProjects = $architectOverviewData['counts']['progress'];
 $completedProjects = $architectOverviewData['counts']['completed'];
-$qaReviewCount = $architectOverviewData['counts']['qa'];
 
 // Sales creates new architecture-review intakes as pending projects.
 $reviewProjects = $conn->query("
@@ -114,6 +113,38 @@ include '../../includes/navbar.php';
 ?>
 
 <style>
+.architect-stats-row {
+    align-items: stretch;
+}
+
+.architect-stats-row > div > .card {
+    width: 100%;
+    min-height: 180px;
+}
+
+.architect-stats-row .card-body > .d-flex {
+    gap: 0.75rem;
+    height: 100%;
+}
+
+.architect-stats-row .flex-grow-1 {
+    min-width: 0;
+}
+
+.architect-stats-row .ms-3 {
+    flex-shrink: 0;
+    margin-left: 0 !important;
+}
+
+.architect-stats-row .text-uppercase {
+    min-height: 2.5em;
+}
+
+.architect-stats-row small {
+    display: block;
+    min-height: 3em;
+}
+
 :root {
     --theme-primary: #1f6392;
     --theme-dark: #184f73;
@@ -525,8 +556,8 @@ include '../../includes/navbar.php';
     </div>
 
     <!-- Statistics Cards -->
-    <div class="row g-3 mb-4 role-stats-row">
-        <div class="col-xl col-md-6">
+    <div class="row g-3 mb-4 role-stats-row architect-stats-row">
+        <div class="col-xl-3 col-md-6 d-flex">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-body p-4">
                     <div class="d-flex justify-content-between align-items-start">
@@ -543,7 +574,7 @@ include '../../includes/navbar.php';
             </div>
         </div>
         
-        <div class="col-xl col-md-6">
+        <div class="col-xl-3 col-md-6 d-flex">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-body p-4">
                     <div class="d-flex justify-content-between align-items-start">
@@ -560,7 +591,7 @@ include '../../includes/navbar.php';
             </div>
         </div>
         
-        <div class="col-xl col-md-6">
+        <div class="col-xl-3 col-md-6 d-flex">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-body p-4">
                     <div class="d-flex justify-content-between align-items-start">
@@ -577,7 +608,7 @@ include '../../includes/navbar.php';
             </div>
         </div>
         
-        <div class="col-xl col-md-6">
+        <div class="col-xl-3 col-md-6 d-flex">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-body p-4">
                     <div class="d-flex justify-content-between align-items-start">
@@ -592,15 +623,6 @@ include '../../includes/navbar.php';
                     </div>
                 </div>
             </div>
-        </div>
-        <div class="col-xl col-md-6">
-            <a href="final-approval.php" class="card border-0 shadow-sm h-100 text-decoration-none">
-                <div class="card-body p-4">
-                    <div class="text-muted text-uppercase small fw-semibold mb-2">QA Reviews</div>
-                    <div class="h1 fw-bold mb-2" style="color: #1f6392;"><?php echo $qaReviewCount; ?></div>
-                    <small class="text-muted">Awaiting final approval</small>
-                </div>
-            </a>
         </div>
     </div>
 
