@@ -32,11 +32,14 @@ function architectDashboardRequestedFeatureCount(?string $requestedFeatures): in
     return count($features);
 }
 
-// Get statistics
-$totalProjects = $conn->query("SELECT COUNT(*) as count FROM projects WHERE architect_id = {$user['id']} OR architect_id IS NULL")->fetch_assoc()['count'];
-$pendingProjects = $conn->query("SELECT COUNT(*) as count FROM projects WHERE (architect_id = {$user['id']} OR architect_id IS NULL) AND status = 'pending'")->fetch_assoc()['count'];
-$inProgressProjects = $conn->query("SELECT COUNT(*) as count FROM projects WHERE (architect_id = {$user['id']} OR architect_id IS NULL) AND status = 'in_progress'")->fetch_assoc()['count'];
-$completedProjects = $conn->query("SELECT COUNT(*) as count FROM projects WHERE (architect_id = {$user['id']} OR architect_id IS NULL) AND status = 'completed'")->fetch_assoc()['count'];
+// Use the same workflow buckets as Live Overview.
+require_once '../../includes/architect-overview.php';
+$architectOverviewData = architectOverview($conn, (int) $user['id']);
+$totalProjects = $architectOverviewData['counts']['total'];
+$pendingProjects = $architectOverviewData['counts']['review'];
+$inProgressProjects = $architectOverviewData['counts']['progress'];
+$completedProjects = $architectOverviewData['counts']['completed'];
+$qaReviewCount = $architectOverviewData['counts']['qa'];
 
 // Sales creates new architecture-review intakes as pending projects.
 $reviewProjects = $conn->query("
@@ -47,7 +50,7 @@ $reviewProjects = $conn->query("
     FROM projects p 
     JOIN clients c ON p.client_id = c.id 
     WHERE (p.architect_id = {$user['id']} OR p.architect_id IS NULL) 
-    AND p.status IN ('pending', 'review')
+    AND p.status IN ('pending', 'review', 'architectural_review')
     ORDER BY COALESCE(p.timeline_end, DATE(p.created_at)) ASC, p.created_at DESC 
     LIMIT 5
 ");
@@ -523,7 +526,7 @@ include '../../includes/navbar.php';
 
     <!-- Statistics Cards -->
     <div class="row g-3 mb-4 role-stats-row">
-        <div class="col-xl-3 col-md-6">
+        <div class="col-xl col-md-6">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-body p-4">
                     <div class="d-flex justify-content-between align-items-start">
@@ -540,7 +543,7 @@ include '../../includes/navbar.php';
             </div>
         </div>
         
-        <div class="col-xl-3 col-md-6">
+        <div class="col-xl col-md-6">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-body p-4">
                     <div class="d-flex justify-content-between align-items-start">
@@ -557,7 +560,7 @@ include '../../includes/navbar.php';
             </div>
         </div>
         
-        <div class="col-xl-3 col-md-6">
+        <div class="col-xl col-md-6">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-body p-4">
                     <div class="d-flex justify-content-between align-items-start">
@@ -574,7 +577,7 @@ include '../../includes/navbar.php';
             </div>
         </div>
         
-        <div class="col-xl-3 col-md-6">
+        <div class="col-xl col-md-6">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-body p-4">
                     <div class="d-flex justify-content-between align-items-start">
@@ -589,6 +592,15 @@ include '../../includes/navbar.php';
                     </div>
                 </div>
             </div>
+        </div>
+        <div class="col-xl col-md-6">
+            <a href="final-approval.php" class="card border-0 shadow-sm h-100 text-decoration-none">
+                <div class="card-body p-4">
+                    <div class="text-muted text-uppercase small fw-semibold mb-2">QA Reviews</div>
+                    <div class="h1 fw-bold mb-2" style="color: #1f6392;"><?php echo $qaReviewCount; ?></div>
+                    <small class="text-muted">Awaiting final approval</small>
+                </div>
+            </a>
         </div>
     </div>
 
@@ -764,7 +776,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             const label = context.label || '';
                             const value = context.raw || 0;
                             const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                            const percentage = ((value / total) * 100).toFixed(1);
+                            const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : '0.0';
                             return `${label}: ${value} (${percentage}%)`;
                         }
                     }

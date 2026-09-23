@@ -632,38 +632,10 @@ if (
                 ];
             }
             $evortixRoleDashboardSummary = $roleSummaries[$summaryRole] ?? null;
-            if ($summaryRole === 'architect' && $evortixRoleDashboardSummary) {
-                $planningResult = $summaryConn->query("
-                    SELECT p.id, p.name, p.status, p.timeline_end,
-                           (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id) AS task_count
-                    FROM projects p
-                    WHERE (p.architect_id = {$summaryUserId} OR p.architect_id IS NULL)
-                      AND p.status IN ('pending', 'review', 'architectural_review')
-                    ORDER BY CASE WHEN p.timeline_end IS NULL THEN 1 ELSE 0 END,
-                             p.timeline_end ASC, p.created_at ASC
-                    LIMIT 1
-                ");
-                $planningProject = $planningResult ? $planningResult->fetch_assoc() : null;
-                if ($planningProject) {
-                    $planningStarted = (int) ($planningProject['task_count'] ?? 0) > 0;
-                    $planningDeadline = !empty($planningProject['timeline_end'])
-                        ? date('M d, Y', strtotime((string) $planningProject['timeline_end']))
-                        : 'No target deadline';
-                    $evortixRoleDashboardSummary['item'] = [
-                        'icon' => 'fa-diagram-project',
-                        'title' => ($planningStarted ? 'Continue: ' : 'Start: ') . (string) $planningProject['name'],
-                        'meta' => ($planningStarted ? 'Planning underway' : 'Awaiting architecture review')
-                            . ' · Target ' . $planningDeadline,
-                        'action_url' => BASE_URL . 'modules/architect/project-review.php?id=' . (int) $planningProject['id'],
-                    ];
-                } else {
-                    $evortixRoleDashboardSummary['item'] = [
-                        'icon' => 'fa-circle-check',
-                        'title' => 'Architecture queue clear',
-                        'meta' => 'No project is waiting for planning',
-                        'action_url' => '',
-                    ];
-                }
+            if ($summaryRole === 'architect') {
+                require_once __DIR__ . '/architect-overview.php';
+                $architectSummaryData = $architectOverviewData ?? architectOverview($summaryConn, $summaryUserId);
+                $evortixRoleDashboardSummary = $architectSummaryData['summary'];
             }
             unset($_SESSION['evortix_role_dashboard_welcome_pending']);
         }
@@ -1017,6 +989,7 @@ document.addEventListener('DOMContentLoaded', () => {
 .evortix-role-summary-item-meta { color:#5b7f97; display:block; font-size:.65rem; font-weight:700; line-height:1.35; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
 .evortix-role-summary-item-arrow { color:#157baa; font-size:.72rem }
 .chat-bot-speech.evortix-role-dashboard-summary.has-project-list { width:min(430px,calc(100vw - 190px)); min-width:380px }
+.evortix-project-status-tabs:has(> :nth-child(4)) { grid-template-columns:repeat(2,minmax(0,1fr)); }
 .evortix-project-status-tabs { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.38rem; margin-bottom:.68rem }
 .evortix-project-status-tab { align-items:center; background:rgba(255,255,255,.58); border:1px solid rgba(8,123,185,.14); border-radius:10px; color:#426f8c; display:grid; font-size:.6rem; font-weight:800; gap:.18rem; grid-template-columns:auto minmax(0,1fr) auto; min-width:0; padding:.46rem .48rem; text-align:left; transition:background .16s ease,border-color .16s ease,color .16s ease }
 .evortix-project-status-tab i { color:#1784b6; font-size:.61rem }
@@ -2842,7 +2815,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const fallbackItems = patterns.length
                 ? cards.filter(card => card.value > 0 && patterns.some(pattern => pattern.test(card.label)))
                 : cards.filter(card => card.value > 0);
-            const items = (serverSummary ? serverItems : fallbackItems).slice(0, 5);
+            const items = serverSummary ? serverItems : fallbackItems;
             speech.querySelectorAll('[data-evortix-tail-tab]').forEach(button => {
                 const active = button.dataset.evortixTailTab === tab[0];
                 button.classList.toggle('is-active', active);
