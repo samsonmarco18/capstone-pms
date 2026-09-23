@@ -119,12 +119,11 @@ include '../../includes/navbar.php';
 
 .architect-stats-row > div > .card {
     width: 100%;
-    min-height: 180px;
+    min-height: 0;
 }
 
 .architect-stats-row .card-body > .d-flex {
     gap: 0.75rem;
-    height: 100%;
 }
 
 .architect-stats-row .flex-grow-1 {
@@ -137,12 +136,18 @@ include '../../includes/navbar.php';
 }
 
 .architect-stats-row .text-uppercase {
-    min-height: 2.5em;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.5;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.5rem !important;
 }
 
 .architect-stats-row small {
     display: block;
-    min-height: 3em;
+    font-size: 0.7rem;
+    font-weight: 500;
+    line-height: 1.5;
 }
 
 :root {

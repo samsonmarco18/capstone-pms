@@ -636,6 +636,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $postedDepartmentAllocations = projectWorkflowDepartmentAllocations($conn, $postedProjectId, $postedProject);
     $postedDeveloperCapacity = array_sum($postedDepartmentAllocations);
 
+    if (isset($_POST['reorder_phases'])) {
+        if (!$canEditArchitecture || empty($_SESSION['roadmap_order_token']) || !hash_equals((string) $_SESSION['roadmap_order_token'], (string) ($_POST['order_token'] ?? ''))) {
+            http_response_code(403);
+            exit('Phase ordering is not authorized.');
+        }
+        $phaseIds = array_map('intval', (array) ($_POST['phase_order'] ?? []));
+        $conn->begin_transaction();
+        try {
+            $current = $conn->query("SELECT id FROM methodology_phases WHERE project_id = {$postedProjectId} FOR UPDATE");
+            $existingIds = [];
+            while ($row = $current->fetch_assoc()) $existingIds[] = (int) $row['id'];
+            $sortedIds = $phaseIds;
+            sort($sortedIds); sort($existingIds);
+            if (!$phaseIds || $sortedIds !== $existingIds) throw new RuntimeException('The roadmap changed. Reload it before reordering.');
+            $stmt = $conn->prepare('UPDATE methodology_phases SET sequence_no = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND project_id = ?');
+            foreach ($phaseIds as $index => $orderedPhaseId) {
+                $sequence = $index + 1;
+                $stmt->bind_param('iiii', $sequence, $userId, $orderedPhaseId, $postedProjectId);
+                if (!$stmt->execute()) throw new RuntimeException('Unable to save phase order.');
+            }
+            $stmt->close();
+            $conn->commit();
+            $_SESSION['success'] = 'Phase order saved.';
+        } catch (Throwable $error) {
+            $conn->rollback();
+            $_SESSION['error'] = $error->getMessage();
+        }
+        header('Location: methodology.php?project_id=' . $postedProjectId);
+        exit();
+    }
+
     if (isset($_POST['apply_template'])) {
         if (!$canEditArchitecture) {
             $_SESSION['error'] = 'Only architects can apply methodology templates.';
@@ -866,7 +897,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             SELECT id
             FROM methodology_phases
             WHERE project_id = {$postedProjectId}
-            ORDER BY start_date DESC, sequence_no DESC, id DESC
+            AND is_final_phase = 1
+                ORDER BY id ASC
             LIMIT 1
         ");
         $postedFinalPhaseId = $finalPhaseResult ? (int) ($finalPhaseResult->fetch_assoc()['id'] ?? 0) : 0;
@@ -924,20 +956,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             roadmapReturnToEditor($postedProjectId, 'phase', 'Phase name, start date, and end date are required.', $_POST);
         }
 
-        $lastOtherPhaseResult = $conn->query("
-            SELECT COALESCE(MAX(sequence_no), 0) AS last_sequence
-            FROM methodology_phases
-            WHERE project_id = {$postedProjectId}
-              AND id <> {$phaseId}
-        ");
-        $lastOtherSequence = $lastOtherPhaseResult
-            ? max(0, (int) ($lastOtherPhaseResult->fetch_assoc()['last_sequence'] ?? 0))
-            : 0;
-        if ($sequenceNo >= $lastOtherSequence) {
-            // The final roadmap phase is completed by Architect merge-to-main,
-            // not by a staffed development assignment.
-            $developerCount = 0;
-        }
+        $savedPhaseType = $phaseId > 0
+            ? $conn->query("SELECT is_final_phase FROM methodology_phases WHERE id = {$phaseId} AND project_id = {$postedProjectId}")->fetch_assoc()
+            : null;
+        if (!empty($savedPhaseType['is_final_phase'])) $developerCount = 0;
 
         $otherHeadcountResult = $conn->query("
             SELECT COALESCE(SUM(developer_count), 0) AS used_headcount
@@ -1015,7 +1037,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 SELECT id
                 FROM methodology_phases
                 WHERE project_id = {$postedProjectId}
-                ORDER BY start_date DESC, sequence_no DESC, id DESC
+                AND is_final_phase = 1
+                ORDER BY id ASC
                 LIMIT 1
             ");
             $finalTaskPhaseId = $finalTaskPhaseResult
@@ -1441,7 +1464,7 @@ if ($selectedProject) {
         FROM methodology_phases mp
         LEFT JOIN users u ON u.id = mp.updated_by
         WHERE mp.project_id = {$selectedProjectId}
-        ORDER BY mp.start_date ASC, mp.sequence_no ASC, mp.id ASC
+        ORDER BY mp.sequence_no ASC, mp.start_date ASC, mp.id ASC
     ");
     while ($row = $phaseRows->fetch_assoc()) {
         $row['tasks'] = [];
@@ -1783,7 +1806,11 @@ if ($selectedProject && $canEditArchitecture) {
         }
     }
 }
-$finalPhaseId = $phases !== [] ? (int) array_key_last($phases) : 0;
+$_SESSION['roadmap_order_token'] ??= bin2hex(random_bytes(32));
+$finalPhaseId = 0;
+foreach ($phases as $phase) {
+    if (!empty($phase['is_final_phase'])) { $finalPhaseId = (int) $phase['id']; break; }
+}
 $projectDepartmentRemainingAllocations = [];
 foreach ($projectDepartmentAllocations as $department => $capacity) {
     // JavaScript narrows this project limit to the whole roadmap's remaining count.
@@ -5802,6 +5829,9 @@ html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode)
                         onclick="<?php echo ($canEditArchitecture && $phaseHasHeadcount && !$isFinalPhase) ? 'openTaskModalForPhase(this)' : ''; ?>"
                     >
                         <div class="phase-card-heading">
+                            <?php if ($canEditArchitecture): ?>
+                            <button type="button" class="phase-drag-handle" draggable="true" aria-label="Reorder <?php echo htmlspecialchars((string) $phase['name']); ?>" title="Drag to reorder; use Up or Down arrow keys" onclick="event.stopPropagation()"><i class="fas fa-grip-vertical" aria-hidden="true"></i></button>
+                            <?php endif; ?>
                             <h5><?php echo htmlspecialchars((string) $phase['name']); ?></h5>
                             <div class="phase-card-heading-actions">
                                 <span class="phase-status-indicator phase-state-<?php echo htmlspecialchars($phaseIndicator['key']); ?>">
@@ -6083,7 +6113,21 @@ html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode)
             </section>
         <?php endif; ?>
 
-        <div class="modal fade roadmap-task-plan-modal" id="roadmapTaskPlanModal" tabindex="-1" aria-labelledby="roadmapTaskPlanModalTitle" aria-hidden="true">
+        <?php if ($canEditArchitecture): ?>
+<form method="post" id="phaseOrderForm" hidden>
+    <input type="hidden" name="reorder_phases" value="1">
+    <input type="hidden" name="project_id" value="<?php echo (int) $selectedProjectId; ?>">
+    <input type="hidden" name="order_token" value="<?php echo htmlspecialchars($_SESSION['roadmap_order_token']); ?>">
+</form>
+<script src="<?php echo BASE_URL; ?>assets/js/roadmap-phase-order.js" defer></script>
+<style>
+.phase-drag-handle { border: 0; background: transparent; color: #7bb9db; cursor: grab; padding: .5rem; }
+.phase-drag-handle:active { cursor: grabbing; }
+.phase-card-roadmap.is-dragging { opacity: .5; }
+.phase-card-roadmap.is-drop-target { outline: 2px solid #38bdf8; outline-offset: -2px; }
+</style>
+<?php endif; ?>
+<div class="modal fade roadmap-task-plan-modal" id="roadmapTaskPlanModal" tabindex="-1" aria-labelledby="roadmapTaskPlanModalTitle" aria-hidden="true">
             <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
                 <div class="modal-content">
                     <div class="modal-header roadmap-task-plan-modal-header">
