@@ -637,6 +637,11 @@ if (
                 $architectSummaryData = $architectOverviewData ?? architectOverview($summaryConn, $summaryUserId);
                 $evortixRoleDashboardSummary = $architectSummaryData['summary'];
             }
+            if ($summaryRole === 'expert') {
+                require_once __DIR__ . '/expert-estimation-overview.php';
+                $expertOverviewData = $expertEstimationOverview ?? expertEstimationOverview($summaryConn, $summaryUserId);
+                $evortixRoleDashboardSummary = $expertOverviewData['summary'];
+            }
             unset($_SESSION['evortix_role_dashboard_welcome_pending']);
         }
     } catch (Throwable $e) {

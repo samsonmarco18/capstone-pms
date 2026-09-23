@@ -31,11 +31,11 @@
         const speech = bot?.querySelector('.chat-bot-speech');
         if (!speech || locked) return;
         const escape = value => { const node = document.createElement('span'); node.textContent = value; return node.innerHTML; };
-        speech.className = 'chat-bot-speech evortix-project-notification evortix-architect-dss';
+        speech.className = 'chat-bot-speech evortix-project-notification evortix-architect-dss evortix-classification-panel';
         speech.innerHTML = `<strong>Developer classification recommendations</strong>
             <p>Review these developer levels before feature estimation.</p>
-            <div style="max-height:240px;overflow:auto">${rows.map((row, index) => `<p><strong>${escape(row.dataset.department)} · Position ${index + 1}: ${escape(row.dataset.recommendedLevel)}</strong><br>${escape(row.dataset.recommendationReason)}</p>`).join('') || '<p>Enter the Roadmap developer headcount first.</p>'}</div>
-            ${rows.length ? '<div class="d-flex flex-wrap gap-2"><button type="button" class="btn btn-primary btn-sm" data-classification-choice="apply">Apply and continue</button><button type="button" class="btn btn-light btn-sm" data-classification-choice="keep">Keep my selections</button></div>' : ''}`;
+            <div class="evortix-classification-list">${rows.map((row, index) => `<p><strong>${escape(row.dataset.department)} · Position ${index + 1}: ${escape(row.dataset.recommendedLevel)}</strong><span>${escape(row.dataset.recommendationReason)}</span></p>`).join('') || '<p>Enter the Roadmap developer headcount first.</p>'}</div>
+            ${rows.length ? '<div class="evortix-classification-actions"><button type="button" class="btn btn-primary btn-sm" data-classification-choice="apply">Apply and continue</button><button type="button" class="btn btn-light btn-sm" data-classification-choice="keep">Keep my selections</button></div>' : ''}`;
         speech.dataset.classificationReview = 'true';
         speech.hidden = false;
         speech.setAttribute('aria-hidden', 'false');
