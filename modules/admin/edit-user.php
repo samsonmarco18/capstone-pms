@@ -41,7 +41,7 @@ if ($isPost && $userId > 0) {
     $role = trim((string) ($_POST['role'] ?? ''));
     $status = trim((string) ($_POST['status'] ?? ''));
     $designation = trim((string) ($_POST['designation'] ?? ''));
-    $developerClassification = $role === 'developer'
+    $developerClassification = in_array($role, ['developer', 'qa'], true)
         ? normalizeDeveloperClassification($_POST['developer_classification'] ?? null)
         : null;
 
@@ -61,11 +61,11 @@ if ($isPost && $userId > 0) {
     if ($role === 'sul' && $department === '') {
         $errors[] = 'SUL users must be assigned to a department.';
     }
-    if ($role === 'developer' && $developerClassification === null) {
-        $errors[] = 'Select a developer classification.';
+    if (in_array($role, ['developer', 'qa'], true) && $developerClassification === null) {
+        $errors[] = 'Select a classification.';
     }
-    if ($role === 'developer' && !$hasDeveloperClassification) {
-        $errors[] = 'Unable to prepare developer classifications. Please try again.';
+    if (in_array($role, ['developer', 'qa'], true) && !$hasDeveloperClassification) {
+        $errors[] = 'Unable to prepare classifications. Please try again.';
     }
     if (!in_array($status, ['active', 'inactive', 'suspended'], true)) {
         $errors[] = 'Please select a valid status.';
@@ -241,9 +241,9 @@ include '../../includes/navbar.php';
                             <label class="form-label" for="editDesignation">Designation</label>
                             <input type="text" id="editDesignation" name="designation" class="form-control" value="<?php echo htmlspecialchars($formValues['designation']); ?>" autocomplete="off">
                         </div>
-                        <div class="col-md-6<?php echo $formValues['role'] === 'developer' ? '' : ' d-none'; ?>" data-developer-classification-field>
-                            <label class="form-label" for="developerClassification">Developer Classification</label>
-                            <select name="developer_classification" id="developerClassification" class="form-select" <?php echo $formValues['role'] === 'developer' ? 'required' : 'disabled'; ?>>
+                        <div class="col-md-6<?php echo in_array($formValues['role'], ['developer', 'qa'], true) ? '' : ' d-none'; ?>" data-developer-classification-field>
+                            <label class="form-label" for="developerClassification">Classification</label>
+                            <select name="developer_classification" id="developerClassification" class="form-select" <?php echo in_array($formValues['role'], ['developer', 'qa'], true) ? 'required' : 'disabled'; ?>>
                                 <option value="">Select classification</option>
                                 <?php foreach ($developerClassificationOptions as $value => $label): ?>
                                 <option value="<?php echo htmlspecialchars($value); ?>" <?php echo $formValues['developer_classification'] === $value ? 'selected' : ''; ?>><?php echo htmlspecialchars($label); ?></option>
@@ -269,11 +269,11 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!roleSelect || !classificationField || !classificationSelect) return;
 
     const toggleClassification = function () {
-        const isDeveloper = roleSelect.value === 'developer';
-        classificationField.classList.toggle('d-none', !isDeveloper);
-        classificationSelect.disabled = !isDeveloper;
-        classificationSelect.required = isDeveloper;
-        if (!isDeveloper) classificationSelect.value = '';
+        const needsClassification = ['developer', 'qa'].includes(roleSelect.value);
+        classificationField.classList.toggle('d-none', !needsClassification);
+        classificationSelect.disabled = !needsClassification;
+        classificationSelect.required = needsClassification;
+        if (!needsClassification) classificationSelect.value = '';
     };
 
     roleSelect.addEventListener('change', toggleClassification);

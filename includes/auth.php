@@ -231,9 +231,9 @@ function ensureUserPasswordSecurityColumns(): bool
 function getDeveloperClassificationOptions(): array
 {
     return [
-        'junior' => 'Junior Developer',
-        'senior' => 'Senior Developer',
-        'professional' => 'Professional Developer',
+        'junior' => 'Junior',
+        'senior' => 'Senior',
+        'professional' => 'Professional',
     ];
 }
 
@@ -271,9 +271,9 @@ function ensureUserDeveloperClassificationColumn(): bool
             }
         }
 
-        // Existing developer accounts need a visible classification until an
+        // Existing delivery accounts need a visible classification until an
         // administrator assigns a more specific level.
-        $conn->query("UPDATE users SET developer_classification = 'professional' WHERE role = 'developer' AND (developer_classification IS NULL OR developer_classification = '')");
+        $conn->query("UPDATE users SET developer_classification = 'professional' WHERE role IN ('developer', 'qa') AND (developer_classification IS NULL OR developer_classification = '')");
         $ensured = true;
         return true;
     } catch (Throwable $e) {

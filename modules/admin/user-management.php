@@ -18,7 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         $full_name = trim((string) ($_POST['full_name'] ?? ''));
         $department = trim((string) $_POST['department']);
         $role = trim((string) $_POST['role']);
-        $developerClassification = $role === 'developer'
+        $developerClassification = in_array($role, ['developer', 'qa'], true)
             ? normalizeDeveloperClassification($_POST['developer_classification'] ?? null)
             : null;
         $hasPasswordChangedAt = ensureUserPasswordSecurityColumns();
@@ -31,10 +31,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
             $_SESSION['error'] = 'Select a valid role.';
         } elseif ($role === 'sul' && $department === '') {
             $_SESSION['error'] = "SUL users must be assigned to a department.";
-        } elseif ($role === 'developer' && $developerClassification === null) {
-            $_SESSION['error'] = 'Select a developer classification.';
-        } elseif ($role === 'developer' && !$hasDeveloperClassification) {
-            $_SESSION['error'] = 'Unable to prepare developer classifications. Please try again.';
+        } elseif (in_array($role, ['developer', 'qa'], true) && $developerClassification === null) {
+            $_SESSION['error'] = 'Select a classification.';
+        } elseif (in_array($role, ['developer', 'qa'], true) && !$hasDeveloperClassification) {
+            $_SESSION['error'] = 'Unable to prepare classifications. Please try again.';
         } else {
             $uniqueStmt = $conn->prepare('SELECT id FROM users WHERE username = ? OR email = ? LIMIT 1');
             if ($uniqueStmt === false) {
@@ -94,7 +94,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         $department = trim((string) $_POST['department']);
         $role = trim((string) $_POST['role']);
         $status = trim((string) ($_POST['status'] ?? ''));
-        $developerClassification = $role === 'developer'
+        $developerClassification = in_array($role, ['developer', 'qa'], true)
             ? normalizeDeveloperClassification($_POST['developer_classification'] ?? null)
             : null;
         
@@ -106,10 +106,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
             $_SESSION['error'] = 'Select a valid account status.';
         } elseif ($role === 'sul' && $department === '') {
             $_SESSION['error'] = "SUL users must be assigned to a department.";
-        } elseif ($role === 'developer' && $developerClassification === null) {
-            $_SESSION['error'] = 'Select a developer classification.';
-        } elseif ($role === 'developer' && !$hasDeveloperClassification) {
-            $_SESSION['error'] = 'Unable to prepare developer classifications. Please try again.';
+        } elseif (in_array($role, ['developer', 'qa'], true) && $developerClassification === null) {
+            $_SESSION['error'] = 'Select a classification.';
+        } elseif (in_array($role, ['developer', 'qa'], true) && !$hasDeveloperClassification) {
+            $_SESSION['error'] = 'Unable to prepare classifications. Please try again.';
         } else {
             $oldData = $conn->query("SELECT * FROM users WHERE id = {$id}")->fetch_assoc();
 
@@ -1543,7 +1543,7 @@ include '../../includes/navbar.php';
                         <th>User</th>
                         <th>Department</th>
                         <th>Role</th>
-                        <th>Developer Class</th>
+                        <th>Classification</th>
                         <th>Status</th>
                         <th>Created</th>
                         <th>Actions</th>
@@ -1577,7 +1577,7 @@ include '../../includes/navbar.php';
                             </span>
                         </td>
                         <td>
-                            <?php if (($row['role'] ?? '') === 'developer'): ?>
+                            <?php if (in_array((string) ($row['role'] ?? ''), ['developer', 'qa'], true)): ?>
                                 <span class="badge-role developer">
                                     <?php echo htmlspecialchars(getDeveloperClassificationLabel($row['developer_classification'] ?? null)); ?>
                                 </span>
@@ -1759,7 +1759,7 @@ include '../../includes/navbar.php';
                             </select>
                         </div>
                         <div class="col-md-6 d-none" data-create-developer-classification>
-                            <label class="form-label" for="createDeveloperClassification">Developer Classification</label>
+                            <label class="form-label" for="createDeveloperClassification">Classification</label>
                             <select name="developer_classification" id="createDeveloperClassification" class="form-select" disabled>
                                 <option value="">Select classification</option>
                                 <?php foreach (getDeveloperClassificationOptions() as $value => $label): ?>
@@ -1820,12 +1820,12 @@ const createDeveloperClassification = document.querySelector('[data-create-devel
 const createDeveloperClassificationSelect = document.getElementById('createDeveloperClassification');
 
 function toggleCreateDeveloperClassification() {
-    const isDeveloper = createUserRole?.value === 'developer';
-    createDeveloperClassification?.classList.toggle('d-none', !isDeveloper);
+    const needsClassification = ['developer', 'qa'].includes(createUserRole?.value || '');
+    createDeveloperClassification?.classList.toggle('d-none', !needsClassification);
     if (createDeveloperClassificationSelect) {
-        createDeveloperClassificationSelect.disabled = !isDeveloper;
-        createDeveloperClassificationSelect.required = isDeveloper;
-        if (!isDeveloper) {
+        createDeveloperClassificationSelect.disabled = !needsClassification;
+        createDeveloperClassificationSelect.required = needsClassification;
+        if (!needsClassification) {
             createDeveloperClassificationSelect.value = '';
         } else if (!createDeveloperClassificationSelect.value) {
             createDeveloperClassificationSelect.value = 'professional';
