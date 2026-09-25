@@ -719,6 +719,7 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
         line-height: 1;
         width: 26px;
     }
+    .estimation-section-complete[hidden] { display: none; }
     .estimation-section-complete i { color: #fff; }
     .estimation-section-toggle__chevron { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 9px; background: #edf6fb; color: var(--pe-primary); transition: transform 0.2s ease, background 0.2s ease; }
     .estimation-section-toggle[aria-expanded="true"] .estimation-section-toggle__chevron { transform: rotate(180deg); background: #dceef8; }
@@ -985,7 +986,7 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                         <button type="button" class="estimation-panel-head estimation-section-toggle" aria-expanded="false" aria-controls="projectOverviewDetails">
                             <h5 class="estimation-section-title"><span class="estimation-section-icon"><i class="fas fa-briefcase"></i></span><span>Project Overview</span></h5>
                             <span class="estimation-section-toggle__meta">
-                                <?php if ($projectOverviewComplete): ?><span class="estimation-section-complete" title="Section complete" aria-label="Project Overview complete"><i class="fas fa-check" aria-hidden="true"></i></span><?php endif; ?>
+                                <?php if ($projectOverviewComplete): ?><span class="estimation-section-complete" hidden title="Section complete and reviewed" aria-label="Project Overview complete"><i class="fas fa-check" aria-hidden="true"></i></span><?php endif; ?>
                                 <span class="estimation-section-toggle__chevron" aria-hidden="true"><i class="fas fa-chevron-down"></i></span>
                             </span>
                         </button>
@@ -1007,7 +1008,7 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                         <button type="button" class="estimation-panel-head estimation-section-toggle" aria-expanded="false" aria-controls="technologyCostDetails">
                             <h5 class="estimation-section-title"><span class="estimation-section-icon"><i class="fas fa-layer-group"></i></span><span>Technology Stack Cost</span></h5>
                             <span class="estimation-section-toggle__meta">
-                                <?php if ($technologyCostComplete): ?><span class="estimation-section-complete" title="Section complete" aria-label="Technology Stack Cost complete"><i class="fas fa-check" aria-hidden="true"></i></span><?php endif; ?>
+                                <?php if ($technologyCostComplete): ?><span class="estimation-section-complete" hidden title="Section complete and reviewed" aria-label="Technology Stack Cost complete"><i class="fas fa-check" aria-hidden="true"></i></span><?php endif; ?>
                                 <span class="estimation-section-toggle__chevron" aria-hidden="true"><i class="fas fa-chevron-down"></i></span>
                             </span>
                         </button>
@@ -1034,7 +1035,7 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                         <button type="button" class="estimation-panel-head estimation-section-toggle" aria-expanded="false" aria-controls="developerAllocationDetails">
                             <h5 class="estimation-section-title"><span class="estimation-section-icon"><i class="fas fa-users"></i></span><span>Developer Allocation</span></h5>
                             <span class="estimation-section-toggle__meta">
-                                <?php if ($developerAllocationComplete): ?><span class="estimation-section-complete" title="Section complete" aria-label="Developer Allocation complete"><i class="fas fa-check" aria-hidden="true"></i></span><?php endif; ?>
+                                <?php if ($developerAllocationComplete): ?><span class="estimation-section-complete" hidden title="Section complete and reviewed" aria-label="Developer Allocation complete"><i class="fas fa-check" aria-hidden="true"></i></span><?php endif; ?>
                                 <span class="estimation-section-toggle__chevron" aria-hidden="true"><i class="fas fa-chevron-down"></i></span>
                             </span>
                         </button>
@@ -1083,7 +1084,7 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                         <button type="button" class="estimation-panel-head estimation-section-toggle" aria-expanded="false" aria-controls="developerCostDetails">
                             <h5 class="estimation-section-title"><span class="estimation-section-icon"><i class="fas fa-calculator"></i></span><span>Developer Cost Estimation</span></h5>
                             <span class="estimation-section-toggle__meta">
-                                <?php if ($developerCostComplete): ?><span class="estimation-section-complete" title="Section complete" aria-label="Developer Cost Estimation complete"><i class="fas fa-check" aria-hidden="true"></i></span><?php endif; ?>
+                                <?php if ($developerCostComplete): ?><span class="estimation-section-complete" hidden title="Section complete and reviewed" aria-label="Developer Cost Estimation complete"><i class="fas fa-check" aria-hidden="true"></i></span><?php endif; ?>
                                 <span class="estimation-section-toggle__chevron" aria-hidden="true"><i class="fas fa-chevron-down"></i></span>
                             </span>
                         </button>
@@ -1108,7 +1109,7 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                             <span class="estimation-section-toggle__meta">
                                 <span class="feature-estimation-progress-meta"><?php echo $featureProgressEstimated; ?> of <?php echo $featureProgressTotal; ?> complete</span>
                                 <span class="project-estimation-status-pill <?php echo $featureProgressReady ? 'is-submitted' : ''; ?>"><?php echo htmlspecialchars($featureProgressStatus); ?></span>
-                                <?php if ($featureProgressReady): ?><span class="estimation-section-complete" title="Section complete" aria-label="Feature Estimation Progress complete"><i class="fas fa-check" aria-hidden="true"></i></span><?php endif; ?>
+                                <?php if ($featureProgressReady): ?><span class="estimation-section-complete" hidden title="Section complete and reviewed" aria-label="Feature Estimation Progress complete"><i class="fas fa-check" aria-hidden="true"></i></span><?php endif; ?>
                                 <span class="estimation-section-toggle__chevron" aria-hidden="true"><i class="fas fa-chevron-down"></i></span>
                             </span>
                         </button>
@@ -1140,7 +1141,7 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                             <h5 class="estimation-section-title"><span class="estimation-section-icon"><i class="fas fa-chart-pie"></i></span><span>Project Cost Summary</span></h5>
                             <span class="estimation-section-toggle__meta">
                                 <span class="project-estimation-status-pill <?php echo $estimationLockedForReview ? 'is-submitted' : ''; ?>"><i class="fas fa-<?php echo $estimationLockedForReview ? 'lock' : 'pen'; ?>" aria-hidden="true"></i><?php echo htmlspecialchars($estimationStatusLabel); ?></span>
-                                <?php if ($projectCostSummaryComplete): ?><span class="estimation-section-complete" title="Section complete" aria-label="Project Cost Summary complete"><i class="fas fa-check" aria-hidden="true"></i></span><?php endif; ?>
+                                <?php if ($projectCostSummaryComplete): ?><span class="estimation-section-complete" hidden title="Section complete and reviewed" aria-label="Project Cost Summary complete"><i class="fas fa-check" aria-hidden="true"></i></span><?php endif; ?>
                                 <span class="estimation-section-toggle__chevron" aria-hidden="true"><i class="fas fa-chevron-down"></i></span>
                             </span>
                         </button>
@@ -1293,6 +1294,10 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                 const details = document.getElementById(toggle.getAttribute('aria-controls') || '');
                 toggle.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
                 if (details) details.hidden = !shouldOpen;
+                if (shouldOpen && details) {
+                    const reviewedMarker = toggle.querySelector('.estimation-section-complete');
+                    if (reviewedMarker) reviewedMarker.hidden = false;
+                }
             });
         });
 

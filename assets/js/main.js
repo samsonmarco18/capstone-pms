@@ -670,21 +670,34 @@ function loadNotifications() {
     });
 }
 
-function announceProjectTeamNotification(notifications) {
-    const notification = notifications.find(item =>
-        !Number(item.is_read)
-        && String(item.related_table || '') === 'projects'
-        && String(item.title || '').toLowerCase().startsWith('project team message:')
-    );
-    if (!notification || typeof window.evortixAnnounceNotification !== 'function') return;
+const announcedProjectTeamNotifications = new Set();
+let projectTeamAnnouncementAvailableAt = 0;
 
-    const storageKey = `evortix.projectNotification.${notification.id}`;
-    if (sessionStorage.getItem(storageKey)) return;
-    sessionStorage.setItem(storageKey, '1');
+function announceProjectTeamNotification(notifications) {
+    if (typeof window.evortixAnnounceNotification !== 'function'
+        || window.evortixDashboardWelcomeActive
+        || Date.now() < projectTeamAnnouncementAvailableAt) return;
+
+    const notification = notifications.find(item => {
+        if (Number(item.is_read)
+            || String(item.related_table || '') !== 'projects'
+            || !String(item.title || '').toLowerCase().startsWith('project team message:')) return false;
+        const key = `evortix.projectNotification.${item.id}`;
+        if (announcedProjectTeamNotifications.has(key)) return false;
+        try { return !sessionStorage.getItem(key); } catch (error) { return true; }
+    });
+    if (!notification) return;
+
     const projectUrl = Number(notification.related_id || 0) > 0
         ? `${BASE_URL}modules/roadmap/methodology.php?project_id=${encodeURIComponent(notification.related_id)}`
         : notification.action_url;
-    window.evortixAnnounceNotification(notification.title, notification.message, projectUrl);
+    if (window.evortixAnnounceNotification(notification.title, notification.message, projectUrl) !== true) return;
+
+    const storageKey = `evortix.projectNotification.${notification.id}`;
+    announcedProjectTeamNotifications.add(storageKey);
+    try { sessionStorage.setItem(storageKey, '1'); } catch (error) { /* Keep in-memory deduplication. */ }
+    // Leave time to read each message before polling displays the next one.
+    projectTeamAnnouncementAvailableAt = Date.now() + 15000;
 }
 
 function updateNotificationBadge(count) {

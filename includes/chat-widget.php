@@ -15,7 +15,7 @@ if (function_exists('isLoggedIn') && isLoggedIn()) {
         $evortixUserId = (int) ($evortixUser['id'] ?? 0);
         if ($evortixUserId > 0) {
             $evortixStmt = getConnection()->prepare(
-                "SELECT id, title, message, action_url, related_id
+                "SELECT id, title, message, action_url, related_id, related_table
                  FROM notifications
                  WHERE user_id = ?
                    AND is_read = FALSE
@@ -1472,9 +1472,17 @@ document.addEventListener('DOMContentLoaded', function () {
     };
 
     window.evortixAnnounceNotification = function (heading, message, actionUrl) {
-        if (!evortixEnabled || !evortixSuggestionsEnabled || !botFloat) return;
+        if (!evortixEnabled || !evortixSuggestionsEnabled || !botFloat) return false;
         const speech = botFloat.querySelector('.chat-bot-speech');
-        if (!speech) return;
+        if (!speech) return false;
+        // Do not replace an active decision or confirmation panel. Retry on the next poll.
+        if (!botFloat.hidden && !speech.hidden && speech.getAttribute('aria-hidden') !== 'true'
+            && speech.querySelector('button, input, select, textarea')) return false;
+
+        clearTimeout(botTransitionTimer);
+        clearTimeout(botTypeTimer);
+        clearTimeout(evortixSpeechTimer);
+        speech.className = 'chat-bot-speech evortix-project-notification';
 
         speech.hidden = false;
         speech.classList.remove('evortix-dashboard-summary');
@@ -1504,7 +1512,12 @@ document.addEventListener('DOMContentLoaded', function () {
         announceEvortixAudio(`${heading || 'Project update'}. ${message || ''}`);
         window.chatBotWidgetRobot?.wake?.();
         window.chatBotFloatRobot?.wink?.('right');
+        botFloat.classList.remove('is-returning-bed', 'is-preparing-speech', 'is-leaving-bed');
+        botFloat.classList.add('is-speaking');
+        window.chatBotWidgetRobot?.setMode?.('empty-bed');
+        window.chatBotFloatRobot?.setMode?.('standing');
         typeBotSpeech(180);
+        return true;
     };
 
     const evortixRoleDashboardSummary = <?php echo json_encode($evortixRoleDashboardSummary, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
@@ -2054,15 +2067,10 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     if (evortixProjectTeamNotification) {
-        const storageKey = `evortix.projectNotification.${evortixProjectTeamNotification.id}`;
         const announceProjectNotification = () => {
-            if (sessionStorage.getItem(storageKey)) return;
-            sessionStorage.setItem(storageKey, '1');
-            window.setTimeout(() => window.evortixAnnounceNotification(
-                evortixProjectTeamNotification.title,
-                evortixProjectTeamNotification.message,
-                evortixProjectTeamNotification.action_url
-            ), 700);
+            window.setTimeout(() => {
+                window.announceProjectTeamNotification?.([evortixProjectTeamNotification]);
+            }, 700);
         };
         if (window.evortixDashboardWelcomeActive) {
             document.addEventListener('evortix:dashboard-welcome-complete', announceProjectNotification, { once:true });
