@@ -6049,7 +6049,8 @@ body {
     padding: 0;
     min-height: 0;
 }
-.evortix-classification-item strong {
+.chat-bot-speech.evortix-classification-panel .evortix-classification-item strong {
+    padding-left: 0 !important;
     color: #083a5d;
     font-size: .76rem;
     font-weight: 800;
