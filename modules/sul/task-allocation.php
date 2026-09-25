@@ -857,6 +857,12 @@ $deliveryNoAvailableText = 'No ' . $deliveryAssigneePluralLower . ' available';
 $sulUserDepartmentClause = $sulDepartment !== '' ? projectWorkflowUserDepartmentClause($conn, 'u', $sulDepartment) : '1 = 0';
 $sulUserDepartmentFilter = ' AND ' . $sulUserDepartmentClause;
 $deliveryAssigneeDepartmentFilter = $isQaDepartmentSul ? '' : $sulUserDepartmentFilter;
+$deliveryAssigneeRoleCondition = $isQaDepartmentSul
+    ? "(LOWER(u.role) = 'qa' OR (LOWER(u.role) = 'developer' AND " . projectWorkflowUserDepartmentClause($conn, 'u', 'QA') . '))'
+    : "u.role = 'developer'";
+$deliveryAssigneeValidationRoleCondition = $isQaDepartmentSul
+    ? "(LOWER(users.role) = 'qa' OR (LOWER(users.role) = 'developer' AND " . projectWorkflowUserDepartmentClause($conn, 'users', 'QA') . '))'
+    : "users.role = 'developer'";
 $sulProjectFilter = sulTaskAllocationProjectFilter($conn, 'p', $sulDepartment);
 $sulTaskDepartmentFilter = $sulDepartment !== '' ? ' AND ' . projectWorkflowTaskDepartmentClause($conn, 't', $sulDepartment, true) : ' AND 1 = 0';
 $sulCurrentRoadmapTaskFilter = $sulDepartment !== '' ? ' AND ' . projectWorkflowCurrentRoadmapTaskClause($conn, 't', $sulDepartment, true) : ' AND 1 = 0';
@@ -1537,11 +1543,12 @@ $developers = $conn->query("
            COUNT(t.id) as assigned_tasks
     FROM users u
     LEFT JOIN tasks t ON u.id = t.assigned_to AND t.status != 'completed'
-    WHERE u.role = '{$deliveryAssigneeRole}' AND u.status = 'active'
-    AND COALESCE(NULLIF(u.availability_status, ''), 'available') IN ('available', 'limited')
+    WHERE {$deliveryAssigneeRoleCondition}
+      AND COALESCE(NULLIF(LOWER(u.status), ''), 'active') = 'active'
+    AND LOWER(COALESCE(NULLIF(u.availability_status, ''), 'available')) IN ('available', 'limited')
       {$deliveryAssigneeDepartmentFilter}
     GROUP BY u.id, u.full_name, u.profile_pic, u.designation, u.department, u.developer_classification, u.skills, u.availability_status, u.max_concurrent_tasks
-    ORDER BY CASE COALESCE(NULLIF(u.availability_status, ''), 'available') WHEN 'available' THEN 0 WHEN 'limited' THEN 1 ELSE 2 END,
+    ORDER BY CASE LOWER(COALESCE(NULLIF(u.availability_status, ''), 'available')) WHEN 'available' THEN 0 WHEN 'limited' THEN 1 ELSE 2 END,
              assigned_tasks ASC, u.full_name ASC
 ");
 $availableDeveloperCount = $developers ? $developers->num_rows : 0;
@@ -1966,8 +1973,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             SELECT id, COALESCE(developer_classification, 'professional') AS developer_classification
             FROM users
             WHERE id IN ({$developerIdList})
-              AND role = '{$deliveryAssigneeRole}'
-              AND status = 'active'
+              AND " . str_replace('users.', '', $deliveryAssigneeValidationRoleCondition) . "
+              AND COALESCE(NULLIF(LOWER(status), ''), 'active') = 'active'
               {$developerDepartmentSql}
         ");
         $validDeveloper = $developerCheck && $developerCheck->num_rows === count($developerIds);
@@ -2153,9 +2160,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             LEFT JOIN tasks active_tasks
               ON active_tasks.assigned_to = users.id
              AND active_tasks.status NOT IN ('completed', 'cancelled')
-            WHERE users.role = '{$deliveryAssigneeRole}'
-              AND users.status = 'active'
-              AND COALESCE(NULLIF(users.availability_status, ''), 'available') IN ('available', 'limited')
+            WHERE {$deliveryAssigneeValidationRoleCondition}
+              AND COALESCE(NULLIF(LOWER(users.status), ''), 'active') = 'active'
+              AND LOWER(COALESCE(NULLIF(users.availability_status, ''), 'available')) IN ('available', 'limited')
                " . ($isQaDepartmentSul ? '' : 'AND ' . projectWorkflowUserDepartmentClause($conn, 'users', $sulDepartment)) . "
               " . ($requiredClassificationCounts !== [] ? "AND COALESCE(users.developer_classification, 'professional') IN ('" . implode("','", array_keys($requiredClassificationCounts)) . "')" : "") . "
             GROUP BY users.id
