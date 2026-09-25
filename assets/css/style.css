@@ -5985,7 +5985,7 @@ body {
 .chat-bot-speech.evortix-classification-panel::before { display: none; }
 .evortix-classification-head {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     gap: .65rem;
     flex-shrink: 0;
 }
