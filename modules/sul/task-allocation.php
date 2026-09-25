@@ -1451,7 +1451,7 @@ $completedTasks = $conn->query("
 $experts = $conn->query("
     SELECT u.id, u.full_name, u.profile_pic, u.designation, u.department,
            COALESCE(u.skills, '') AS skills,
-           COALESCE(u.availability_status, 'available') AS availability_status,
+           COALESCE(NULLIF(u.availability_status, ''), 'available') AS availability_status,
            COALESCE(u.max_concurrent_tasks, 5) AS max_concurrent_tasks,
            COUNT(t.id) as assigned_tasks
     FROM users u
@@ -1459,7 +1459,7 @@ $experts = $conn->query("
     WHERE u.role = 'expert' AND u.status = 'active'
       {$sulUserDepartmentFilter}
     GROUP BY u.id, u.full_name, u.profile_pic, u.designation, u.department, u.skills, u.availability_status, u.max_concurrent_tasks
-    ORDER BY CASE COALESCE(u.availability_status, 'available') WHEN 'available' THEN 0 WHEN 'limited' THEN 1 ELSE 2 END,
+    ORDER BY CASE COALESCE(NULLIF(u.availability_status, ''), 'available') WHEN 'available' THEN 0 WHEN 'limited' THEN 1 ELSE 2 END,
              assigned_tasks ASC, u.full_name ASC
 ");
 
@@ -1531,16 +1531,16 @@ $developers = $conn->query("
     SELECT u.id, u.full_name, u.profile_pic, u.designation, u.department,
            COALESCE(u.developer_classification, 'professional') AS developer_classification,
            COALESCE(u.skills, '') AS skills,
-           COALESCE(u.availability_status, 'available') AS availability_status,
+           COALESCE(NULLIF(u.availability_status, ''), 'available') AS availability_status,
            COALESCE(u.max_concurrent_tasks, 5) AS max_concurrent_tasks,
            COUNT(t.id) as assigned_tasks
     FROM users u
     LEFT JOIN tasks t ON u.id = t.assigned_to AND t.status != 'completed'
     WHERE u.role = '{$deliveryAssigneeRole}' AND u.status = 'active'
-      AND COALESCE(u.availability_status, 'available') IN ('available', 'limited')
+      AND COALESCE(NULLIF(u.availability_status, ''), 'available') IN ('available', 'limited')
       {$sulUserDepartmentFilter}
     GROUP BY u.id, u.full_name, u.profile_pic, u.designation, u.department, u.developer_classification, u.skills, u.availability_status, u.max_concurrent_tasks
-    ORDER BY CASE COALESCE(u.availability_status, 'available') WHEN 'available' THEN 0 WHEN 'limited' THEN 1 ELSE 2 END,
+    ORDER BY CASE COALESCE(NULLIF(u.availability_status, ''), 'available') WHEN 'available' THEN 0 WHEN 'limited' THEN 1 ELSE 2 END,
              assigned_tasks ASC, u.full_name ASC
 ");
 $availableDeveloperCount = $developers ? $developers->num_rows : 0;
@@ -2152,7 +2152,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
              AND active_tasks.status NOT IN ('completed', 'cancelled')
             WHERE users.role = '{$deliveryAssigneeRole}'
               AND users.status = 'active'
-              AND COALESCE(users.availability_status, 'available') IN ('available', 'limited')
+              AND COALESCE(NULLIF(users.availability_status, ''), 'available') IN ('available', 'limited')
               AND " . projectWorkflowUserDepartmentClause($conn, 'users', $sulDepartment) . "
               " . ($requiredClassificationCounts !== [] ? "AND COALESCE(users.developer_classification, 'professional') IN ('" . implode("','", array_keys($requiredClassificationCounts)) . "')" : "") . "
             GROUP BY users.id
@@ -3273,15 +3273,15 @@ $evortixReallocationSuggestions = [];
 if (!$sulMissingDepartment) {
     $reallocationRows = $conn->query("
         SELECT t.id, t.title, t.deadline, t.status, p.name AS project_name,
-               u.full_name, COALESCE(u.availability_status, 'available') AS availability_status
+               u.full_name, COALESCE(NULLIF(u.availability_status, ''), 'available') AS availability_status
         FROM tasks t
         JOIN projects p ON p.id = t.project_id
         JOIN users u ON u.id = t.assigned_to
         WHERE t.status NOT IN ('completed', 'merged', 'ready_for_release')
           AND {$sulProjectFilter}
           {$sulTaskDepartmentFilter}
-          AND (COALESCE(u.availability_status, 'available') NOT IN ('available', 'limited') OR t.deadline < NOW())
-        ORDER BY CASE WHEN COALESCE(u.availability_status, 'available') NOT IN ('available', 'limited') THEN 0 ELSE 1 END,
+          AND (COALESCE(NULLIF(u.availability_status, ''), 'available') NOT IN ('available', 'limited') OR t.deadline < NOW())
+        ORDER BY CASE WHEN COALESCE(NULLIF(u.availability_status, ''), 'available') NOT IN ('available', 'limited') THEN 0 ELSE 1 END,
                  t.deadline ASC
         LIMIT 5
     ");
