@@ -856,6 +856,7 @@ $deliveryNoSelectionText = 'No ' . $deliveryAssigneeLower . ' selected';
 $deliveryNoAvailableText = 'No ' . $deliveryAssigneePluralLower . ' available';
 $sulUserDepartmentClause = $sulDepartment !== '' ? projectWorkflowUserDepartmentClause($conn, 'u', $sulDepartment) : '1 = 0';
 $sulUserDepartmentFilter = ' AND ' . $sulUserDepartmentClause;
+$deliveryAssigneeDepartmentFilter = $isQaDepartmentSul ? '' : $sulUserDepartmentFilter;
 $sulProjectFilter = sulTaskAllocationProjectFilter($conn, 'p', $sulDepartment);
 $sulTaskDepartmentFilter = $sulDepartment !== '' ? ' AND ' . projectWorkflowTaskDepartmentClause($conn, 't', $sulDepartment, true) : ' AND 1 = 0';
 $sulCurrentRoadmapTaskFilter = $sulDepartment !== '' ? ' AND ' . projectWorkflowCurrentRoadmapTaskClause($conn, 't', $sulDepartment, true) : ' AND 1 = 0';
@@ -1075,7 +1076,7 @@ $pendingEstimationTasks = $conn->query("
       AND t.assigned_to IS NOT NULL 
       AND t.assigned_to != 0
       AND u.role = 'expert'
-      {$sulUserDepartmentFilter}
+      {$deliveryAssigneeDepartmentFilter}
       AND {$sulProjectFilter}
       {$selectedExpertProjectFilter}
       AND (SELECT COUNT(*) FROM feature_estimations fe WHERE fe.task_id = t.id AND fe.status = 'completed') = 0
@@ -1136,7 +1137,7 @@ $reviewTasks = $conn->query("
     JOIN projects p ON t.project_id = p.id
     LEFT JOIN feature_estimations fe ON t.id = fe.task_id AND fe.status = 'completed'
     WHERE t.status IN ('review', 'in_review'){$salesApprovalFilter}
-      {$sulUserDepartmentFilter}
+      {$deliveryAssigneeDepartmentFilter}
       AND {$sulProjectFilter}
       {$selectedExpertProjectFilter}
     ORDER BY t.deadline ASC
@@ -1537,8 +1538,8 @@ $developers = $conn->query("
     FROM users u
     LEFT JOIN tasks t ON u.id = t.assigned_to AND t.status != 'completed'
     WHERE u.role = '{$deliveryAssigneeRole}' AND u.status = 'active'
-      AND COALESCE(NULLIF(u.availability_status, ''), 'available') IN ('available', 'limited')
-      {$sulUserDepartmentFilter}
+    AND COALESCE(NULLIF(u.availability_status, ''), 'available') IN ('available', 'limited')
+      {$deliveryAssigneeDepartmentFilter}
     GROUP BY u.id, u.full_name, u.profile_pic, u.designation, u.department, u.developer_classification, u.skills, u.availability_status, u.max_concurrent_tasks
     ORDER BY CASE COALESCE(NULLIF(u.availability_status, ''), 'available') WHEN 'available' THEN 0 WHEN 'limited' THEN 1 ELSE 2 END,
              assigned_tasks ASC, u.full_name ASC
@@ -1957,7 +1958,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             exit();
         }
 
-        $developerDepartmentSql = $sulDepartment !== '' ? ' AND ' . projectWorkflowUserDepartmentClause($conn, 'users', $sulDepartment) : ' AND 1 = 0';
+        $developerDepartmentSql = $isQaDepartmentSul
+            ? ''
+            : ($sulDepartment !== '' ? ' AND ' . projectWorkflowUserDepartmentClause($conn, 'users', $sulDepartment) : ' AND 1 = 0');
         $developerIdList = implode(',', $developerIds);
         $developerCheck = $conn->query("
             SELECT id, COALESCE(developer_classification, 'professional') AS developer_classification
@@ -2153,7 +2156,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             WHERE users.role = '{$deliveryAssigneeRole}'
               AND users.status = 'active'
               AND COALESCE(NULLIF(users.availability_status, ''), 'available') IN ('available', 'limited')
-              AND " . projectWorkflowUserDepartmentClause($conn, 'users', $sulDepartment) . "
+               " . ($isQaDepartmentSul ? '' : 'AND ' . projectWorkflowUserDepartmentClause($conn, 'users', $sulDepartment)) . "
               " . ($requiredClassificationCounts !== [] ? "AND COALESCE(users.developer_classification, 'professional') IN ('" . implode("','", array_keys($requiredClassificationCounts)) . "')" : "") . "
             GROUP BY users.id
             ORDER BY CASE WHEN users.id = {$developerId} THEN 0 ELSE 1 END,
