@@ -5993,12 +5993,12 @@ body {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
-    background: rgba(255, 255, 255, .32);
+    width: 20px;
+    height: 20px;
+    background: transparent;
     color: #073d60;
-    flex: 0 0 32px;
+    flex: 0 0 20px;
+    font-size: .9rem;
 }
 .evortix-classification-head strong {
     margin: 0;
