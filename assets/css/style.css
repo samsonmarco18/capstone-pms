@@ -6033,20 +6033,15 @@ body {
     border-radius: 0;
     background: transparent;
 }
+.evortix-classification-item + .evortix-classification-item {
+    padding-top: .6rem;
+    border-top: 1px solid rgba(7, 74, 109, .24);
+}
 .evortix-classification-item-head {
     display: grid;
-    grid-template-columns: 28px minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
     gap: .5rem;
-}
-.evortix-classification-arrow {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    color: #0a5279;
-    font-size: .72rem;
 }
 .evortix-classification-item strong,
 .evortix-classification-item span {
@@ -6108,7 +6103,7 @@ body {
     display: none !important;
 }
 @media (max-width: 600px) {
-    .evortix-classification-item-head { grid-template-columns: 26px minmax(0, 1fr); }
-    .evortix-classification-level { grid-column: 2; justify-self: start; }
+    .evortix-classification-item-head { grid-template-columns: minmax(0, 1fr); }
+    .evortix-classification-level { justify-self: start; }
     .evortix-classification-actions { grid-template-columns: 1fr; }
 }

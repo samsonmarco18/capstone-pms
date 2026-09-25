@@ -1039,7 +1039,7 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                             </span>
                         </button>
                         <div class="estimation-panel-body" id="developerAllocationDetails" hidden>
-                            <div id="evortixClassificationReview" class="alert alert-info" data-project-id="<?php echo (int) $selectedProjectId; ?>" data-expert-id="<?php echo (int) $user['id']; ?>" data-locked="<?php echo $estimationLockedForReview ? '1' : '0'; ?>" hidden></div>
+                            <div id="evortixClassificationReview" data-project-id="<?php echo (int) $selectedProjectId; ?>" data-expert-id="<?php echo (int) $user['id']; ?>" data-locked="<?php echo $estimationLockedForReview ? '1' : '0'; ?>" hidden></div>
                             <?php if (count($allocations) === 0): ?>
                                 <div class="text-muted">No Roadmap Architect headcount has been entered yet.</div>
                             <?php else: foreach ($allocations as $allocation): $department = (string) $allocation['department']; $required = max(0, (int) $allocation['required_count']); $derivedContribution = max(0, min(100, (int) ($allocation['contribution_percent'] ?? 100))); ?>

@@ -16,7 +16,7 @@
 
     function update() {
         if (complete) complete.hidden = !ready();
-        review.hidden = locked;
+        review.hidden = true;
         review.querySelectorAll('button').forEach(button => { button.disabled = locked || rows.length === 0; });
         if (status) status.textContent = ready() ? 'Developer classification reviewed. Continue to feature estimation.'
             : rows.length ? 'Review the recommendations, then apply them or confirm your selections.'
@@ -40,7 +40,6 @@
             <div class="evortix-classification-list">${rows.map((row, index) => `
                 <article class="evortix-classification-item">
                     <div class="evortix-classification-item-head">
-                        <span class="evortix-classification-arrow" aria-hidden="true"><i class="fas fa-arrow-right"></i></span>
                         <div><strong>${escape(row.dataset.department)}</strong><span>Position ${index + 1}</span></div>
                         <span class="evortix-classification-level">${escape(row.dataset.recommendedLevel)}</span>
                     </div>
