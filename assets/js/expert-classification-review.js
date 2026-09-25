@@ -32,10 +32,21 @@
         if (!speech || locked) return;
         const escape = value => { const node = document.createElement('span'); node.textContent = value; return node.innerHTML; };
         speech.className = 'chat-bot-speech evortix-project-notification evortix-architect-dss evortix-classification-panel';
-        speech.innerHTML = `<strong>Developer classification recommendations</strong>
-            <p>Review these developer levels before feature estimation.</p>
-            <div class="evortix-classification-list">${rows.map((row, index) => `<p><strong>${escape(row.dataset.department)} · Position ${index + 1}: ${escape(row.dataset.recommendedLevel)}</strong><span>${escape(row.dataset.recommendationReason)}</span></p>`).join('') || '<p>Enter the Roadmap developer headcount first.</p>'}</div>
-            ${rows.length ? '<div class="evortix-classification-actions"><button type="button" class="btn btn-primary btn-sm" data-classification-choice="apply">Apply and continue</button><button type="button" class="btn btn-light btn-sm" data-classification-choice="keep">Keep my selections</button></div>' : ''}`;
+        speech.innerHTML = `
+            <div class="evortix-classification-head">
+                <span class="evortix-classification-icon"><i class="fas fa-users" aria-hidden="true"></i></span>
+                <div><strong>Developer recommendations</strong><span>Review the suggested staffing levels before estimating features.</span></div>
+            </div>
+            <div class="evortix-classification-list">${rows.map((row, index) => `
+                <article class="evortix-classification-item">
+                    <div class="evortix-classification-item-head">
+                        <span class="evortix-classification-position">${String(index + 1).padStart(2, '0')}</span>
+                        <div><strong>${escape(row.dataset.department)}</strong><span>Position ${index + 1}</span></div>
+                        <span class="evortix-classification-level">${escape(row.dataset.recommendedLevel)}</span>
+                    </div>
+                    <p>${escape(row.dataset.recommendationReason)}</p>
+                </article>`).join('') || '<p class="evortix-classification-empty">Enter the Roadmap developer headcount first.</p>'}</div>
+            ${rows.length ? '<div class="evortix-classification-actions"><button type="button" class="btn btn-primary btn-sm" data-classification-choice="apply">Apply recommendations</button><button type="button" class="btn btn-light btn-sm" data-classification-choice="keep">Keep selections</button></div>' : ''}`;
         speech.dataset.classificationReview = 'true';
         speech.hidden = false;
         speech.setAttribute('aria-hidden', 'false');

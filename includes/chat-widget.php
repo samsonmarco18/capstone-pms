@@ -45,8 +45,7 @@ if (function_exists('isLoggedIn') && isLoggedIn()) {
                        OR message LIKE 'SUL requested revision%'
                        OR title LIKE 'QA Revision Assigned:%'
                        OR title LIKE 'QA Revision Queued:%'
-                       OR title LIKE 'QA Revision Now Assigned:%'
-                       OR title LIKE 'QA Passed:%'
+                        OR title LIKE 'QA Revision Now Assigned:%'
                    )
                  ORDER BY created_at DESC, id DESC
                  LIMIT 1"
@@ -2080,14 +2079,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 const isExpertRevision = evortixSulRevisionNotification.related_table === 'expert_project_estimations';
                 const notificationTitle = String(evortixSulRevisionNotification.title || '');
                 const isQaRevision = notificationTitle.startsWith('QA Revision');
-                const isQaPassed = notificationTitle.startsWith('QA Passed:');
                 const guidance = isExpertRevision
                     ? 'Review the SUL reason, update the affected estimates, staffing, cost, and timeline, then save and resubmit the project estimation.'
                     : isQaRevision
                         ? 'Evortix is relaying the QA decision. Review the QA notes, follow the assigned department order, correct the finding, and resubmit the work to your SUL.'
-                        : isQaPassed
-                            ? 'QA passed this feature. Review the result and continue with Architect final approval.'
-                            : 'Review the SUL comment, update the implementation and evidence, then resubmit the task or pull request for SUL review.';
+                        : 'Review the SUL comment, update the implementation and evidence, then resubmit the task or pull request for SUL review.';
                 window.evortixAnnounceNotification?.(
                     notificationTitle || (isQaRevision ? 'QA revision received' : 'SUL revision requested'),
                     `${evortixSulRevisionNotification.message || 'Your SUL requested changes.'} ${guidance}`,
@@ -2095,9 +2091,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 );
                 const action = document.querySelector('#chat-bot-float .evortix-project-notification-action');
                 if (action) {
-                    action.textContent = isQaPassed
-                        ? 'Review QA result'
-                        : (isQaRevision ? 'Open QA revision' : 'Review revision');
+                    action.textContent = isQaRevision ? 'Open QA revision' : 'Review revision';
                 }
 
                 const currentPath = window.location.pathname;

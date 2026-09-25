@@ -1039,15 +1039,7 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                             </span>
                         </button>
                         <div class="estimation-panel-body" id="developerAllocationDetails" hidden>
-                            <div id="evortixClassificationReview" class="alert alert-info" data-project-id="<?php echo (int) $selectedProjectId; ?>" data-expert-id="<?php echo (int) $user['id']; ?>" data-locked="<?php echo $estimationLockedForReview ? '1' : '0'; ?>">
-                                <strong><i class="fas fa-robot me-1" aria-hidden="true"></i>Evortix developer classification</strong>
-                                <p class="mb-2">Review the recommended developer levels below before continuing to feature estimation.</p>
-                                <div class="d-flex flex-wrap gap-2">
-                                    <button type="button" class="btn btn-primary btn-sm" data-classification-choice="apply">Apply recommendations and continue</button>
-                                    <button type="button" class="btn btn-outline-secondary btn-sm" data-classification-choice="keep">Keep my selections and continue</button>
-                                </div>
-                                <small class="d-block mt-2" data-classification-status aria-live="polite"></small>
-                            </div>
+                            <div id="evortixClassificationReview" class="alert alert-info" data-project-id="<?php echo (int) $selectedProjectId; ?>" data-expert-id="<?php echo (int) $user['id']; ?>" data-locked="<?php echo $estimationLockedForReview ? '1' : '0'; ?>" hidden></div>
                             <?php if (count($allocations) === 0): ?>
                                 <div class="text-muted">No Roadmap Architect headcount has been entered yet.</div>
                             <?php else: foreach ($allocations as $allocation): $department = (string) $allocation['department']; $required = max(0, (int) $allocation['required_count']); $derivedContribution = max(0, min(100, (int) ($allocation['contribution_percent'] ?? 100))); ?>
