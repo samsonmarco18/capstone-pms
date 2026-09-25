@@ -813,6 +813,7 @@ $sulMissingDepartment = $sulDepartment === '';
 $isExpertDepartmentSul = $sulDepartmentLabel === 'Expert Department';
 $isUiUxDepartmentSul = $sulDepartmentLabel === 'UI/UX';
 $isQaDepartmentSul = $sulDepartmentLabel === 'QA';
+$deliveryAssigneeRole = $isQaDepartmentSul ? 'qa' : 'developer';
 $canManageExpertWorkflow = !$sulMissingDepartment && $isExpertDepartmentSul;
 $canManageDeveloperWorkflow = !$sulMissingDepartment && !$isExpertDepartmentSul;
 $departmentAssigneeLabels = [
@@ -1535,7 +1536,7 @@ $developers = $conn->query("
            COUNT(t.id) as assigned_tasks
     FROM users u
     LEFT JOIN tasks t ON u.id = t.assigned_to AND t.status != 'completed'
-    WHERE u.role = 'developer' AND u.status = 'active'
+    WHERE u.role = '{$deliveryAssigneeRole}' AND u.status = 'active'
       AND COALESCE(u.availability_status, 'available') IN ('available', 'limited')
       {$sulUserDepartmentFilter}
     GROUP BY u.id, u.full_name, u.profile_pic, u.designation, u.department, u.developer_classification, u.skills, u.availability_status, u.max_concurrent_tasks
@@ -1962,7 +1963,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             SELECT id, COALESCE(developer_classification, 'professional') AS developer_classification
             FROM users
             WHERE id IN ({$developerIdList})
-              AND role = 'developer'
+              AND role = '{$deliveryAssigneeRole}'
               AND status = 'active'
               {$developerDepartmentSql}
         ");
@@ -2136,7 +2137,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $teamLimit = min($teamLimit, $requiredTotal);
             foreach ($requiredClassificationCounts as $classification => $requiredCount) {
                 if ((int) ($selectedClassificationCounts[$classification] ?? 0) !== (int) $requiredCount) {
-                    $_SESSION['error'] = "Match the expert's required developer ranks: " . sulTaskAllocationDeveloperRequirementSummary($requiredClassificationCounts) . ".";
+                    $_SESSION['error'] = "Match the required classifications: " . sulTaskAllocationDeveloperRequirementSummary($requiredClassificationCounts) . ".";
                     header("Location: task-allocation.php?project_id=" . $assignmentProjectId);
                     exit();
                 }
@@ -2149,7 +2150,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             LEFT JOIN tasks active_tasks
               ON active_tasks.assigned_to = users.id
              AND active_tasks.status NOT IN ('completed', 'cancelled')
-            WHERE users.role = 'developer'
+            WHERE users.role = '{$deliveryAssigneeRole}'
               AND users.status = 'active'
               AND COALESCE(users.availability_status, 'available') IN ('available', 'limited')
               AND " . projectWorkflowUserDepartmentClause($conn, 'users', $sulDepartment) . "
@@ -9058,9 +9059,9 @@ let developerBulkFeatureCount = 1;
 let developerRequiredClassifications = {};
 
 const developerClassificationLabels = {
-    junior: 'Junior Developer',
-    professional: 'Professional Developer',
-    senior: 'Senior Developer'
+    junior: 'Junior',
+    professional: 'Professional',
+    senior: 'Senior'
 };
 
 function summarizeDeveloperRequirements(requirements) {
