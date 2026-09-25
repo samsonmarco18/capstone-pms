@@ -40,7 +40,7 @@
             <div class="evortix-classification-list">${rows.map((row, index) => `
                 <article class="evortix-classification-item">
                     <div class="evortix-classification-item-head">
-                        <span class="evortix-classification-position">${String(index + 1).padStart(2, '0')}</span>
+                        <span class="evortix-classification-arrow" aria-hidden="true"><i class="fas fa-arrow-right"></i></span>
                         <div><strong>${escape(row.dataset.department)}</strong><span>Position ${index + 1}</span></div>
                         <span class="evortix-classification-level">${escape(row.dataset.recommendedLevel)}</span>
                     </div>

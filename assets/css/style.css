@@ -5969,7 +5969,10 @@ body {
     padding: 1rem;
     border: 1px solid rgba(255, 255, 255, .48);
     border-radius: 10px 10px 4px 10px;
-    background: linear-gradient(145deg, #92e6ff 0%, #55c7ef 48%, #2198d3 100%);
+    background:
+        radial-gradient(circle at 18% 18%, #ffffff, transparent 34%),
+        linear-gradient(135deg, #e4f9ff, #74d9ff 52%, #1d90d6),
+        #dff8ff;
     box-shadow: 0 16px 34px rgba(15, 119, 183, .26), inset 0 1px 0 rgba(255, 255, 255, .28);
     color: #083a5d;
     white-space: normal;
@@ -6036,17 +6039,14 @@ body {
     align-items: center;
     gap: .5rem;
 }
-.evortix-classification-position {
+.evortix-classification-arrow {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     width: 28px;
     height: 28px;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, .3);
     color: #0a5279;
-    font-size: .66rem;
-    font-weight: 800;
+    font-size: .72rem;
 }
 .evortix-classification-item strong,
 .evortix-classification-item span {
