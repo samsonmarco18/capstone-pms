@@ -6103,6 +6103,43 @@ body {
 .chat-bot-speech.evortix-classification-panel[hidden] {
     display: none !important;
 }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .chat-bot-speech.evortix-classification-panel {
+    border-color: rgba(126, 211, 245, .34) !important;
+    background:
+        radial-gradient(circle at 18% 18%, rgba(114, 211, 250, .2), transparent 34%),
+        linear-gradient(135deg, #123b57, #0d6d99 54%, #081f34) !important;
+    box-shadow: 0 16px 34px rgba(0, 0, 0, .38), inset 0 1px 0 rgba(190, 237, 255, .1) !important;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .chat-bot-speech.evortix-classification-panel::after {
+    background: #0b5e88 !important;
+    border-color: rgba(126, 211, 245, .3) !important;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .chat-bot-speech.evortix-classification-panel :is(
+    .evortix-classification-head strong,
+    .evortix-classification-item strong,
+    .evortix-classification-level
+) {
+    color: #f0fbff !important;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .chat-bot-speech.evortix-classification-panel :is(
+    .evortix-classification-head span,
+    .evortix-classification-item-head div > span,
+    .evortix-classification-item p
+) {
+    color: #bdeaff !important;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .evortix-classification-level {
+    border-color: rgba(163, 224, 249, .34);
+    background: rgba(255, 255, 255, .1);
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .evortix-classification-item + .evortix-classification-item {
+    border-top-color: rgba(182, 232, 252, .22);
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .evortix-classification-actions .btn-light {
+    border-color: #d8f4ff !important;
+    background: #eaf8ff !important;
+    color: #0a3c59 !important;
+}
 @media (max-width: 600px) {
     .evortix-classification-item-head { grid-template-columns: minmax(0, 1fr); }
     .evortix-classification-level { justify-self: start; }
