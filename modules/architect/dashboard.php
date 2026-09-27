@@ -32,11 +32,13 @@ function architectDashboardRequestedFeatureCount(?string $requestedFeatures): in
     return count($features);
 }
 
-// Get statistics
-$totalProjects = $conn->query("SELECT COUNT(*) as count FROM projects WHERE architect_id = {$user['id']} OR architect_id IS NULL")->fetch_assoc()['count'];
-$pendingProjects = $conn->query("SELECT COUNT(*) as count FROM projects WHERE (architect_id = {$user['id']} OR architect_id IS NULL) AND status = 'pending'")->fetch_assoc()['count'];
-$inProgressProjects = $conn->query("SELECT COUNT(*) as count FROM projects WHERE (architect_id = {$user['id']} OR architect_id IS NULL) AND status = 'in_progress'")->fetch_assoc()['count'];
-$completedProjects = $conn->query("SELECT COUNT(*) as count FROM projects WHERE (architect_id = {$user['id']} OR architect_id IS NULL) AND status = 'completed'")->fetch_assoc()['count'];
+// Use the same workflow buckets as Live Overview.
+require_once '../../includes/architect-overview.php';
+$architectOverviewData = architectOverview($conn, (int) $user['id']);
+$totalProjects = $architectOverviewData['counts']['total'];
+$pendingProjects = $architectOverviewData['counts']['review'];
+$inProgressProjects = $architectOverviewData['counts']['progress'];
+$completedProjects = $architectOverviewData['counts']['completed'];
 
 // Sales creates new architecture-review intakes as pending projects.
 $reviewProjects = $conn->query("
@@ -47,7 +49,7 @@ $reviewProjects = $conn->query("
     FROM projects p 
     JOIN clients c ON p.client_id = c.id 
     WHERE (p.architect_id = {$user['id']} OR p.architect_id IS NULL) 
-    AND p.status IN ('pending', 'review')
+    AND p.status IN ('pending', 'review', 'architectural_review')
     ORDER BY COALESCE(p.timeline_end, DATE(p.created_at)) ASC, p.created_at DESC 
     LIMIT 5
 ");
@@ -111,6 +113,43 @@ include '../../includes/navbar.php';
 ?>
 
 <style>
+.architect-stats-row {
+    align-items: stretch;
+}
+
+.architect-stats-row > div > .card {
+    width: 100%;
+    min-height: 0;
+}
+
+.architect-stats-row .card-body > .d-flex {
+    gap: 0.75rem;
+}
+
+.architect-stats-row .flex-grow-1 {
+    min-width: 0;
+}
+
+.architect-stats-row .ms-3 {
+    flex-shrink: 0;
+    margin-left: 0 !important;
+}
+
+.architect-stats-row .text-uppercase {
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.5;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.5rem !important;
+}
+
+.architect-stats-row small {
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 500;
+    line-height: 1.5;
+}
+
 :root {
     --theme-primary: #1f6392;
     --theme-dark: #184f73;
@@ -209,6 +248,27 @@ include '../../includes/navbar.php';
 .activity-date {
     font-size: 0.65rem;
     color: #6c757d;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .activity-item {
+    border-bottom-color: rgba(148, 163, 184, 0.28);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .activity-user {
+    color: #e2e8f0;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .activity-user i {
+    color: #7dd3fc;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .activity-time,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .activity-date {
+    color: #a9bbcf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .activity-action {
+    color: #c3d2e0;
 }
 
 .review-project-list {
@@ -501,8 +561,8 @@ include '../../includes/navbar.php';
     </div>
 
     <!-- Statistics Cards -->
-    <div class="row g-3 mb-4 role-stats-row">
-        <div class="col-xl-3 col-md-6">
+    <div class="row g-3 mb-4 role-stats-row architect-stats-row">
+        <div class="col-xl-3 col-md-6 d-flex">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-body p-4">
                     <div class="d-flex justify-content-between align-items-start">
@@ -519,7 +579,7 @@ include '../../includes/navbar.php';
             </div>
         </div>
         
-        <div class="col-xl-3 col-md-6">
+        <div class="col-xl-3 col-md-6 d-flex">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-body p-4">
                     <div class="d-flex justify-content-between align-items-start">
@@ -536,7 +596,7 @@ include '../../includes/navbar.php';
             </div>
         </div>
         
-        <div class="col-xl-3 col-md-6">
+        <div class="col-xl-3 col-md-6 d-flex">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-body p-4">
                     <div class="d-flex justify-content-between align-items-start">
@@ -553,7 +613,7 @@ include '../../includes/navbar.php';
             </div>
         </div>
         
-        <div class="col-xl-3 col-md-6">
+        <div class="col-xl-3 col-md-6 d-flex">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-body p-4">
                     <div class="d-flex justify-content-between align-items-start">
@@ -743,7 +803,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             const label = context.label || '';
                             const value = context.raw || 0;
                             const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                            const percentage = ((value / total) * 100).toFixed(1);
+                            const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : '0.0';
                             return `${label}: ${value} (${percentage}%)`;
                         }
                     }

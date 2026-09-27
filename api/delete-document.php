@@ -63,10 +63,7 @@ if (!$deleted) {
 
 $relativePath = trim((string) ($document['file_path'] ?? ''));
 if ($relativePath !== '') {
-    $absolutePath = storageResolveRelativePath($relativePath);
-    if ($absolutePath !== null && is_file($absolutePath)) {
-        @unlink($absolutePath);
-    }
+    storageDeleteFile($relativePath);
 }
 
 logActivity($currentUserId, 'delete_architecture_document', 'architecture_documents', $documentId);

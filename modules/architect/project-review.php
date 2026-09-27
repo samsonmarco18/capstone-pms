@@ -49,7 +49,7 @@ function projectReviewParseRequestedFeatures(?string $rawFeatures): array
 
 $project = $conn->query("
     SELECT p.*, c.name AS client_name, c.contact_person, c.email AS client_email,
-           c.phone AS client_phone, c.address AS client_address, c.industry AS client_industry
+           c.phone AS client_phone, c.address AS client_address
     FROM projects p
     JOIN clients c ON p.client_id = c.id
     WHERE p.id = $projectId

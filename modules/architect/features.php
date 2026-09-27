@@ -2,10 +2,12 @@
 require_once '../../includes/auth.php';
 require_once '../../includes/project-template.php';
 require_once '../../includes/project-compilation.php';
+require_once '../../includes/project-workflow.php';
 requireRole('architect');
 
 $conn = getConnection();
 $user = getCurrentUser();
+projectWorkflowEnsureSchema($conn);
 projectTemplateEnsureSchema($conn);
 $projectId = isset($_GET['id']) ? (int) $_GET['id'] : 0;
 $pageError = null;
@@ -70,6 +72,9 @@ $project = $projectResult ? $projectResult->fetch_assoc() : null;
 if (!$project && $pageError === null) {
     header('Location: projects.php');
     exit();
+}
+if ($project) {
+    projectWorkflowNormalizePreSubmitFeatureTasks($conn, $projectId);
 }
 
 $projectTemplate = null;
@@ -559,6 +564,16 @@ include '../../includes/navbar.php';
     padding-top: 1.25rem;
 }
 
+.additional-feature-empty {
+    border: 1px dashed var(--gray-300);
+    border-radius: 14px;
+    color: var(--gray-500);
+    font-size: 0.84rem;
+    font-weight: 600;
+    padding: 0.95rem 1rem;
+    text-align: center;
+}
+
 .feature-action-bar {
     display: flex;
     align-items: center;
@@ -926,6 +941,12 @@ a.progress-step:hover {
     border-color: rgba(31, 99, 146, 0.24);
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .additional-feature-empty {
+    background: rgba(7, 19, 33, 0.62);
+    border-color: rgba(31, 99, 146, 0.32);
+    color: #9db6cf;
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-add {
     border-color: #6f8ba5;
     color: #9db6cf;
@@ -1003,13 +1024,6 @@ html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode)
     </div>
 
     <?php include '../../includes/architect-project-review-panel.php'; ?>
-
-    <?php if (count($salesRequestedFeatures) > 0): ?>
-    <div class="architect-dss-source-controls">
-        <div><strong><i class="fas fa-robot me-1"></i> DSS feature review</strong><br><span>The assistant found <?php echo count($salesRequestedFeatures); ?> intake feature(s). Accept or skip them before saving; none are added automatically.</span></div>
-        <div class="d-flex gap-2"><button type="button" class="btn btn-primary btn-sm" data-dss-feature-decision="accept">Accept suggestions</button><button type="button" class="btn btn-outline-secondary btn-sm" data-dss-feature-decision="skip">Skip suggestions</button></div>
-    </div>
-    <?php endif; ?>
 
     <form method="POST" class="card p-4">
         <?php if (count($existingFeatures) > 0): ?>
@@ -1100,6 +1114,7 @@ html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode)
                                 id="salesFeature<?php echo $index; ?>"
                                 data-sales-feature-toggle
                                 data-recommended-feature="<?php echo htmlspecialchars($salesFeature); ?>"
+                                checked
                             >
                             <label class="form-check-label" for="salesFeature<?php echo $index; ?>">
                                 <span class="sales-requested-title"><?php echo htmlspecialchars($salesFeature); ?></span>
@@ -1111,14 +1126,12 @@ html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode)
                             name="new_features[<?php echo $index; ?>][title]"
                             value="<?php echo htmlspecialchars($salesFeature); ?>"
                             data-sales-feature-field
-                                <?php echo isset($existingFeatureLookup[architectFeatureNormalizeTitle($salesFeature)]) ? '' : 'disabled'; ?>
                         >
                         <input
                             type="hidden"
                             name="new_features[<?php echo $index; ?>][description]"
                             value="Requested by Sales during client intake."
                             data-sales-feature-field
-                                <?php echo isset($existingFeatureLookup[architectFeatureNormalizeTitle($salesFeature)]) ? '' : 'disabled'; ?>
                         >
                     </div>
                 <?php endforeach; ?>
@@ -1138,6 +1151,11 @@ html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode)
                 </div>
             </div>
             <div id="featuresContainer">
+                <?php if (count($existingFeatures) > 0 || count($salesRequestedFeatures) > 0): ?>
+                    <div class="additional-feature-empty" data-feature-empty-state>
+                        No extra unsaved feature rows. Use Add Feature only when you need another item.
+                    </div>
+                <?php else: ?>
                 <div class="feature-item">
                     <div class="row g-3 align-items-end">
                         <div class="col-md-5">
@@ -1155,6 +1173,7 @@ html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode)
                         </div>
                     </div>
                 </div>
+                <?php endif; ?>
             </div>
         </div>
 
@@ -1179,6 +1198,7 @@ const hasSavedFeatures = <?php echo count($existingFeatures) > 0 ? 'true' : 'fal
 
 function addFeature() {
     const container = document.getElementById('featuresContainer');
+    container?.querySelector('[data-feature-empty-state]')?.remove();
     const item = document.createElement('div');
     item.className = 'feature-item';
     item.innerHTML = `
@@ -1343,11 +1363,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if ($architectDssItems !== []):
     $architectDssAssistantConfig = [
         'title' => 'Feature recommendations ready',
-        'message' => 'I found ' . count($architectDssItems) . ' feature recommendation' . (count($architectDssItems) === 1 ? '' : 's') . ' from the Sales intake and project template. Review them one at a time.',
+        'message' => 'I found ' . count($architectDssItems) . ' feature recommendation' . (count($architectDssItems) === 1 ? '' : 's') . ' from the Sales intake and project template. Review them individually or accept all at once.',
         'stateKey' => 'evortix.dss.features.project.' . (int) $projectId,
         'persistDecisions' => false,
         'startDelay' => 100,
-        'showSourceControls' => true,
+        'showSourceControls' => false,
+        'allowAcceptAll' => true,
         'pointAtMessage' => true,
         'pointSide' => 'left',
         'items' => $architectDssItems,

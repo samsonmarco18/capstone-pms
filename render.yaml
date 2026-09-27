@@ -1,3 +1,8 @@
+databases:
+  - name: erni-pms-db
+    plan: free
+    region: oregon
+
 services:
   - type: web
     name: erni-pms
@@ -25,9 +30,13 @@ services:
       - key: DB_DRIVER
         value: pgsql
       - key: DATABASE_URL
-        sync: false
+        fromDatabase:
+          name: erni-pms-db
+          property: connectionString
       - key: UPLOAD_STORAGE_ROOT
         value: /tmp/erni-pms/uploads
+      - key: UPLOAD_STORAGE_BACKEND
+        value: db
       - key: MAIL_ENABLED
         value: "1"
       - key: MAIL_DELIVERY_METHOD

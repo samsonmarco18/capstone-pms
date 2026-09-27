@@ -107,7 +107,7 @@ return [
   'MAIL_USERNAME' => 'altheapalentinos@gmail.com',
   'MAIL_PASSWORD' => 'your-google-app-password',
   'MAIL_FROM_EMAIL' => 'altheapalentinos@gmail.com',
-  'MAIL_FROM_NAME' => 'Erni PMS',
+  'MAIL_FROM_NAME' => 'ERNI Development Center Philippines Inc.',
   'MAIL_TIMEOUT' => '8',
 ];
 ```
@@ -144,7 +144,7 @@ Mailer environment checklist:
 - `MAIL_USERNAME`: the Gmail address used to send mail.
 - `MAIL_PASSWORD`: a Google App Password for SMTP. Do not use the normal Gmail password.
 - `MAIL_FROM_EMAIL`: usually the same Gmail address as `MAIL_USERNAME`.
-- `MAIL_FROM_NAME`: sender label shown to recipients, for example `ERNI PMS`.
+- `MAIL_FROM_NAME`: sender label shown to recipients, for example `ERNI Development Center Philippines Inc.`.
 - `MAIL_VERIFY_PEER`: keep `1` unless a local certificate issue temporarily blocks SMTP testing.
 - `MAIL_TIMEOUT`: keep between `5` and `10`.
 - `MAIL_DEBUG`: keep `0`; set to `1` only while diagnosing mail configuration.

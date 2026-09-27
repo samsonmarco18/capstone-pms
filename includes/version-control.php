@@ -53,7 +53,7 @@ function vcGetAccessibleProjects(mysqli|PgsqlMysqliCompatConnection $conn, array
             SELECT p.id, p.name, p.status, c.name AS client_name
             FROM projects p
             INNER JOIN clients c ON c.id = p.client_id
-            WHERE p.status != 'completed'
+            WHERE p.status NOT IN ('completed', 'cancelled')
             ORDER BY p.name
         ";
         return $conn->query($sql)->fetch_all(MYSQLI_ASSOC);
@@ -216,6 +216,26 @@ function vcGenerateRepositoryHttpCloneUrl(string $slug): string
     return rtrim(BASE_URL, '/') . '/git/' . rawurlencode(vcGenerateSlug($slug)) . '.git';
 }
 
+function vcBuildRepositoryBrowserUrl(int $projectId = 0, int $repositoryId = 0, int $branchId = 0, int $commitId = 0): string
+{
+    $params = [];
+    if ($projectId > 0) {
+        $params['project_id'] = $projectId;
+    }
+    if ($repositoryId > 0) {
+        $params['repository_id'] = $repositoryId;
+    }
+    if ($commitId > 0) {
+        $params['commit_id'] = $commitId;
+    }
+    if ($branchId > 0) {
+        $params['branch_id'] = $branchId;
+    }
+
+    return rtrim(BASE_URL, '/') . '/modules/version-control/repositories.php'
+        . ($params ? '?' . http_build_query($params) : '');
+}
+
 function vcGetManagedRepositoryPushUsername(): string
 {
     $username = trim((string) (getenv('GIT_HTTP_PUSH_USERNAME') ?: 'git'));
@@ -246,7 +266,8 @@ function vcResolvePreferredWritableRemoteUrl(
     string $slug,
     ?string $externalRemoteUrl = null,
     bool $portableClient = false,
-    ?string $webhookToken = null
+    ?string $webhookToken = null,
+    ?string $pushUsername = null
 ): ?string
 {
     $externalRemoteUrl = vcNormalizeExternalRemoteUrl($externalRemoteUrl);
@@ -256,7 +277,7 @@ function vcResolvePreferredWritableRemoteUrl(
 
     if ($portableClient) {
         if (vcIsRenderEnvironment()) {
-            return vcGenerateRepositoryAuthenticatedHttpCloneUrl($slug, (string) $webhookToken);
+            return vcGenerateRepositoryAuthenticatedHttpCloneUrl($slug, (string) $webhookToken, $pushUsername);
         }
 
         return vcGenerateRepositoryFileCloneUrl($slug);
@@ -451,6 +472,14 @@ function vcIsInternalManagedRepositoryUrl(string $url): bool
         $host = (string) $parts['host'];
         $port = isset($parts['port']) ? ':' . (int) $parts['port'] : '';
         $path = (string) ($parts['path'] ?? '');
+        $baseParts = parse_url(BASE_URL);
+        $baseHost = strtolower((string) ($baseParts['host'] ?? ''));
+        $normalizedHost = strtolower($host);
+        $sameHost = $baseHost !== '' && $normalizedHost === $baseHost;
+        $isLocalHost = in_array($normalizedHost, ['localhost', '127.0.0.1', '::1'], true);
+        if (($sameHost || $isLocalHost) && preg_match('#/(?:[^/]+/)?git/[^/?#]+\.git(?:/.*)?$#i', $path) === 1) {
+            return true;
+        }
         $normalized = $scheme . '://' . $host . $port . $path;
     }
 
@@ -798,10 +827,26 @@ function vcCopyFile(string $sourcePath, string $targetPath): void
     vcWriteTextFile($targetPath, $contents);
 }
 
-function vcGenerateLocalSyncHookScript(string $syncEndpointUrl): string
+function vcShellDoubleQuotedValue(string $value): string
 {
+    return str_replace(
+        ['\\', '"', '$', '`'],
+        ['\\\\', '\\"', '\\$', '\\`'],
+        $value
+    );
+}
+
+function vcGenerateLocalSyncHookScript(string $syncEndpointUrl, ?string $pmsUsername = null): string
+{
+    $syncEndpointUrl = vcShellDoubleQuotedValue($syncEndpointUrl);
+    $pmsUsername = vcShellDoubleQuotedValue(trim((string) $pmsUsername));
+
     return "#!/bin/sh\n" .
         "PMS_URL=\"" . $syncEndpointUrl . "\"\n" .
+        "PMS_USERNAME=\"" . $pmsUsername . "\"\n" .
+        "if [ -z \"\$PMS_USERNAME\" ]; then\n" .
+        "  PMS_USERNAME=\$(git config --get erni-pms.username || true)\n" .
+        "fi\n" .
         "json_escape() {\n" .
         "  printf '%s' \"\$1\" | sed 's/\\\\/\\\\\\\\/g; s/\"/\\\\\"/g' | tr '\\n' ' '\n" .
         "}\n" .
@@ -814,7 +859,7 @@ function vcGenerateLocalSyncHookScript(string $syncEndpointUrl): string
         "REMOTE_URL=\$(git config --get remote.origin.url)\n" .
         "FILE_CHANGES_B64=\$(git show --pretty=\"\" --name-status \"\$COMMIT_HASH\" | base64 | tr -d '\\n')\n" .
         "FILE_STATS_B64=\$(git show --pretty=\"\" --numstat \"\$COMMIT_HASH\" | base64 | tr -d '\\n')\n" .
-        "PAYLOAD=\$(printf '{\"event_type\":\"commit\",\"branch_name\":\"%s\",\"commit_hash\":\"%s\",\"commit_title\":\"%s\",\"commit_message\":\"%s\",\"author_name\":\"%s\",\"author_email\":\"%s\",\"remote_url\":\"%s\",\"platform\":\"git-client\",\"file_changes_b64\":\"%s\",\"file_stats_b64\":\"%s\"}' \"\$(json_escape \"\$BRANCH\")\" \"\$(json_escape \"\$COMMIT_HASH\")\" \"\$(json_escape \"\$TITLE\")\" \"\$(json_escape \"\$BODY\")\" \"\$(json_escape \"\$AUTHOR_NAME\")\" \"\$(json_escape \"\$AUTHOR_EMAIL\")\" \"\$(json_escape \"\$REMOTE_URL\")\" \"\$(json_escape \"\$FILE_CHANGES_B64\")\" \"\$(json_escape \"\$FILE_STATS_B64\")\")\n" .
+        "PAYLOAD=\$(printf '{\"event_type\":\"commit\",\"branch_name\":\"%s\",\"commit_hash\":\"%s\",\"commit_title\":\"%s\",\"commit_message\":\"%s\",\"author_name\":\"%s\",\"author_email\":\"%s\",\"pms_username\":\"%s\",\"remote_url\":\"%s\",\"platform\":\"git-client\",\"file_changes_b64\":\"%s\",\"file_stats_b64\":\"%s\"}' \"\$(json_escape \"\$BRANCH\")\" \"\$(json_escape \"\$COMMIT_HASH\")\" \"\$(json_escape \"\$TITLE\")\" \"\$(json_escape \"\$BODY\")\" \"\$(json_escape \"\$AUTHOR_NAME\")\" \"\$(json_escape \"\$AUTHOR_EMAIL\")\" \"\$(json_escape \"\$PMS_USERNAME\")\" \"\$(json_escape \"\$REMOTE_URL\")\" \"\$(json_escape \"\$FILE_CHANGES_B64\")\" \"\$(json_escape \"\$FILE_STATS_B64\")\")\n" .
         "curl -s -X POST \"\$PMS_URL\" -H \"Content-Type: application/json\" -d \"\$PAYLOAD\" >/dev/null 2>&1\n";
 }
 
@@ -886,13 +931,15 @@ function vcConfigureLocalRepositoryRemote(
     string $defaultBranch,
     ?string $externalRemoteUrl = null,
     bool $portableClient = false,
-    ?string $webhookToken = null
+    ?string $webhookToken = null,
+    ?string $pushUsername = null
 ): void {
     $remoteUrl = vcResolvePreferredWritableRemoteUrl(
         $slug,
         $externalRemoteUrl,
         $portableClient,
-        $webhookToken
+        $webhookToken,
+        $pushUsername
     );
     $hasOrigin = vcTryGitCommand(['remote', 'get-url', 'origin'], $repositoryPath);
 
@@ -1080,7 +1127,8 @@ function vcCreateRepositoryArchive(
     string $slug,
     string $refName,
     ?string $externalRemoteUrl = null,
-    ?string $webhookToken = null
+    ?string $webhookToken = null,
+    ?array $downloadUser = null
 ): array
 {
     $bareRepositoryPath = vcGetRepositoryBarePath($slug);
@@ -1137,7 +1185,6 @@ function vcCreateRepositoryArchive(
         $gitDir = $cloneTempDir . DIRECTORY_SEPARATOR . '.git';
         if (!is_dir($gitDir)) {
             error_log('ERROR: .git directory not found at: ' . $gitDir);
-            error_log('Clone directory contents: ' . print_r(scandir($cloneTempDir), true));
             throw new RuntimeException('Git directory not found after clone at: ' . $gitDir . '. Clone may have failed.');
         }
         
@@ -1150,13 +1197,28 @@ function vcCreateRepositoryArchive(
                 ['checkout', $refName],
                 $cloneTempDir
             );
+
+            $downloadUsername = trim((string) ($downloadUser['username'] ?? ''));
+            $downloadFullName = trim((string) ($downloadUser['full_name'] ?? ''));
+            $downloadEmail = trim((string) ($downloadUser['email'] ?? ''));
+            if ($downloadUsername !== '') {
+                vcRunGitCommand(['config', 'erni-pms.username', $downloadUsername], $cloneTempDir);
+            }
+            if ($downloadFullName !== '') {
+                vcRunGitCommand(['config', 'user.name', $downloadFullName], $cloneTempDir);
+            }
+            if ($downloadEmail !== '') {
+                vcRunGitCommand(['config', 'user.email', $downloadEmail], $cloneTempDir);
+            }
+
             vcConfigureLocalRepositoryRemote(
                 $cloneTempDir,
                 $slug,
                 $refName,
                 $externalRemoteUrl,
                 true,
-                $webhookToken
+                $webhookToken,
+                $downloadUsername
             );
             error_log('Checkout completed successfully');
         } catch (Throwable $checkoutError) {
@@ -1171,7 +1233,7 @@ function vcCreateRepositoryArchive(
         // Create post-commit hook with sync functionality
         $syncUrl = getenv('ERNI_PMS_SYNC_ENDPOINT')
             ?: rtrim(BASE_URL, '/') . '/api/version-control/sync.php?token=' . urlencode((string) $webhookToken);
-        $postCommitHook = vcGenerateLocalSyncHookScript($syncUrl);
+        $postCommitHook = vcGenerateLocalSyncHookScript($syncUrl, $downloadUsername ?? '');
         $postCommitPath = $hooksDir . DIRECTORY_SEPARATOR . 'post-commit';
         vcWriteTextFile($postCommitPath, $postCommitHook);
         @chmod($postCommitPath, 0755);
@@ -1182,7 +1244,7 @@ function vcCreateRepositoryArchive(
         $erniPmsDir = $cloneTempDir . DIRECTORY_SEPARATOR . '.erni-pms';
         vcEnsureDirectory($erniPmsDir);
 
-        $hookExample = vcGenerateLocalSyncHookScript($syncUrl);
+        $hookExample = vcGenerateLocalSyncHookScript($syncUrl, $downloadUsername ?? '');
         $hookExamplePath = $erniPmsDir . DIRECTORY_SEPARATOR . 'post-commit.example.sh';
         vcWriteTextFile($hookExamplePath, $hookExample);
         @chmod($hookExamplePath, 0755);

@@ -6,55 +6,140 @@ requireRole('admin');
 $conn = getConnection();
 workflowEnsureSchema($conn);
 $user = getCurrentUser();
+$hasDeveloperClassification = ensureUserDeveloperClassificationColumn();
 
 // Handle user creation
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
     if ($_POST['action'] == 'create') {
-        $username = $_POST['username'];
-        $email = $_POST['email'];
-        $password = password_hash($_POST['password'], PASSWORD_DEFAULT);
-        $full_name = $_POST['full_name'];
+        $username = trim((string) ($_POST['username'] ?? ''));
+        $email = trim((string) ($_POST['email'] ?? ''));
+        $passwordInput = (string) ($_POST['password'] ?? '');
+        $password = password_hash($passwordInput, PASSWORD_DEFAULT);
+        $full_name = trim((string) ($_POST['full_name'] ?? ''));
         $department = trim((string) $_POST['department']);
         $role = trim((string) $_POST['role']);
+        $developerClassification = in_array($role, ['developer', 'qa'], true)
+            ? normalizeDeveloperClassification($_POST['developer_classification'] ?? null)
+            : null;
         $hasPasswordChangedAt = ensureUserPasswordSecurityColumns();
 
-        if ($role === 'sul' && $department === '') {
+        if ($username === '' || $full_name === '' || $passwordInput === '') {
+            $_SESSION['error'] = 'Username, full name, and password are required.';
+        } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $_SESSION['error'] = 'Enter a valid email address.';
+        } elseif (!in_array($role, ['admin', 'sales', 'architect', 'sul', 'qa', 'expert', 'developer'], true)) {
+            $_SESSION['error'] = 'Select a valid role.';
+        } elseif ($role === 'sul' && $department === '') {
             $_SESSION['error'] = "SUL users must be assigned to a department.";
+        } elseif (in_array($role, ['developer', 'qa'], true) && $developerClassification === null) {
+            $_SESSION['error'] = 'Select a classification.';
+        } elseif (in_array($role, ['developer', 'qa'], true) && !$hasDeveloperClassification) {
+            $_SESSION['error'] = 'Unable to prepare classifications. Please try again.';
         } else {
-            $sql = $hasPasswordChangedAt
-                ? "INSERT INTO users (username, email, password, full_name, department, role, password_changed_at) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
-                : "INSERT INTO users (username, email, password, full_name, department, role) VALUES (?, ?, ?, ?, ?, ?)";
-            $stmt = $conn->prepare($sql);
-            $stmt->bind_param("ssssss", $username, $email, $password, $full_name, $department, $role);
-
-            if ($stmt->execute()) {
-                $userId = $stmt->insert_id;
-                logActivity($user['id'], 'create_user', 'users', $userId, null, $_POST);
-                $_SESSION['success'] = "User created successfully";
+            $uniqueStmt = $conn->prepare('SELECT id FROM users WHERE username = ? OR email = ? LIMIT 1');
+            if ($uniqueStmt === false) {
+                $_SESSION['error'] = 'Unable to validate the new user. Please try again.';
+                error_log('user-management create unique prepare failed: ' . ($conn->error ?? 'unknown error'));
             } else {
-                $_SESSION['error'] = "Error creating user: " . $conn->error;
+                $uniqueStmt->bind_param('ss', $username, $email);
+                $uniqueStmt->execute();
+                $duplicateExists = $uniqueStmt->get_result()->num_rows > 0;
+                $uniqueStmt->close();
+
+                if ($duplicateExists) {
+                    $_SESSION['error'] = 'Username or email is already used by another account.';
+                } else {
+                    if ($hasDeveloperClassification) {
+                        $sql = $hasPasswordChangedAt
+                            ? "INSERT INTO users (username, email, password, full_name, department, role, developer_classification, password_changed_at) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
+                            : "INSERT INTO users (username, email, password, full_name, department, role, developer_classification) VALUES (?, ?, ?, ?, ?, ?, ?)";
+                    } elseif ($hasPasswordChangedAt) {
+                        $sql = "INSERT INTO users (username, email, password, full_name, department, role, password_changed_at) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)";
+                    } else {
+                        $sql = "INSERT INTO users (username, email, password, full_name, department, role) VALUES (?, ?, ?, ?, ?, ?)";
+                    }
+                    $stmt = $conn->prepare($sql);
+                    if ($stmt === false) {
+                        $_SESSION['error'] = 'Unable to prepare user creation. Please try again.';
+                        error_log('user-management create prepare failed: ' . ($conn->error ?? 'unknown error'));
+                    } else {
+                        if ($hasDeveloperClassification) {
+                            $stmt->bind_param("sssssss", $username, $email, $password, $full_name, $department, $role, $developerClassification);
+                        } else {
+                            $stmt->bind_param("ssssss", $username, $email, $password, $full_name, $department, $role);
+                        }
+
+                        if ($stmt->execute()) {
+                            $userId = $stmt->insert_id;
+                            logActivity((int) $user['id'], 'create_user', 'users', (int) $userId, null, [
+                                'username' => $username,
+                                'email' => $email,
+                                'full_name' => $full_name,
+                                'department' => $department,
+                                'role' => $role,
+                                'developer_classification' => $developerClassification,
+                            ]);
+                            $_SESSION['success'] = "User created successfully";
+                        } else {
+                            $_SESSION['error'] = "Error creating user: " . ($stmt->error ?: ($conn->error ?? 'database error'));
+                        }
+                        $stmt->close();
+                    }
+                }
             }
         }
     } elseif ($_POST['action'] == 'update') {
-        $id = $_POST['id'];
-        $full_name = $_POST['full_name'];
+        $id = (int) ($_POST['id'] ?? 0);
+        $full_name = trim((string) ($_POST['full_name'] ?? ''));
         $department = trim((string) $_POST['department']);
         $role = trim((string) $_POST['role']);
-        $status = $_POST['status'];
+        $status = trim((string) ($_POST['status'] ?? ''));
+        $developerClassification = in_array($role, ['developer', 'qa'], true)
+            ? normalizeDeveloperClassification($_POST['developer_classification'] ?? null)
+            : null;
         
-        if ($role === 'sul' && $department === '') {
+        if ($id <= 0 || $full_name === '') {
+            $_SESSION['error'] = 'Select a valid user and enter a full name.';
+        } elseif (!in_array($role, ['admin', 'sales', 'architect', 'sul', 'qa', 'expert', 'developer'], true)) {
+            $_SESSION['error'] = 'Select a valid role.';
+        } elseif (!in_array($status, ['active', 'inactive', 'suspended'], true)) {
+            $_SESSION['error'] = 'Select a valid account status.';
+        } elseif ($role === 'sul' && $department === '') {
             $_SESSION['error'] = "SUL users must be assigned to a department.";
+        } elseif (in_array($role, ['developer', 'qa'], true) && $developerClassification === null) {
+            $_SESSION['error'] = 'Select a classification.';
+        } elseif (in_array($role, ['developer', 'qa'], true) && !$hasDeveloperClassification) {
+            $_SESSION['error'] = 'Unable to prepare classifications. Please try again.';
         } else {
-            $oldData = $conn->query("SELECT * FROM users WHERE id = $id")->fetch_assoc();
+            $oldData = $conn->query("SELECT * FROM users WHERE id = {$id}")->fetch_assoc();
 
-            $stmt = $conn->prepare("UPDATE users SET full_name=?, department=?, role=?, status=? WHERE id=?");
-            $stmt->bind_param("ssssi", $full_name, $department, $role, $status, $id);
-
-            if ($stmt->execute()) {
-                logActivity($user['id'], 'update_user', 'users', $id, $oldData, $_POST);
-                $_SESSION['success'] = "User updated successfully";
+            $updateSql = $hasDeveloperClassification
+                ? "UPDATE users SET full_name=?, department=?, role=?, status=?, developer_classification=? WHERE id=?"
+                : "UPDATE users SET full_name=?, department=?, role=?, status=? WHERE id=?";
+            $stmt = $conn->prepare($updateSql);
+            if ($stmt === false) {
+                $_SESSION['error'] = 'Unable to prepare user update. Please try again.';
+                error_log('user-management update prepare failed: ' . ($conn->error ?? 'unknown error'));
             } else {
-                $_SESSION['error'] = "Error updating user";
+                if ($hasDeveloperClassification) {
+                    $stmt->bind_param("sssssi", $full_name, $department, $role, $status, $developerClassification, $id);
+                } else {
+                    $stmt->bind_param("ssssi", $full_name, $department, $role, $status, $id);
+                }
+
+                if ($stmt->execute()) {
+                    logActivity((int) $user['id'], 'update_user', 'users', $id, $oldData, [
+                        'full_name' => $full_name,
+                        'department' => $department,
+                        'role' => $role,
+                        'status' => $status,
+                        'developer_classification' => $developerClassification,
+                    ]);
+                    $_SESSION['success'] = "User updated successfully";
+                } else {
+                    $_SESSION['error'] = "Error updating user: " . ($stmt->error ?: ($conn->error ?? 'database error'));
+                }
+                $stmt->close();
             }
         }
     } elseif ($_POST['action'] == 'delete') {
@@ -611,6 +696,45 @@ include '../../includes/navbar.php';
     color: var(--panel-muted);
 }
 
+.user-directory-profile {
+    align-items: center;
+    display: flex;
+    gap: 0.75rem;
+    min-width: 0;
+}
+
+.user-directory-avatar {
+    align-items: center;
+    background: linear-gradient(145deg, #dff1fb 0%, #c8e4f4 100%);
+    border: 1px solid #bedcec;
+    border-radius: 50%;
+    color: var(--theme-primary);
+    display: inline-flex;
+    flex: 0 0 38px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    height: 38px;
+    justify-content: center;
+    letter-spacing: 0.02em;
+    overflow: hidden;
+    width: 38px;
+}
+
+.user-directory-avatar img {
+    display: block;
+    height: 100%;
+    object-fit: cover;
+    width: 100%;
+}
+
+.user-directory-avatar.has-profile-image span {
+    display: none;
+}
+
+.user-directory-copy {
+    min-width: 0;
+}
+
 /* Badges */
 .badge-role {
     display: inline-block;
@@ -1023,6 +1147,12 @@ include '../../includes/navbar.php';
     color: var(--panel-text) !important;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .user-directory-avatar {
+    background: #102a40;
+    border-color: #214764;
+    color: #8cc7ff;
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-title {
     color: #ffffff !important;
 }
@@ -1053,6 +1183,21 @@ include '../../includes/navbar.php';
     background: transparent;
     border-color: var(--panel-border);
     color: var(--panel-input-text);
+    color-scheme: dark;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-input select option,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .user-pagination__size option,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-select option {
+    background-color: #071725;
+    color: var(--panel-input-text);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-input select option:checked,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .user-pagination__size option:checked,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-select option:checked {
+    background-color: var(--theme-primary);
+    color: #ffffff;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-input input:focus,
@@ -1285,6 +1430,17 @@ include '../../includes/navbar.php';
 </style>
 
 <div class="container-fluid px-4 py-4">
+    <?php if (isset($_SESSION['success'])): ?>
+        <div class="alert alert-success shadow-sm">
+            <?php echo htmlspecialchars((string) $_SESSION['success']); unset($_SESSION['success']); ?>
+        </div>
+    <?php endif; ?>
+    <?php if (isset($_SESSION['error'])): ?>
+        <div class="alert alert-danger shadow-sm">
+            <?php echo htmlspecialchars((string) $_SESSION['error']); unset($_SESSION['error']); ?>
+        </div>
+    <?php endif; ?>
+
     <!-- Page Header -->
     <div class="page-header-modern">
         <div class="d-flex flex-wrap justify-content-between align-items-center">
@@ -1387,6 +1543,7 @@ include '../../includes/navbar.php';
                         <th>User</th>
                         <th>Department</th>
                         <th>Role</th>
+                        <th>Classification</th>
                         <th>Status</th>
                         <th>Created</th>
                         <th>Actions</th>
@@ -1394,16 +1551,39 @@ include '../../includes/navbar.php';
                 </thead>
                 <tbody>
                     <?php while($row = $users->fetch_assoc()): ?>
+                    <?php
+                        $rowProfileImageUrl = getUserProfileImageUrl($row['profile_pic'] ?? null);
+                        $rowInitials = getUserInitials($row['full_name'] ?? 'User');
+                    ?>
                     <tr>
                         <td>
-                            <div class="user-name"><?php echo htmlspecialchars($row['full_name']); ?></div>
-                            <div class="user-email"><?php echo htmlspecialchars($row['email']); ?></div>
+                            <div class="user-directory-profile">
+                                <span class="user-directory-avatar <?php echo $rowProfileImageUrl !== '' ? 'has-profile-image' : ''; ?>" aria-hidden="true">
+                                    <?php if ($rowProfileImageUrl !== ''): ?>
+                                        <img src="<?php echo htmlspecialchars($rowProfileImageUrl); ?>" alt="" loading="lazy" onerror="this.remove(); this.parentElement.classList.remove('has-profile-image');">
+                                    <?php endif; ?>
+                                    <span><?php echo htmlspecialchars($rowInitials); ?></span>
+                                </span>
+                                <div class="user-directory-copy">
+                                    <div class="user-name"><?php echo htmlspecialchars($row['full_name']); ?></div>
+                                    <div class="user-email"><?php echo htmlspecialchars($row['email']); ?></div>
+                                </div>
+                            </div>
                         </td>
                         <td><?php echo htmlspecialchars($row['department'] ?: '—'); ?></td>
                         <td>
                             <span class="badge-role <?php echo $row['role']; ?>">
                                 <?php echo strtoupper($row['role']); ?>
                             </span>
+                        </td>
+                        <td>
+                            <?php if (in_array((string) ($row['role'] ?? ''), ['developer', 'qa'], true)): ?>
+                                <span class="badge-role developer">
+                                    <?php echo htmlspecialchars(getDeveloperClassificationLabel($row['developer_classification'] ?? null)); ?>
+                                </span>
+                            <?php else: ?>
+                                <span class="text-muted">-</span>
+                            <?php endif; ?>
                         </td>
                         <td>
                             <span class="badge-status <?php echo $row['status']; ?>">
@@ -1413,12 +1593,12 @@ include '../../includes/navbar.php';
                         <td><?php echo date('M d, Y', strtotime($row['created_at'])); ?></td>
                         <td>
                             <div class="action-buttons">
-                                <button class="btn-icon view" onclick="viewUser(<?php echo $row['id']; ?>)">
+                                <a class="btn-icon view" href="view-user.php?id=<?php echo (int) $row['id']; ?>" aria-label="View <?php echo htmlspecialchars($row['full_name'], ENT_QUOTES); ?>">
                                     <i class="fas fa-eye"></i>
-                                </button>
-                                <button class="btn-icon edit" onclick="editUser(<?php echo $row['id']; ?>)">
+                                </a>
+                                <a class="btn-icon edit" href="edit-user.php?id=<?php echo (int) $row['id']; ?>" aria-label="Edit <?php echo htmlspecialchars($row['full_name'], ENT_QUOTES); ?>">
                                     <i class="fas fa-edit"></i>
-                                </button>
+                                </a>
                                 <button
                                     type="button"
                                     class="btn-icon delete"
@@ -1530,29 +1710,34 @@ include '../../includes/navbar.php';
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form method="POST" autocomplete="off" data-app-loading data-loading-title="Creating user" data-loading-text="Please wait while the user account is created.">
+            <form method="POST" autocomplete="off" novalidate data-app-loading data-loading-title="Creating user" data-loading-text="Please wait while the user account is created." data-confirm-skip="true" onsubmit="this.dataset.confirmedSubmit = '1';">
                 <div class="modal-body">
                     <input type="hidden" name="action" value="create">
                     <div class="row g-3">
                         <div class="col-md-6">
-                            <label class="form-label">Username</label>
-                            <input type="text" name="username" class="form-control" placeholder="Enter username" autocomplete="off" required>
+                            <label class="form-label" for="createUsername">Username</label>
+                            <input type="text" id="createUsername" name="username" class="form-control" placeholder="Enter username" autocomplete="off" required>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Email</label>
-                            <input type="email" name="email" class="form-control" placeholder="name@company.com" autocomplete="off" required>
+                            <label class="form-label" for="createEmail">Email</label>
+                            <input type="email" id="createEmail" name="email" class="form-control" placeholder="name@company.com" autocomplete="off" required>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Password</label>
-                            <input type="password" name="password" class="form-control" placeholder="Create a secure password" autocomplete="new-password" required>
+                            <label class="form-label" for="createPassword">Password</label>
+                            <div class="password-field">
+                                <input type="password" id="createPassword" name="password" class="form-control" placeholder="Create a secure password" autocomplete="new-password" required>
+                                <button type="button" class="password-toggle-btn" data-password-toggle title="Show password">
+                                    <i class="fas fa-eye" aria-hidden="true"></i>
+                                </button>
+                            </div>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Full Name</label>
-                            <input type="text" name="full_name" class="form-control" placeholder="Enter full name" autocomplete="off" required>
+                            <label class="form-label" for="createFullName">Full Name</label>
+                            <input type="text" id="createFullName" name="full_name" class="form-control" placeholder="Enter full name" autocomplete="off" required>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Department</label>
-                            <select name="department" class="form-select">
+                            <label class="form-label" for="createDepartment">Department</label>
+                            <select name="department" id="createDepartment" class="form-select">
                                 <option value="">Select Department</option>
                                 <?php foreach (getDepartmentOptions() as $department): ?>
                                     <option value="<?php echo htmlspecialchars($department); ?>">
@@ -1562,8 +1747,9 @@ include '../../includes/navbar.php';
                             </select>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Role</label>
-                            <select name="role" class="form-select" required>
+                            <label class="form-label" for="createRole">Role</label>
+                            <select name="role" id="createRole" class="form-select" data-create-user-role required>
+                                <option value="admin">Admin</option>
                                 <option value="sales">Sales</option>
                                 <option value="architect">Architect</option>
                                 <option value="sul">Service Unit Leader</option>
@@ -1572,11 +1758,20 @@ include '../../includes/navbar.php';
                                 <option value="developer">Developer</option>
                             </select>
                         </div>
+                        <div class="col-md-6 d-none" data-create-developer-classification>
+                            <label class="form-label" for="createDeveloperClassification">Classification</label>
+                            <select name="developer_classification" id="createDeveloperClassification" class="form-select" disabled>
+                                <option value="">Select classification</option>
+                                <?php foreach (getDeveloperClassificationOptions() as $value => $label): ?>
+                                <option value="<?php echo htmlspecialchars($value); ?>"><?php echo htmlspecialchars($label); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="modal-secondary-action" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn-primary-modern">Create User</button>
+                    <button type="button" class="btn-primary-modern" onclick="HTMLFormElement.prototype.submit.call(this.form);">Create User</button>
                 </div>
             </form>
         </div>
@@ -1610,14 +1805,6 @@ userPageSize?.addEventListener('change', function() {
     window.location.href = 'user-management.php?' + params.toString() + '#userDirectory';
 });
 
-function viewUser(id) {
-    window.location.href = 'view-user.php?id=' + id;
-}
-
-function editUser(id) {
-    window.location.href = 'edit-user.php?id=' + id;
-}
-
 function openDeleteUserModal(button) {
     const userId = button.getAttribute('data-user-id') || '';
     const userName = button.getAttribute('data-user-name') || 'this user';
@@ -1627,6 +1814,27 @@ function openDeleteUserModal(button) {
 
     new bootstrap.Modal(document.getElementById('deleteUserModal')).show();
 }
+
+const createUserRole = document.querySelector('[data-create-user-role]');
+const createDeveloperClassification = document.querySelector('[data-create-developer-classification]');
+const createDeveloperClassificationSelect = document.getElementById('createDeveloperClassification');
+
+function toggleCreateDeveloperClassification() {
+    const needsClassification = ['developer', 'qa'].includes(createUserRole?.value || '');
+    createDeveloperClassification?.classList.toggle('d-none', !needsClassification);
+    if (createDeveloperClassificationSelect) {
+        createDeveloperClassificationSelect.disabled = !needsClassification;
+        createDeveloperClassificationSelect.required = needsClassification;
+        if (!needsClassification) {
+            createDeveloperClassificationSelect.value = '';
+        } else if (!createDeveloperClassificationSelect.value) {
+            createDeveloperClassificationSelect.value = 'professional';
+        }
+    }
+}
+
+createUserRole?.addEventListener('change', toggleCreateDeveloperClassification);
+toggleCreateDeveloperClassification();
 </script>
 
 <?php

@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/file-storage.php';
 require_once __DIR__ . '/app-settings.php';
 require_once __DIR__ . '/mailer.php';
 
@@ -17,6 +18,7 @@ function getCurrentUser(): ?array
     }
 
     $conn = getConnection();
+    ensureCoreRoleDepartments($conn);
     $stmt = $conn->prepare('SELECT * FROM users WHERE id = ? LIMIT 1');
     if ($stmt === false) {
         error_log('getCurrentUser prepare failed: ' . ($conn->error ?? 'unknown error'));
@@ -41,6 +43,56 @@ function getCurrentUser(): ?array
     $stmt->close();
 
     return $user;
+}
+
+function ensureCoreRoleDepartments(mysqli|PgsqlMysqliCompatConnection $conn): void
+{
+    static $ensured = false;
+    if ($ensured) {
+        return;
+    }
+
+    $ensured = true;
+    $conn->query("
+        UPDATE users
+        SET department = CASE role
+            WHEN 'admin' THEN 'Administration'
+            WHEN 'sales' THEN 'Sales'
+            WHEN 'architect' THEN 'Architecture'
+            ELSE department
+        END
+        WHERE role IN ('admin', 'sales', 'architect')
+          AND TRIM(COALESCE(department, '')) = ''
+    ");
+}
+
+function getUserProfileImageUrl(?string $profilePic): string
+{
+    $profilePic = trim((string) $profilePic);
+    if ($profilePic === '') {
+        return '';
+    }
+
+    if (preg_match('#^https?://#i', $profilePic)) {
+        return $profilePic;
+    }
+
+    return storagePublicUrl($profilePic);
+}
+
+function getUserInitials(?string $name): string
+{
+    $parts = preg_split('/\s+/', trim((string) $name), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+    if ($parts === []) {
+        return '?';
+    }
+
+    $substring = function_exists('mb_substr') ? 'mb_substr' : 'substr';
+    $uppercase = function_exists('mb_strtoupper') ? 'mb_strtoupper' : 'strtoupper';
+    $first = $substring((string) $parts[0], 0, 1);
+    $last = count($parts) > 1 ? $substring((string) $parts[count($parts) - 1], 0, 1) : '';
+
+    return $uppercase($first . $last);
 }
 
 function hasRole(array|string $roles): bool
@@ -171,6 +223,61 @@ function ensureUserPasswordSecurityColumns(): bool
         return true;
     } catch (Throwable $e) {
         error_log('ensureUserPasswordSecurityColumns error: ' . $e->getMessage());
+        $ensured = false;
+        return false;
+    }
+}
+
+function getDeveloperClassificationOptions(): array
+{
+    return [
+        'junior' => 'Junior',
+        'senior' => 'Senior',
+        'professional' => 'Professional',
+    ];
+}
+
+function normalizeDeveloperClassification(?string $classification): ?string
+{
+    $classification = strtolower(trim((string) $classification));
+    return array_key_exists($classification, getDeveloperClassificationOptions()) ? $classification : null;
+}
+
+function getDeveloperClassificationLabel(?string $classification): string
+{
+    $classification = normalizeDeveloperClassification($classification);
+    return $classification === null ? 'Not classified' : getDeveloperClassificationOptions()[$classification];
+}
+
+function ensureUserDeveloperClassificationColumn(): bool
+{
+    static $ensured = null;
+
+    if ($ensured !== null) {
+        return $ensured;
+    }
+
+    try {
+        $conn = getConnection();
+        if (!dbColumnExists($conn, 'users', 'developer_classification')) {
+            $sql = DB_DRIVER === 'pgsql'
+                ? 'ALTER TABLE users ADD COLUMN developer_classification VARCHAR(30) NULL'
+                : 'ALTER TABLE users ADD COLUMN developer_classification VARCHAR(30) NULL AFTER designation';
+
+            if ($conn->query($sql) === false) {
+                error_log('ensureUserDeveloperClassificationColumn failed: ' . ($conn->error ?? 'unknown error'));
+                $ensured = false;
+                return false;
+            }
+        }
+
+        // Existing delivery accounts need a visible classification until an
+        // administrator assigns a more specific level.
+        $conn->query("UPDATE users SET developer_classification = 'professional' WHERE role IN ('developer', 'qa') AND (developer_classification IS NULL OR developer_classification = '')");
+        $ensured = true;
+        return true;
+    } catch (Throwable $e) {
+        error_log('ensureUserDeveloperClassificationColumn error: ' . $e->getMessage());
         $ensured = false;
         return false;
     }
@@ -435,7 +542,26 @@ function logoutUser(): void
     }
 
     $_SESSION = [];
-    session_destroy();
+    if (ini_get('session.use_cookies')) {
+        $params = session_get_cookie_params();
+        setcookie(
+            session_name(),
+            '',
+            [
+                'expires' => time() - 42000,
+                'path' => $params['path'] ?? '/',
+                'domain' => $params['domain'] ?? '',
+                'secure' => (bool) ($params['secure'] ?? false),
+                'httponly' => (bool) ($params['httponly'] ?? true),
+                'samesite' => $params['samesite'] ?? 'Lax',
+            ]
+        );
+    }
+
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        session_destroy();
+    }
+
     header('Location: ' . BASE_URL . 'login.php');
     exit();
 }
@@ -468,6 +594,9 @@ function getRoleDisplayName(string $role): string
 function getDepartmentOptions(): array
 {
     return [
+        'Administration',
+        'Sales',
+        'Architecture',
         'UI/UX',
         'Frontend',
         'Backend',

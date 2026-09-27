@@ -19,6 +19,7 @@ CREATE TABLE users (
     phone VARCHAR(20),
     address TEXT,
     designation VARCHAR(100),
+    developer_classification VARCHAR(30) NULL,
     skills TEXT NULL,
     availability_status VARCHAR(30) DEFAULT 'available',
     max_concurrent_tasks INT DEFAULT 5,
@@ -47,6 +48,28 @@ CREATE TABLE users (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =====================================================
+-- PASSWORD RESET REQUESTS TABLE
+-- =====================================================
+CREATE TABLE password_reset_requests (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT NOT NULL,
+    requested_email VARCHAR(100) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'pending',
+    request_source VARCHAR(50) NOT NULL DEFAULT 'login',
+    admin_note TEXT,
+    last_error TEXT,
+    processed_by INT NULL,
+    requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    processed_at DATETIME NULL,
+    temp_password_sent_at DATETIME NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (processed_by) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_password_reset_requests_user_id (user_id),
+    INDEX idx_password_reset_requests_status (status),
+    INDEX idx_password_reset_requests_requested_at (requested_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
 -- TECHNOLOGIES AND SERVICES TABLE
 -- =====================================================
 CREATE TABLE technologies (
@@ -58,6 +81,7 @@ CREATE TABLE technologies (
     expiry_date DATE,
     renewal_cost DECIMAL(12, 2),
     description TEXT,
+    logo_path VARCHAR(500) NULL,
     created_by INT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -77,10 +101,7 @@ CREATE TABLE clients (
     email VARCHAR(100),
     phone VARCHAR(20),
     address TEXT,
-    company_type VARCHAR(100),
-    industry VARCHAR(100),
     status ENUM('active', 'inactive', 'suspended', 'pending') DEFAULT 'active',
-    progress INT DEFAULT 0,
     deadline DATE,
     created_by INT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -118,6 +139,10 @@ CREATE TABLE projects (
     storage_requirements VARCHAR(255),
     additional_services TEXT,
     complexity_level ENUM('simple', 'medium', 'complex') DEFAULT 'medium',
+    priority VARCHAR(30) NULL,
+    sales_notes TEXT NULL,
+    sales_attachments LONGTEXT NULL,
+    workflow_status VARCHAR(60) NULL,
     created_by INT NOT NULL,
     architect_id INT,
     sul_id INT,
@@ -130,6 +155,26 @@ CREATE TABLE projects (
     INDEX idx_status (status),
     INDEX idx_client_id (client_id),
     INDEX idx_architect_id (architect_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
+-- PROJECT COMPILATIONS TABLE
+-- =====================================================
+CREATE TABLE project_compilations (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    project_id INT NOT NULL,
+    compilation_no INT NOT NULL,
+    fingerprint VARCHAR(64) NOT NULL,
+    snapshot_json LONGTEXT NOT NULL,
+    change_source VARCHAR(80) NULL,
+    impact_json LONGTEXT NULL,
+    created_by INT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+    UNIQUE KEY uq_project_compilation_no (project_id, compilation_no),
+    INDEX idx_project_compilations_project (project_id),
+    INDEX idx_project_compilations_created_by (created_by)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =====================================================
@@ -178,7 +223,7 @@ CREATE TABLE project_templates (
     learned_from_project_id INT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY unique_project_template_type (normalized_type)
+    UNIQUE KEY unique_project_template_type_version (normalized_type, template_version)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =====================================================
@@ -313,6 +358,15 @@ CREATE TABLE methodology_task_departments (
     project_id INT NOT NULL,
     department VARCHAR(100) NOT NULL,
     required_count INT NOT NULL DEFAULT 1,
+    status ENUM('planned', 'in_progress', 'for_review', 'for_revision', 'completed', 'blocked') NOT NULL DEFAULT 'planned',
+    assigned_developer_id INT NULL,
+    workflow_task_id INT NULL,
+    deadline DATE NULL,
+    submitted_at DATETIME NULL,
+    approved_by INT NULL,
+    approved_at DATETIME NULL,
+    revision_notes TEXT,
+    updated_by INT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (methodology_task_id) REFERENCES methodology_tasks(id) ON DELETE CASCADE,
@@ -376,6 +430,8 @@ CREATE TABLE tasks (
     architect_reviewed_at DATETIME NULL,
     merged_at DATETIME NULL,
     release_notified_at DATETIME NULL,
+    parent_task_id INT NULL,
+    department_scope VARCHAR(100) NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
@@ -385,6 +441,36 @@ CREATE TABLE tasks (
     INDEX idx_assigned_to (assigned_to),
     INDEX idx_project_id (project_id),
     INDEX idx_project_status_assigned (project_id, status, assigned_to)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
+-- TASK REOPEN REQUESTS TABLE
+-- =====================================================
+CREATE TABLE task_reopen_requests (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    task_id INT NOT NULL,
+    project_id INT NOT NULL,
+    requested_by INT NOT NULL,
+    severity VARCHAR(20) NOT NULL DEFAULT 'minor',
+    reason TEXT NOT NULL,
+    status VARCHAR(40) NOT NULL DEFAULT 'pending_sul',
+    sul_reviewed_by INT NULL,
+    sul_reviewed_at DATETIME NULL,
+    sul_comment TEXT NULL,
+    architect_reviewed_by INT NULL,
+    architect_reviewed_at DATETIME NULL,
+    architect_comment TEXT NULL,
+    reopened_scope VARCHAR(20) NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (requested_by) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (sul_reviewed_by) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (architect_reviewed_by) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_task_reopen_task (task_id),
+    INDEX idx_task_reopen_project (project_id),
+    INDEX idx_task_reopen_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =====================================================
@@ -717,9 +803,7 @@ CREATE TABLE chat_groups (
     id INT PRIMARY KEY AUTO_INCREMENT,
     name VARCHAR(255) NOT NULL,
     description TEXT,
-    group_type ENUM('direct', 'group', 'project_team') DEFAULT 'group',
     project_id INT,
-    profile_image VARCHAR(255),
     created_by INT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -938,6 +1022,19 @@ CREATE TABLE project_repositories (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =====================================================
+-- REPOSITORY GIT SNAPSHOTS TABLE
+-- =====================================================
+CREATE TABLE repository_git_snapshots (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    repository_id INT NOT NULL UNIQUE,
+    bundle_base64 LONGTEXT NOT NULL,
+    bundle_size INT NOT NULL DEFAULT 0,
+    head_hash VARCHAR(64) NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (repository_id) REFERENCES project_repositories(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
 -- REPOSITORY BRANCHES TABLE
 -- =====================================================
 CREATE TABLE repository_branches (
@@ -1060,12 +1157,12 @@ CREATE TABLE repository_operations (
 
 -- Insert default admin user (password: password)
 INSERT INTO users (username, email, password, full_name, department, role, status, designation) VALUES
-('admin', 'admin@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'System Administrator', NULL, 'admin', 'active', 'Admin');
+('admin', 'admin@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'System Administrator', 'Administration', 'admin', 'active', 'Admin');
 
 -- Insert Sample Users for Each Role (password: password)
 INSERT INTO users (username, email, password, full_name, department, role, status, designation) VALUES
-('sales_user', 'sales@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'John Sales Manager', NULL, 'sales', 'active', 'Sales Manager'),
-('architect', 'architect@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Maria Architect', NULL, 'architect', 'active', 'System Architect'),
+('sales_user', 'sales@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'John Sales Manager', 'Sales', 'sales', 'active', 'Sales Manager'),
+('architect', 'architect@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Maria Architect', 'Architecture', 'architect', 'active', 'System Architect'),
 ('sul_user', 'sul@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Robert Frontend SUL', 'Frontend Developer', 'sul', 'active', 'Service Unit Leader'),
 ('qa_user', 'qa@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Quinn QA Engineer', 'QA Engineer', 'qa', 'active', 'QA Engineer'),
 ('expert', 'expert@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Dr. Frontend Expert', 'Frontend Developer', 'expert', 'active', 'Frontend Expert'),
@@ -1154,20 +1251,75 @@ INSERT INTO technologies (name, category, price, status, expiry_date, renewal_co
 ('Reporting and Export Service', 'Integration', 0.00, 'active', NULL, 0.00, 'Document, spreadsheet, and analytics export support', 1);
 
 -- Insert Sample Clients
-INSERT INTO clients (name, contact_person, email, phone, address, company_type, industry, status, deadline, created_by) VALUES
-('TechCorp Solutions', 'Juan Dela Cruz', 'juan@techcorp.com', '+63 2 1234 5678', 'Manila, Philippines', 'Corporation', 'Technology', 'active', '2026-12-31', 1),
-('Healthcare Inc', 'Maria Santos', 'maria@healthcare.com', '+63 917 1234 567', 'Quezon City, Philippines', 'Company', 'Healthcare', 'active', '2026-12-15', 1);
+INSERT INTO clients (name, contact_person, email, phone, address, status, deadline, created_by) VALUES
+('TechCorp Solutions', 'Juan Dela Cruz', 'juan@techcorp.com', '+63 2 1234 5678', 'Manila, Philippines', 'active', '2026-12-31', 1),
+('Healthcare Inc', 'Maria Santos', 'maria@healthcare.com', '+63 917 1234 567', 'Quezon City, Philippines', 'active', '2026-12-15', 1);
 
 -- Insert Sample Projects
-INSERT INTO projects (client_id, name, description, status, timeline_start, timeline_end, requested_features, included_departments, complexity_level, created_by, architect_id, sul_id) VALUES
+INSERT INTO projects (client_id, name, description, status, timeline_start, timeline_end, requested_features, included_departments, project_type, methodology_template, sales_budget, complexity_level, created_by, architect_id, sul_id) VALUES
 (1, 'E-Commerce Platform', 'Complete e-commerce solution with payment gateway', 'requirements_gathering', '2026-03-01', '2026-12-31', 'Product Catalog
 Cart and Checkout
 Payment Gateway Integration
-Loyalty Rewards', '["Expert Department","Frontend Developer","Backend Developer","QA Engineer","UI/UX Designer","DevOps Engineer","Database Administrator"]', 'complex', 1, 3, 4),
+Loyalty Rewards', '["Expert Department","Frontend Developer","Backend Developer","QA Engineer","UI/UX Designer","DevOps Engineer","Database Administrator"]', 'E-Commerce Platform', 'agile', 1850000.00, 'complex', 1, 3, 4),
 (2, 'Patient Management System', 'Hospital management and patient tracking system', 'pending', '2026-04-01', '2027-03-31', 'Patient Registration
 Appointment Scheduling
 Medical Records
-Insurance Export', '["Expert Department","Frontend Developer","Backend Developer","QA Engineer","UI/UX Designer","Database Administrator"]', 'complex', 1, NULL, NULL);
+Insurance Export', '["Expert Department","Frontend Developer","Backend Developer","QA Engineer","UI/UX Designer","Database Administrator"]', 'Patient Management System', 'waterfall', 2200000.00, 'complex', 1, NULL, NULL),
+(1, 'Retail Marketplace Modernization', 'Completed marketplace rebuild used to learn refined e-commerce planning versions.', 'completed', '2025-01-06', '2025-06-20', 'Vendor Product Catalog
+Cart and Checkout
+Payment Gateway Integration
+Inventory Sync
+Order Analytics', '["Expert Department","Frontend Developer","Backend Developer","QA Engineer","UI/UX Designer","DevOps Engineer","Database Administrator"]', 'E-Commerce Platform', 'scrum', 2450000.00, 'complex', 1, 3, 4),
+(2, 'Clinic Operations Suite', 'Completed patient operations system used to learn refined healthcare planning versions.', 'completed', '2025-02-03', '2025-08-15', 'Patient Registration
+Appointment Scheduling
+Medical Records
+Billing and Insurance Export
+Role-Based Clinical Dashboard', '["Expert Department","Frontend Developer","Backend Developer","QA Engineer","UI/UX Designer","Database Administrator"]', 'Patient Management System', 'v_model', 2750000.00, 'complex', 1, 3, 4);
+
+-- Six-month project history for the Sales dashboard trend chart.
+-- Relative dates keep every chart bucket populated whenever the database is imported.
+INSERT INTO clients (
+    name, contact_person, email, phone, address, company_type, industry,
+    status, deadline, created_by, created_at
+) VALUES
+('Northstar Retail Group', 'Ava Reyes', 'ava.reyes@northstar.example', '+63 917 555 0101', 'Makati, Philippines', 'Corporation', 'Retail', 'active', DATE_ADD(CURDATE(), INTERVAL 4 MONTH), 1, DATE_SUB(NOW(), INTERVAL 5 MONTH)),
+('BrightCare Clinics', 'Miguel Santos', 'miguel.santos@brightcare.example', '+63 917 555 0102', 'Quezon City, Philippines', 'Company', 'Healthcare', 'active', DATE_ADD(CURDATE(), INTERVAL 4 MONTH), 1, DATE_SUB(NOW(), INTERVAL 4 MONTH)),
+('Summit Logistics', 'Leah Cruz', 'leah.cruz@summitlogistics.example', '+63 917 555 0103', 'Taguig, Philippines', 'Corporation', 'Logistics', 'active', DATE_ADD(CURDATE(), INTERVAL 5 MONTH), 1, DATE_SUB(NOW(), INTERVAL 3 MONTH)),
+('Harbor Hospitality', 'Noah Garcia', 'noah.garcia@harborhospitality.example', '+63 917 555 0104', 'Pasay, Philippines', 'Corporation', 'Hospitality', 'active', DATE_ADD(CURDATE(), INTERVAL 5 MONTH), 1, DATE_SUB(NOW(), INTERVAL 2 MONTH)),
+('Verde Services', 'Isla Mendoza', 'isla.mendoza@verdeservices.example', '+63 917 555 0105', 'Cebu City, Philippines', 'Company', 'Professional Services', 'active', DATE_ADD(CURDATE(), INTERVAL 6 MONTH), 1, DATE_SUB(NOW(), INTERVAL 1 MONTH)),
+('Atlas Field Operations', 'Ethan Lim', 'ethan.lim@atlasfield.example', '+63 917 555 0106', 'Davao City, Philippines', 'Corporation', 'Field Services', 'active', DATE_ADD(CURDATE(), INTERVAL 6 MONTH), 1, DATE_SUB(NOW(), INTERVAL 12 DAY));
+
+INSERT INTO projects (
+    client_id, name, description, status, timeline_start, timeline_end,
+    requested_features, included_departments, project_type, methodology_template,
+    sales_budget, complexity_level, created_by, architect_id, sul_id, created_at
+) VALUES
+((SELECT id FROM clients WHERE email = 'ava.reyes@northstar.example'), 'Inventory Visibility Portal', 'Sample completed project for dashboard reporting.', 'completed', DATE_SUB(CURDATE(), INTERVAL 7 MONTH), DATE_SUB(CURDATE(), INTERVAL 5 MONTH), 'Inventory Dashboard\nStock Alerts\nCSV Export', '["Frontend Developer","Backend Developer","QA Engineer"]', 'Business Portal', 'agile', 680000.00, 'medium', 1, 3, 4, DATE_SUB(NOW(), INTERVAL 5 MONTH)),
+((SELECT id FROM clients WHERE email = 'miguel.santos@brightcare.example'), 'Patient Appointment Kiosk', 'Sample completed project for dashboard reporting.', 'completed', DATE_SUB(CURDATE(), INTERVAL 7 MONTH), DATE_SUB(CURDATE(), INTERVAL 5 MONTH), 'Appointment Booking\nQueue Display\nSMS Reminder', '["Frontend Developer","Backend Developer","QA Engineer"]', 'Healthcare Portal', 'scrum', 720000.00, 'medium', 1, 3, 4, DATE_SUB(NOW(), INTERVAL 5 MONTH)),
+((SELECT id FROM clients WHERE email = 'ava.reyes@northstar.example'), 'Supplier Onboarding Hub', 'Sample active project for dashboard reporting.', 'in_progress', DATE_SUB(CURDATE(), INTERVAL 5 MONTH), DATE_ADD(CURDATE(), INTERVAL 1 MONTH), 'Supplier Registration\nDocument Review\nApproval Workflow', '["Frontend Developer","Backend Developer","QA Engineer"]', 'Business Portal', 'agile', 850000.00, 'medium', 1, 3, 4, DATE_SUB(NOW(), INTERVAL 4 MONTH)),
+((SELECT id FROM clients WHERE email = 'miguel.santos@brightcare.example'), 'Clinic Billing Upgrade', 'Sample completed project for dashboard reporting.', 'completed', DATE_SUB(CURDATE(), INTERVAL 6 MONTH), DATE_SUB(CURDATE(), INTERVAL 3 MONTH), 'Invoice Generation\nPayment Tracking\nBilling Reports', '["Frontend Developer","Backend Developer","QA Engineer"]', 'Healthcare System', 'waterfall', 910000.00, 'medium', 1, 3, 4, DATE_SUB(NOW(), INTERVAL 4 MONTH)),
+((SELECT id FROM clients WHERE email = 'leah.cruz@summitlogistics.example'), 'Customer Support Workspace', 'Sample active project for dashboard reporting.', 'review', DATE_SUB(CURDATE(), INTERVAL 4 MONTH), DATE_ADD(CURDATE(), INTERVAL 1 MONTH), 'Ticket Management\nKnowledge Base\nSupport Analytics', '["Frontend Developer","Backend Developer","QA Engineer"]', 'Support Platform', 'scrum', 760000.00, 'medium', 1, 3, 4, DATE_SUB(NOW(), INTERVAL 3 MONTH)),
+((SELECT id FROM clients WHERE email = 'miguel.santos@brightcare.example'), 'Medical Records Archive', 'Sample completed project for dashboard reporting.', 'completed', DATE_SUB(CURDATE(), INTERVAL 5 MONTH), DATE_SUB(CURDATE(), INTERVAL 2 MONTH), 'Document Archive\nRecord Search\nAccess Audit', '["Backend Developer","QA Engineer","Database Administrator"]', 'Healthcare System', 'waterfall', 980000.00, 'complex', 1, 3, 4, DATE_SUB(NOW(), INTERVAL 3 MONTH)),
+((SELECT id FROM clients WHERE email = 'noah.garcia@harborhospitality.example'), 'Sales Performance Dashboard', 'Sample completed project for dashboard reporting.', 'completed', DATE_SUB(CURDATE(), INTERVAL 4 MONTH), DATE_SUB(CURDATE(), INTERVAL 1 MONTH), 'Revenue Dashboard\nSales Targets\nReport Export', '["Frontend Developer","Backend Developer","QA Engineer"]', 'Analytics Dashboard', 'agile', 640000.00, 'medium', 1, 3, 4, DATE_SUB(NOW(), INTERVAL 2 MONTH)),
+((SELECT id FROM clients WHERE email = 'miguel.santos@brightcare.example'), 'Teleconsultation Scheduler', 'Sample active project for dashboard reporting.', 'in_development', DATE_SUB(CURDATE(), INTERVAL 3 MONTH), DATE_ADD(CURDATE(), INTERVAL 2 MONTH), 'Doctor Availability\nVideo Consultations\nAppointment Reminders', '["Frontend Developer","Backend Developer","QA Engineer"]', 'Healthcare Portal', 'scrum', 1250000.00, 'complex', 1, 3, 4, DATE_SUB(NOW(), INTERVAL 2 MONTH)),
+((SELECT id FROM clients WHERE email = 'isla.mendoza@verdeservices.example'), 'Partner Reporting Center', 'Sample completed project for dashboard reporting.', 'completed', DATE_SUB(CURDATE(), INTERVAL 3 MONTH), DATE_SUB(CURDATE(), INTERVAL 1 MONTH), 'Partner Reports\nData Filters\nScheduled Exports', '["Frontend Developer","Backend Developer","QA Engineer"]', 'Reporting Portal', 'agile', 590000.00, 'medium', 1, 3, 4, DATE_SUB(NOW(), INTERVAL 1 MONTH)),
+((SELECT id FROM clients WHERE email = 'miguel.santos@brightcare.example'), 'Laboratory Results Viewer', 'Sample active project for dashboard reporting.', 'requirements_gathering', DATE_SUB(CURDATE(), INTERVAL 1 MONTH), DATE_ADD(CURDATE(), INTERVAL 3 MONTH), 'Results Dashboard\nPatient Access\nResult Notifications', '["Frontend Developer","Backend Developer","QA Engineer"]', 'Healthcare Portal', 'agile', 870000.00, 'medium', 1, 3, 4, DATE_SUB(NOW(), INTERVAL 1 MONTH)),
+((SELECT id FROM clients WHERE email = 'ethan.lim@atlasfield.example'), 'Field Service Mobile Portal', 'Sample active project for dashboard reporting.', 'architectural_review', CURDATE(), DATE_ADD(CURDATE(), INTERVAL 4 MONTH), 'Job Dispatch\nTechnician Updates\nService Reports', '["Frontend Developer","Backend Developer","QA Engineer"]', 'Mobile Portal', 'scrum', 1020000.00, 'complex', 1, 3, 4, DATE_SUB(NOW(), INTERVAL 12 DAY)),
+((SELECT id FROM clients WHERE email = 'miguel.santos@brightcare.example'), 'Patient Feedback Dashboard', 'Sample completed project for dashboard reporting.', 'completed', DATE_SUB(CURDATE(), INTERVAL 2 MONTH), DATE_SUB(CURDATE(), INTERVAL 5 DAY), 'Feedback Forms\nSentiment Summary\nService Reports', '["Frontend Developer","Backend Developer","QA Engineer"]', 'Analytics Dashboard', 'agile', 480000.00, 'simple', 1, 3, 4, DATE_SUB(NOW(), INTERVAL 4 DAY));
+
+-- Baseline project templates
+INSERT INTO project_templates (
+    project_type, normalized_type, template_version, duration_label, duration_min_weeks, duration_max_weeks,
+    budget_min, budget_max, methodology, core_features, tech_stack, team_composition, complexity_level,
+    payment_terms, sales_notes, integrations, security_requirements, architecture_notes, workload_estimate,
+    project_description, suggested_milestones, default_project_phases, functional_requirements,
+    non_functional_requirements, third_party_services, hosting_platform, deployment_environment,
+    database_technology, auth_method, backup_recovery_strategy, developer_roles_allocation,
+    testing_requirements, documentation_requirements, maintenance_support, risk_assessment,
+    implementation_notes, source, usage_count, learned_from_project_id
+) VALUES
+('E-Commerce Platform', 'e_commerce_platform', 1, '24-32 weeks', 24, 32, 1800000.00, 2600000.00, 'Agile', 'Product Catalog, Cart and Checkout, Payment Gateway Integration, Order Management', 'React, Laravel, MySQL, Payment Gateway API, Managed Web Application Firewall', '1 Architect, 2 Frontend Developers, 2 Backend Developers, 1 QA Engineer, 1 DevOps Engineer', 'complex', '40% down payment, 40% development milestone, 20% acceptance.', 'Baseline e-commerce template for catalog, checkout, and fulfillment projects.', 'Payment gateway, transactional email, inventory import/export.', 'Role-based admin access, payment data isolation, audit logs, WAF.', 'Modular catalog, checkout, and order services with API-first integration boundaries.', '24-32 weeks with cross-functional delivery team.', 'Build a scalable commerce platform with secure checkout and operational reporting.', 'Discovery, UX and catalog setup, checkout integration, QA/UAT, production launch.', 'Discovery; Architecture; Catalog and Checkout Build; Integration QA; Launch', 'Catalog browsing, cart operations, checkout, order tracking, admin product management.', 'Responsive performance, secure payments, auditability, backup and recovery readiness.', 'Payment gateway, email/SMS notifications, reporting export.', 'Azure App Service', 'Staging and production slots', 'MySQL', 'OAuth / OpenID Connect', 'Daily database backups and weekly full application archive.', 'Frontend catalog lane, backend checkout lane, QA automation lane, DevOps release lane.', 'Feature tests, checkout integration tests, regression and UAT scripts.', 'Architecture notes, API guide, admin guide, release checklist.', '30-day warranty support plus optional monthly maintenance.', 'Payment integration delays and product data quality are primary risks.', 'Use as the initial estimate before project-specific discovery.', 'seed', 0, NULL),
+('Patient Management System', 'patient_management_system', 1, '28-40 weeks', 28, 40, 2200000.00, 3200000.00, 'Waterfall', 'Patient Registration, Appointment Scheduling, Medical Records, Insurance Export', 'React, Laravel, MySQL, OAuth / OpenID Connect, Reporting and Export Service', '1 Architect, 2 Backend Developers, 1 Frontend Developer, 1 QA Engineer, 1 Database Administrator', 'complex', '40% down payment, 40% module acceptance, 20% final acceptance.', 'Baseline healthcare operations template for patient and clinic workflows.', 'Insurance export, notification service, reporting export.', 'RBAC, clinical audit logs, protected records, encrypted credentials.', 'Prioritize data model, access boundaries, and auditability before feature build.', '28-40 weeks with healthcare validation gates.', 'Deliver patient operations workflows with secure records and scheduling.', 'Requirements signoff, data model, scheduling, records, UAT and handover.', 'Requirements; Data Model; Scheduling; Records; UAT and Handover', 'Patient profiles, appointments, medical records, billing/insurance export.', 'Privacy, auditability, data backup, role segregation, predictable reporting.', 'Email/SMS notifications, reporting export, insurance claim export.', 'Managed VPS Hosting', 'Separate UAT and production environments', 'MySQL', 'OAuth / OpenID Connect', 'Daily encrypted backups and monthly restore rehearsal.', 'Backend records lane, frontend scheduling lane, database reporting lane, QA validation lane.', 'Data validation, role access, appointment workflow, UAT scripts.', 'User manual, admin guide, data dictionary, deployment runbook.', '30-day warranty and optional support retainer.', 'Clinical workflow changes and privacy requirements require careful signoff.', 'Use as baseline before clinic-specific discovery.', 'seed', 0, NULL);
 
 -- Sample project feature checklist data
 INSERT INTO tasks (project_id, title, description, task_type, assigned_to, assigned_by, status, priority, deadline, completed_at, architect_reviewed_by, architect_reviewed_at, merged_at, release_notified_at) VALUES

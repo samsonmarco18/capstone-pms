@@ -218,7 +218,7 @@ function notifyAdminsAboutPasswordResetRequest(int $requestId, array $requesting
         $name = trim((string) ($requestingUser['full_name'] ?? 'A user'));
         $email = trim((string) ($requestingUser['email'] ?? ''));
         $message = $name . ' (' . $email . ') requested a password reset.';
-        $actionUrl = 'modules/admin/password-reset-requests.php?request_id=' . $requestId;
+        $actionUrl = BASE_URL . 'modules/admin/password-reset-requests.php?request_id=' . $requestId;
 
         foreach ($admins as $adminId) {
             if ($adminId <= 0) {
@@ -512,7 +512,7 @@ function sendTemporaryPasswordEmail(array $request, string $temporaryPassword, s
 
     $htmlBody = '<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;padding:24px;background:#f5f7fb;">'
         . '<div style="background:#ffffff;border:1px solid #dbe3ef;border-radius:16px;padding:24px;">'
-        . '<h2 style="margin:0 0 12px;color:#1f6392;">ERNI PMS Temporary Password</h2>'
+        . '<h2 style="margin:0 0 12px;color:#1f6392;">ERNI Development Center Philippines Inc. Temporary Password</h2>'
         . '<p style="margin:0 0 12px;color:#334155;">Hello ' . $safeName . ',</p>'
         . '<p style="margin:0 0 16px;color:#475569;line-height:1.6;">An administrator approved your password reset request. Use this temporary password to sign in:</p>'
         . '<div style="margin:0 0 16px;padding:14px 16px;background:#eef6fb;border-radius:12px;font-size:18px;font-weight:700;letter-spacing:0.04em;color:#0f4a6e;">' . $safePassword . '</div>'
@@ -537,7 +537,7 @@ function sendTemporaryPasswordEmail(array $request, string $temporaryPassword, s
         $textBody .= "\n\nAdmin note:\n" . trim($adminNote);
     }
 
-    return sendSystemEmail($email, 'ERNI PMS Temporary Password', $htmlBody, $textBody);
+    return sendSystemEmail($email, 'ERNI Development Center Philippines Inc. Temporary Password', $htmlBody, $textBody);
 }
 
 function updatePasswordResetRequestStatus(

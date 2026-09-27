@@ -5,22 +5,29 @@ requireLogin();
 $user = getCurrentUser();
 $conn = getConnection();
 
-function resolveNotificationActionUrl(?string $actionUrl): string
+function resolveNotificationActionUrl(?string $actionUrl, array $notification = []): string
 {
     $url = trim((string) $actionUrl);
     if ($url === '') {
         return BASE_URL . 'notifications.php';
     }
 
-    if (preg_match('#^https?://#i', $url)) {
-        return $url;
+    $resolvedUrl = preg_match('#^https?://#i', $url)
+        ? $url
+        : BASE_URL . ltrim($url, '/');
+
+    $title = strtolower((string) ($notification['title'] ?? ''));
+    $message = strtolower((string) ($notification['message'] ?? ''));
+    $isSulReviewNotification = str_contains($title . ' ' . $message, 'for review')
+        || str_contains($title . ' ' . $message, 'sul review')
+        || str_contains($title . ' ' . $message, 'test results submitted')
+        || str_contains($title . ' ' . $message, 'design submitted');
+
+    if ($isSulReviewNotification && str_contains($resolvedUrl, 'modules/sul/task-allocation.php') && !str_contains($resolvedUrl, '#')) {
+        $resolvedUrl .= '#developer-review-panel';
     }
 
-    if ($url[0] === '/') {
-        return BASE_URL . ltrim($url, '/');
-    }
-
-    return BASE_URL . ltrim($url, '/');
+    return $resolvedUrl;
 }
 
 // Handle delete request
@@ -386,7 +393,7 @@ include 'includes/navbar.php';
                         </div>
                         <a
                             class="notification-content notification-link"
-                            href="<?php echo htmlspecialchars(resolveNotificationActionUrl($notification['action_url'] ?? '')); ?>"
+                            href="<?php echo htmlspecialchars(resolveNotificationActionUrl($notification['action_url'] ?? '', $notification)); ?>"
                             onclick="return markAsReadAndGo(<?php echo (int) $notification['id']; ?>, this.href, event);"
                         >
                             <div class="notification-title">

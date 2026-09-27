@@ -3,6 +3,7 @@ require_once '../../includes/auth.php';
 requireRole('admin');
 
 $conn = getConnection();
+ensureUserDeveloperClassificationColumn();
 $userId = (int) ($_GET['id'] ?? 0);
 $stmt = $conn->prepare('SELECT * FROM users WHERE id = ?');
 $stmt->bind_param('i', $userId);
@@ -28,6 +29,8 @@ if ($initials === '') {
 $status = (string) ($selectedUser['status'] ?? 'inactive');
 $role = (string) ($selectedUser['role'] ?? '');
 $roleLabel = getRoleDisplayName($role);
+$hasClassification = in_array(strtolower(trim($role)), ['developer', 'qa'], true);
+$developerClassificationLabel = getDeveloperClassificationLabel($selectedUser['developer_classification'] ?? null);
 $createdAt = !empty($selectedUser['created_at']) ? date('F d, Y', strtotime((string) $selectedUser['created_at'])) : 'Not available';
 $lastLogin = !empty($selectedUser['last_login']) ? date('F d, Y g:i A', strtotime((string) $selectedUser['last_login'])) : 'No recorded login';
 
@@ -345,6 +348,16 @@ include '../../includes/navbar.php';
 
 <div class="container-fluid px-4 py-4">
     <div class="user-profile-shell">
+        <?php if (isset($_SESSION['success'])): ?>
+            <div class="alert alert-success shadow-sm mb-0">
+                <?php echo htmlspecialchars((string) $_SESSION['success']); unset($_SESSION['success']); ?>
+            </div>
+        <?php endif; ?>
+        <?php if (isset($_SESSION['error'])): ?>
+            <div class="alert alert-danger shadow-sm mb-0">
+                <?php echo htmlspecialchars((string) $_SESSION['error']); unset($_SESSION['error']); ?>
+            </div>
+        <?php endif; ?>
         <section class="profile-hero">
             <div class="profile-hero-top">
                 <div class="profile-identity">
@@ -357,6 +370,12 @@ include '../../includes/navbar.php';
                                 <i class="fas fa-user-tie"></i>
                                 <?php echo htmlspecialchars($roleLabel); ?>
                             </span>
+                            <?php if ($hasClassification): ?>
+                            <span class="profile-badge">
+                                <i class="fas fa-layer-group"></i>
+                                <?php echo htmlspecialchars($developerClassificationLabel); ?>
+                            </span>
+                            <?php endif; ?>
                             <span class="profile-badge">
                                 <i class="fas fa-building"></i>
                                 <?php echo htmlspecialchars($selectedUser['department'] ?: 'No department'); ?>
@@ -416,6 +435,12 @@ include '../../includes/navbar.php';
                         <label>Designation</label>
                         <div class="profile-value"><?php echo htmlspecialchars($selectedUser['designation'] ?: 'Not set'); ?></div>
                     </div>
+                    <?php if ($hasClassification): ?>
+                    <div class="profile-field">
+                        <label>Classification</label>
+                        <div class="profile-value"><?php echo htmlspecialchars($developerClassificationLabel); ?></div>
+                    </div>
+                    <?php endif; ?>
                     <div class="profile-field">
                         <label>Member Since</label>
                         <div class="profile-value"><?php echo htmlspecialchars($createdAt); ?></div>

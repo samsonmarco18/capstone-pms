@@ -223,6 +223,7 @@ function taskReopenCreateRequest(
         FROM tasks t
         JOIN projects p ON p.id = t.project_id
         WHERE t.id = ?
+          AND p.status != 'cancelled'
           AND (
                t.assigned_to = ?
                OR EXISTS (
@@ -399,6 +400,7 @@ function taskReopenSulDecision(
         JOIN tasks t ON t.id = r.task_id
         JOIN projects p ON p.id = r.project_id
         WHERE r.id = {$requestId} AND r.status = 'pending_sul'
+          AND p.status != 'cancelled'
           {$departmentFilter}
         LIMIT 1
     ")->fetch_assoc();
@@ -613,6 +615,7 @@ function taskReopenArchitectDecision(
         JOIN tasks t ON t.id = r.task_id
         JOIN projects p ON p.id = r.project_id
         WHERE r.id = {$requestId} AND r.status = 'pending_architect'
+          AND p.status != 'cancelled'
         LIMIT 1
     ")->fetch_assoc();
     if (!$request) {

@@ -80,6 +80,11 @@ function backupSqlValue(mixed $value, string $type, string $driver): string
     ]) . "'";
 }
 
+function backupSqlStringLiteral(string $value, string $driver): string
+{
+    return backupSqlValue($value, 'text', $driver);
+}
+
 function backupFetchRows(mysqli|PgsqlMysqliCompatConnection $conn, string $sql): array
 {
     $result = $conn->query($sql);
@@ -127,6 +132,15 @@ function backupBuildDataDump(mysqli|PgsqlMysqliCompatConnection $conn, string $t
     if ($targetDriver === 'pgsql') {
         $lines[] = 'BEGIN;';
         $lines[] = 'SET standard_conforming_strings = on;';
+        if ($tables !== []) {
+            $truncateTables = implode(', ', array_map(
+                static fn(string $table): string => backupSqlIdentifier($table, $targetDriver),
+                array_filter($tables, static fn(string $table): bool => preg_match('/^[a-zA-Z0-9_]+$/', $table) === 1)
+            ));
+            if ($truncateTables !== '') {
+                $lines[] = 'TRUNCATE TABLE ' . $truncateTables . ' RESTART IDENTITY CASCADE;';
+            }
+        }
     } else {
         $lines[] = 'SET FOREIGN_KEY_CHECKS=0;';
         $lines[] = 'START TRANSACTION;';
@@ -153,13 +167,17 @@ function backupBuildDataDump(mysqli|PgsqlMysqliCompatConnection $conn, string $t
         $rows = backupFetchRows($conn, 'SELECT * FROM ' . $sourceTable);
 
         $lines[] = '-- Table: ' . $table;
+        $targetTable = backupSqlIdentifier($table, $targetDriver);
+        if ($targetDriver === 'mysql') {
+            $lines[] = 'truncate table ' . $targetTable . ';';
+        }
+
         if ($rows === []) {
             $lines[] = '-- No rows';
             $lines[] = '';
             continue;
         }
 
-        $targetTable = backupSqlIdentifier($table, $targetDriver);
         $targetColumns = implode(', ', array_map(
             static fn(string $column): string => backupSqlIdentifier($column, $targetDriver),
             $columnNames
@@ -177,6 +195,25 @@ function backupBuildDataDump(mysqli|PgsqlMysqliCompatConnection $conn, string $t
     }
 
     if ($targetDriver === 'pgsql') {
+        foreach ($tables as $table) {
+            if (!preg_match('/^[a-zA-Z0-9_]+$/', $table)) {
+                continue;
+            }
+
+            $columns = backupGetColumns($conn, $table);
+            foreach ($columns as $column) {
+                $columnName = (string) ($column['column_name'] ?? '');
+                $columnType = strtolower((string) ($column['data_type'] ?? ''));
+                if (!in_array($columnType, ['integer', 'bigint', 'smallint'], true)) {
+                    continue;
+                }
+
+                $tableLiteral = backupSqlStringLiteral($table, $targetDriver);
+                $columnLiteral = backupSqlStringLiteral($columnName, $targetDriver);
+                $targetColumn = backupSqlIdentifier($columnName, $targetDriver);
+                $lines[] = 'SELECT setval(pg_get_serial_sequence(' . $tableLiteral . ', ' . $columnLiteral . '), COALESCE((SELECT MAX(' . $targetColumn . ') FROM ' . backupSqlIdentifier($table, $targetDriver) . '), 0) + 1, false) WHERE pg_get_serial_sequence(' . $tableLiteral . ', ' . $columnLiteral . ') IS NOT NULL;';
+            }
+        }
         $lines[] = 'COMMIT;';
     } else {
         $lines[] = 'COMMIT;';
@@ -353,7 +390,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $mailUsername = trim((string) ($_POST['mail_username'] ?? ''));
         $mailPassword = trim((string) ($_POST['mail_password'] ?? ''));
         $mailFromEmail = trim((string) ($_POST['mail_from_email'] ?? $mailUsername));
-        $mailFromName = trim((string) ($_POST['mail_from_name'] ?? 'ERNI PMS'));
+        $mailFromName = trim((string) ($_POST['mail_from_name'] ?? 'EVORTIX PMS'));
         $gmailClientId = trim((string) ($_POST['gmail_client_id'] ?? ''));
         $gmailClientSecret = trim((string) ($_POST['gmail_client_secret'] ?? ''));
         $gmailRefreshToken = trim((string) ($_POST['gmail_refresh_token'] ?? ''));
@@ -421,9 +458,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $testEmail = trim((string) ($_POST['test_email'] ?? (string) ($user['email'] ?? '')));
         $result = sendSystemEmail(
             $testEmail,
-            'ERNI PMS Gmail Integration Test',
-            '<div style="font-family:Arial,sans-serif;padding:24px;"><h2 style="color:#1f6392;">ERNI PMS Gmail Test</h2><p>Your Gmail SMTP integration is working.</p><p>This message confirms the system can now send email through your configured Google account.</p></div>',
-            "ERNI PMS Gmail Test\n\nYour Gmail SMTP integration is working."
+            'EVORTIX PMS Gmail Integration Test',
+            '<div style="font-family:Arial,sans-serif;padding:24px;"><h2 style="color:#1f6392;">EVORTIX PMS Gmail Test</h2><p>Your Gmail SMTP integration is working.</p><p>This message confirms the system can now send email through your configured Google account.</p></div>',
+            "EVORTIX PMS Gmail Test\n\nYour Gmail SMTP integration is working."
         );
         $errorDetail = trim((string) ($result['error'] ?? ''));
         if (!$result['success'] && $errorDetail === '') {
@@ -1463,7 +1500,12 @@ input:checked + .switch-slider:before {
                     </div>
                     <div class="form-group">
                         <label class="form-label">Google App Password</label>
-                        <input type="password" name="mail_password" class="form-control-modern" placeholder="Leave blank to keep current saved password">
+                        <div class="password-field">
+                            <input type="password" name="mail_password" class="form-control-modern" placeholder="Leave blank to keep current saved password">
+                            <button type="button" class="password-toggle-btn" data-password-toggle title="Show password">
+                                <i class="fas fa-eye" aria-hidden="true"></i>
+                            </button>
+                        </div>
                         <span class="form-text">Use a Google App Password, not your normal Gmail password.</span>
                     </div>
                     <div class="form-group">
@@ -1472,7 +1514,7 @@ input:checked + .switch-slider:before {
                     </div>
                     <div class="form-group">
                         <label class="form-label">From Name</label>
-                        <input type="text" name="mail_from_name" class="form-control-modern" value="<?php echo htmlspecialchars($activeMailConfig['from_name'] ?? 'ERNI PMS'); ?>" required>
+                        <input type="text" name="mail_from_name" class="form-control-modern" value="<?php echo htmlspecialchars($activeMailConfig['from_name'] ?? 'EVORTIX PMS'); ?>" required>
                     </div>
                     <div class="form-group full-span">
                         <hr style="margin: 0.25rem 0;">
@@ -1483,11 +1525,21 @@ input:checked + .switch-slider:before {
                     </div>
                     <div class="form-group">
                         <label class="form-label">Gmail API Client Secret</label>
-                        <input type="password" name="gmail_client_secret" class="form-control-modern" placeholder="Leave blank to keep current saved secret">
+                        <div class="password-field">
+                            <input type="password" name="gmail_client_secret" class="form-control-modern" placeholder="Leave blank to keep current saved secret">
+                            <button type="button" class="password-toggle-btn" data-password-toggle title="Show password">
+                                <i class="fas fa-eye" aria-hidden="true"></i>
+                            </button>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Gmail API Refresh Token</label>
-                        <input type="password" name="gmail_refresh_token" class="form-control-modern" placeholder="Leave blank to keep current saved token">
+                        <div class="password-field">
+                            <input type="password" name="gmail_refresh_token" class="form-control-modern" placeholder="Leave blank to keep current saved token">
+                            <button type="button" class="password-toggle-btn" data-password-toggle title="Show password">
+                                <i class="fas fa-eye" aria-hidden="true"></i>
+                            </button>
+                        </div>
                         <span class="form-text">Must be generated with the Gmail send scope.</span>
                     </div>
                     <div class="form-group">

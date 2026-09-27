@@ -10,6 +10,116 @@ $message = '';
 $error = '';
 $forcePasswordChange = !empty($_SESSION['force_password_change']);
 $preferencesSaved = false;
+$profileImageUrl = getUserProfileImageUrl($user['profile_pic'] ?? null);
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['remove_profile_photo']) && $error === '') {
+    $currentProfilePic = trim((string) ($user['profile_pic'] ?? ''));
+
+    if ($currentProfilePic === '') {
+        $message = 'No profile photo to remove.';
+    } else {
+        $stmt = $conn->prepare('UPDATE users SET profile_pic = NULL WHERE id = ?');
+        if ($stmt === false) {
+            $error = 'Unable to prepare profile photo removal.';
+        } else {
+            $stmt->bind_param('i', $user['id']);
+            if ($stmt->execute()) {
+                $message = 'Profile photo removed.';
+                logActivity((int) $user['id'], 'remove_profile_photo', 'users', (int) $user['id']);
+
+                storageDeleteFile($currentProfilePic);
+
+                $user = getCurrentUser();
+                $profileImageUrl = getUserProfileImageUrl($user['profile_pic'] ?? null);
+            } else {
+                $error = 'Unable to remove your profile photo.';
+            }
+            $stmt->close();
+        }
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_profile_photo']) && $error === '') {
+    $profileFile = $_FILES['profile_photo'] ?? null;
+    $allowedProfileTypes = [
+        'image/jpeg' => 'jpg',
+        'image/png' => 'png',
+        'image/webp' => 'webp',
+    ];
+    $maxProfileBytes = 3 * 1024 * 1024;
+    $minProfileDimension = 256;
+
+    if (!is_array($profileFile) || ($profileFile['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+        $error = 'Choose a profile photo before uploading.';
+    } elseif (($profileFile['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
+        $error = 'Unable to read the selected profile photo.';
+    } elseif ((int) ($profileFile['size'] ?? 0) > $maxProfileBytes) {
+        $error = 'Profile photo must be 3MB or smaller.';
+    } elseif (!is_uploaded_file((string) ($profileFile['tmp_name'] ?? ''))) {
+        $error = 'Profile photo upload was not accepted.';
+    } else {
+        $mimeType = '';
+        if (class_exists('finfo')) {
+            $fileInfo = new finfo(FILEINFO_MIME_TYPE);
+            $mimeType = (string) $fileInfo->file((string) $profileFile['tmp_name']);
+        } elseif (function_exists('mime_content_type')) {
+            $mimeType = (string) mime_content_type((string) $profileFile['tmp_name']);
+        }
+
+        $imageSize = @getimagesize((string) $profileFile['tmp_name']);
+
+        if (!isset($allowedProfileTypes[$mimeType])) {
+            $error = 'Profile photo must be JPG, PNG, or WEBP.';
+        } elseif ($imageSize === false || (int) ($imageSize[0] ?? 0) < $minProfileDimension || (int) ($imageSize[1] ?? 0) < $minProfileDimension) {
+            $error = 'Profile photo must be at least 256 x 256 pixels.';
+        } else {
+            try {
+                $target = storageBuildUploadTarget(
+                    'user-' . (int) $user['id'] . '.' . $allowedProfileTypes[$mimeType],
+                    'profile-pictures'
+                );
+            } catch (Throwable $e) {
+                $error = 'Unable to prepare profile photo storage.';
+            }
+
+            if ($error === '') {
+                $relativePath = $target['relative_path'];
+                $targetPath = $target['absolute_path'];
+
+                if (!move_uploaded_file((string) $profileFile['tmp_name'], $targetPath)) {
+                    $error = 'Unable to save the profile photo.';
+                } else {
+                    try {
+                        storagePersistFile($relativePath, $targetPath, $target['original_name'] ?? null, $mimeType);
+                    } catch (Throwable $e) {
+                        @unlink($targetPath);
+                        $error = 'Unable to save the profile photo permanently.';
+                    }
+                }
+
+                if ($error === '') {
+                    $stmt = $conn->prepare('UPDATE users SET profile_pic = ? WHERE id = ?');
+                    if ($stmt === false) {
+                        storageDeleteFile($relativePath);
+                        $error = 'Unable to prepare profile photo update.';
+                    } else {
+                        $stmt->bind_param('si', $relativePath, $user['id']);
+                        if ($stmt->execute()) {
+                            $message = 'Profile photo updated.';
+                            logActivity((int) $user['id'], 'update_profile_photo', 'users', (int) $user['id']);
+                            $user = getCurrentUser();
+                            $profileImageUrl = getUserProfileImageUrl($user['profile_pic'] ?? null);
+                        } else {
+                            storageDeleteFile($relativePath);
+                            $error = 'Unable to update your profile photo.';
+                        }
+                        $stmt->close();
+                    }
+                }
+            }
+        }
+    }
+}
 
 if (!$isAdmin) {
     try {
@@ -23,21 +133,13 @@ if (!$isAdmin) {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_preferences']) && !$isAdmin && $error === '') {
     $themeOptions = userPreferenceThemeOptions();
-    $timezoneOptions = userPreferenceTimezoneOptions();
-    $dateFormatOptions = userPreferenceDateFormatOptions();
 
     $themePreference = (string) ($_POST['theme_preference'] ?? 'default');
-    $timezone = (string) ($_POST['timezone'] ?? 'Asia/Manila');
-    $dateFormat = (string) ($_POST['date_format'] ?? 'M d, Y');
+    $timezone = (string) ($user['timezone'] ?? 'Asia/Manila');
+    $dateFormat = (string) ($user['date_format'] ?? 'M d, Y');
 
     if (!isset($themeOptions[$themePreference])) {
         $themePreference = 'default';
-    }
-    if (!isset($timezoneOptions[$timezone])) {
-        $timezone = 'Asia/Manila';
-    }
-    if (!isset($dateFormatOptions[$dateFormat])) {
-        $dateFormat = 'M d, Y';
     }
 
     $evortixEnabled = isset($_POST['evortix_enabled']) ? 1 : 0;
@@ -153,8 +255,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['logout_other_sessions
 
 $preferences = userPreferencesFromUser($user);
 $themeOptions = userPreferenceThemeOptions();
-$timezoneOptions = userPreferenceTimezoneOptions();
-$dateFormatOptions = userPreferenceDateFormatOptions();
 
 include 'includes/header.php';
 include 'includes/sidebar.php';
@@ -369,6 +469,288 @@ include 'includes/navbar.php';
 
 .settings-section-body {
     padding: 1.15rem 1.65rem 1.55rem;
+}
+
+.settings-profile-form {
+    align-items: center;
+    display: flex;
+    gap: 1.5rem;
+    max-width: 820px;
+}
+
+.settings-profile-photo-wrap {
+    flex: 0 0 auto;
+    position: relative;
+}
+
+.settings-profile-preview {
+    align-items: center;
+    background: linear-gradient(135deg, #42a9d8 0%, #1f6392 100%);
+    border: 3px solid #fff;
+    border-radius: 50%;
+    box-shadow: 0 14px 28px rgba(31, 99, 146, .18);
+    color: #fff;
+    display: flex;
+    height: 118px;
+    justify-content: center;
+    overflow: hidden;
+    width: 118px;
+}
+
+.settings-profile-preview img {
+    display: block;
+    height: 100%;
+    object-fit: cover;
+    width: 100%;
+}
+
+.settings-profile-preview.has-profile-image i {
+    display: none;
+}
+
+.settings-profile-preview i {
+    font-size: 2.2rem;
+}
+
+.settings-profile-remove {
+    align-items: center;
+    background: #f31654;
+    border: 3px solid #fff;
+    border-radius: 50%;
+    box-shadow: 0 8px 18px rgba(243, 22, 84, .28);
+    color: #fff;
+    display: inline-flex;
+    height: 34px;
+    justify-content: center;
+    padding: 0;
+    position: absolute;
+    right: -2px;
+    top: 0;
+    transition: transform .18s ease, box-shadow .18s ease;
+    width: 34px;
+}
+
+.settings-profile-remove:hover,
+.settings-profile-remove:focus-visible {
+    box-shadow: 0 10px 22px rgba(243, 22, 84, .34);
+    color: #fff;
+    transform: translateY(-1px) scale(1.03);
+}
+
+.settings-profile-copy {
+    min-width: 0;
+}
+
+.settings-upload-field {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: .75rem 1rem;
+    max-width: 560px;
+}
+
+.settings-upload-button {
+    align-items: center;
+    background: #fff;
+    border: 1px solid #dce5eb;
+    border-radius: 999px;
+    box-shadow: 0 10px 22px rgba(15, 23, 42, .08);
+    color: #2b3036;
+    cursor: pointer;
+    display: inline-flex;
+    flex: 0 0 auto;
+    font-size: 1rem;
+    font-weight: 750;
+    gap: .45rem;
+    margin: 0;
+    min-height: 44px;
+    padding: .7rem 1.45rem;
+    transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+
+.settings-upload-button:hover,
+.settings-upload-button:focus-within {
+    border-color: rgba(31, 99, 146, .24);
+    box-shadow: 0 14px 28px rgba(15, 23, 42, .11);
+    transform: translateY(-1px);
+}
+
+.settings-upload-summary {
+    align-items: center;
+    color: var(--text-muted);
+    display: flex;
+    font-size: .85rem;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.settings-upload-summary.has-file {
+    color: var(--primary-color);
+    font-weight: 650;
+}
+
+.settings-profile-actions {
+    display: flex;
+    gap: .65rem;
+    justify-content: flex-start;
+    margin-top: .9rem;
+    max-width: 560px;
+}
+
+.settings-profile-actions .btn {
+    border-radius: 999px;
+    min-height: 42px;
+    padding-inline: 1.15rem;
+}
+
+.profile-crop-modal[hidden] {
+    display: none;
+}
+
+.profile-crop-modal {
+    align-items: center;
+    background: rgba(15, 23, 42, .62);
+    backdrop-filter: blur(8px);
+    display: flex;
+    inset: 0;
+    justify-content: center;
+    padding: 1.25rem;
+    position: fixed;
+    z-index: 1095;
+}
+
+.profile-crop-dialog {
+    background: var(--card-bg);
+    border-radius: 24px;
+    box-shadow: 0 28px 80px rgba(2, 15, 27, .35);
+    max-width: 480px;
+    overflow: hidden;
+    width: min(100%, 480px);
+}
+
+.profile-crop-header,
+.profile-crop-actions {
+    align-items: center;
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+    padding: 1rem 1.2rem;
+}
+
+.profile-crop-header {
+    border-bottom: 1px solid rgba(31, 99, 146, .1);
+}
+
+.profile-crop-header h3 {
+    color: var(--text-color);
+    font-size: 1rem;
+    font-weight: 750;
+    margin: 0;
+}
+
+.profile-crop-close {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-radius: 50%;
+    color: var(--text-muted);
+    display: inline-flex;
+    height: 36px;
+    justify-content: center;
+    padding: 0;
+    width: 36px;
+}
+
+.profile-crop-close:hover,
+.profile-crop-close:focus-visible {
+    background: rgba(31, 99, 146, .1);
+    color: var(--text-color);
+}
+
+.profile-crop-body {
+    padding: 1.2rem;
+}
+
+.profile-crop-stage {
+    background:
+        linear-gradient(45deg, rgba(148, 163, 184, .18) 25%, transparent 25%),
+        linear-gradient(-45deg, rgba(148, 163, 184, .18) 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, rgba(148, 163, 184, .18) 75%),
+        linear-gradient(-45deg, transparent 75%, rgba(148, 163, 184, .18) 75%);
+    background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+    background-size: 20px 20px;
+    border-radius: 22px;
+    cursor: grab;
+    margin: 0 auto;
+    max-width: 340px;
+    overflow: hidden;
+    position: relative;
+    touch-action: none;
+    width: 100%;
+}
+
+.profile-crop-stage:active {
+    cursor: grabbing;
+}
+
+.profile-crop-stage::before {
+    content: "";
+    display: block;
+    padding-top: 100%;
+}
+
+.profile-crop-stage img,
+.profile-crop-stage canvas,
+.profile-crop-frame {
+    inset: 0;
+    position: absolute;
+}
+
+.profile-crop-stage img {
+    height: auto;
+    max-width: none;
+    pointer-events: none;
+    transform-origin: 0 0;
+    user-select: none;
+    width: auto;
+}
+
+.profile-crop-stage canvas {
+    display: none;
+}
+
+.profile-crop-frame {
+    border: 3px solid #fff;
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 1px rgba(15, 23, 42, .08), 0 0 0 999px rgba(15, 23, 42, .24);
+    pointer-events: none;
+}
+
+.profile-crop-help {
+    color: var(--text-muted);
+    font-size: .82rem;
+    margin: .85rem 0 0;
+    text-align: center;
+}
+
+.profile-crop-control {
+    margin-top: 1rem;
+}
+
+.profile-crop-control label {
+    color: var(--text-color);
+    display: block;
+    font-size: .82rem;
+    font-weight: 650;
+    margin-bottom: .35rem;
+}
+
+.profile-crop-actions {
+    background: rgba(31, 99, 146, .05);
+    border-top: 1px solid rgba(31, 99, 146, .1);
+    justify-content: flex-end;
 }
 
 .settings-field {
@@ -757,6 +1139,44 @@ include 'includes/navbar.php';
     background: rgba(8, 35, 55, .5);
 }
 
+[data-theme="dark"] .settings-profile-preview {
+    border-color: rgba(197, 235, 255, .32);
+    box-shadow: 0 12px 28px rgba(2, 15, 27, .28);
+}
+
+[data-theme="dark"] .settings-upload-button {
+    background: rgba(8, 35, 55, .78);
+    border-color: rgba(138, 210, 255, .2);
+    box-shadow: 0 12px 26px rgba(0, 0, 0, .26);
+    color: #e7f6ff;
+}
+
+[data-theme="dark"] .settings-upload-button:hover {
+    background: rgba(31, 99, 146, .34);
+}
+
+[data-theme="dark"] .settings-upload-summary {
+    color: #d7e4f2;
+}
+
+[data-theme="dark"] .profile-crop-dialog {
+    background: #10283c;
+}
+
+[data-theme="dark"] .profile-crop-header,
+[data-theme="dark"] .profile-crop-actions {
+    border-color: rgba(138, 210, 255, .14);
+}
+
+[data-theme="dark"] .profile-crop-actions {
+    background: rgba(8, 35, 55, .48);
+}
+
+[data-theme="dark"] .profile-crop-frame {
+    border-color: rgba(226, 246, 255, .95);
+    box-shadow: inset 0 0 0 1px rgba(138, 210, 255, .18), 0 0 0 999px rgba(2, 15, 27, .34);
+}
+
 @media (max-width: 991.98px) {
     .settings-workspace {
         grid-template-columns: 1fr;
@@ -805,6 +1225,24 @@ include 'includes/navbar.php';
         padding: 1rem 1.1rem 1.2rem;
     }
 
+    .settings-profile-form {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .settings-profile-preview {
+        height: 104px;
+        width: 104px;
+    }
+
+    .profile-crop-modal {
+        padding: .75rem;
+    }
+
+    .profile-crop-dialog {
+        border-radius: 20px;
+    }
+
     .settings-regional-grid {
         grid-template-columns: 1fr;
     }
@@ -833,7 +1271,7 @@ include 'includes/navbar.php';
     <header class="settings-page-header">
         <div>
             <h1>Settings</h1>
-            <p><?php echo $isAdmin ? 'Manage account security and access system-wide configuration.' : 'Manage your appearance, assistant, notification, regional, and security preferences.'; ?></p>
+            <p><?php echo $isAdmin ? 'Manage account security and access system-wide configuration.' : 'Manage your appearance, assistant, notification, and security preferences.'; ?></p>
         </div>
     </header>
 
@@ -862,14 +1300,14 @@ include 'includes/navbar.php';
     <div class="settings-workspace">
         <nav class="settings-navigation" aria-label="Settings sections">
             <span class="settings-navigation-label">Your preferences</span>
+            <a class="settings-nav-link is-active" href="#settingsProfile" data-settings-target="settingsProfile" aria-controls="settingsProfile" aria-current="page"><i class="fas fa-user-circle"></i><span>Profile</span></a>
             <?php if (!$isAdmin): ?>
-                <a class="settings-nav-link is-active" href="#settingsAppearance" data-settings-target="settingsAppearance" aria-controls="settingsAppearance" aria-current="page"><i class="fas fa-palette"></i><span>Appearance</span></a>
+                <a class="settings-nav-link" href="#settingsAppearance" data-settings-target="settingsAppearance" aria-controls="settingsAppearance"><i class="fas fa-palette"></i><span>Appearance</span></a>
                 <a class="settings-nav-link" href="#settingsEvortix" data-settings-target="settingsEvortix" aria-controls="settingsEvortix"><i class="fas fa-robot"></i><span>Evortix</span></a>
                 <a class="settings-nav-link" href="#settingsNotifications" data-settings-target="settingsNotifications" aria-controls="settingsNotifications"><i class="fas fa-bell"></i><span>Notifications</span></a>
-                <a class="settings-nav-link" href="#settingsRegional" data-settings-target="settingsRegional" aria-controls="settingsRegional"><i class="fas fa-globe"></i><span>Regional</span></a>
                 <div class="settings-navigation-separator"></div>
             <?php endif; ?>
-            <a class="settings-nav-link<?php echo $isAdmin ? ' is-active' : ''; ?>" href="#settingsSecurity" data-settings-target="settingsSecurity" aria-controls="settingsSecurity"<?php echo $isAdmin ? ' aria-current="page"' : ''; ?>><i class="fas fa-lock"></i><span>Security</span></a>
+            <a class="settings-nav-link" href="#settingsSecurity" data-settings-target="settingsSecurity" aria-controls="settingsSecurity"><i class="fas fa-lock"></i><span>Security</span></a>
             <?php if ($isAdmin): ?>
                 <div class="settings-navigation-separator"></div>
                 <a href="<?php echo BASE_URL; ?>modules/admin/settings.php"><i class="fas fa-screwdriver-wrench"></i><span>System settings</span></a>
@@ -877,9 +1315,88 @@ include 'includes/navbar.php';
         </nav>
 
         <main class="settings-content">
+            <section class="settings-section" id="settingsProfile" data-settings-panel>
+                <div class="settings-section-header">
+                    <span class="settings-section-icon"><i class="fas fa-user-circle"></i></span>
+                    <div>
+                        <h2>Profile photo</h2>
+                        <p>Upload a photo for your account avatar across the workspace.</p>
+                    </div>
+                </div>
+                <div class="settings-section-body">
+                    <form method="POST" enctype="multipart/form-data" id="profilePhotoForm" class="settings-profile-form" data-app-loading data-loading-title="Uploading profile photo" data-loading-text="Please wait while your profile photo is saved.">
+                        <div class="settings-profile-photo-wrap">
+                            <div class="settings-profile-preview <?php echo $profileImageUrl !== '' ? 'has-profile-image' : ''; ?>" id="profilePhotoPreview">
+                                <?php if ($profileImageUrl !== ''): ?>
+                                    <img src="<?php echo htmlspecialchars($profileImageUrl); ?>" alt="" loading="lazy" onerror="this.remove(); this.parentElement.classList.remove('has-profile-image');">
+                                <?php endif; ?>
+                                <i class="fas fa-user"></i>
+                            </div>
+                            <?php if ($profileImageUrl !== ''): ?>
+                                <button type="submit" name="remove_profile_photo" form="removeProfilePhotoForm" class="settings-profile-remove" aria-label="Remove profile photo" title="Remove profile photo">
+                                    <i class="fas fa-times" aria-hidden="true"></i>
+                                </button>
+                            <?php endif; ?>
+                        </div>
+                        <div class="settings-profile-copy">
+                            <div class="settings-upload-field">
+                                <label for="profilePhoto" class="settings-upload-button">
+                                    <i class="fas fa-camera" aria-hidden="true"></i>
+                                    <span>Upload Photo</span>
+                                </label>
+                                <input
+                                    id="profilePhoto"
+                                    type="file"
+                                    name="profile_photo"
+                                    class="visually-hidden"
+                                    accept=".jpg,.jpeg,.png,.webp"
+                                    aria-describedby="profilePhotoSummary"
+                                    required
+                                >
+                            </div>
+                            <small class="settings-field-note">At least 256 &times; 256px. JPG, PNG, or WEBP. Max 3MB.</small>
+                            <span class="settings-upload-summary" id="profilePhotoSummary">Choose a photo, crop it, then it will upload automatically.</span>
+                            <button type="submit" name="upload_profile_photo" class="visually-hidden" id="profilePhotoSubmit" tabindex="-1" disabled>
+                                Upload cropped photo
+                            </button>
+                        </div>
+                    </form>
+                    <?php if ($profileImageUrl !== ''): ?>
+                        <form method="POST" id="removeProfilePhotoForm" data-app-loading data-loading-title="Removing profile photo" data-loading-text="Please wait while your profile photo is removed."></form>
+                    <?php endif; ?>
+                    <div class="profile-crop-modal" id="profileCropModal" role="dialog" aria-modal="true" aria-labelledby="profileCropTitle" hidden>
+                        <div class="profile-crop-dialog">
+                            <div class="profile-crop-header">
+                                <h3 id="profileCropTitle">Crop profile photo</h3>
+                                <button type="button" class="profile-crop-close" id="profileCropClose" aria-label="Close crop editor">
+                                    <i class="fas fa-times" aria-hidden="true"></i>
+                                </button>
+                            </div>
+                            <div class="profile-crop-body">
+                                <div class="profile-crop-stage" id="profileCropStage">
+                                    <img id="profileCropImagePreview" alt="">
+                                    <canvas id="profileCropCanvas" width="512" height="512"></canvas>
+                                    <span class="profile-crop-frame" aria-hidden="true"></span>
+                                </div>
+                                <p class="profile-crop-help">Drag to reposition. Use zoom until your face sits nicely in the circle.</p>
+                                <div class="profile-crop-control">
+                                    <label for="profileCropZoom">Zoom</label>
+                                    <input type="range" class="form-range" id="profileCropZoom" min="1" max="3" step="0.01" value="1">
+                                </div>
+                            </div>
+                            <div class="profile-crop-actions">
+                                <button type="button" class="btn btn-outline-secondary" id="profileCropCancel">Cancel</button>
+                                <button type="button" class="btn btn-primary" id="profileCropApply">
+                                    <i class="fas fa-crop-alt me-1"></i> Save Photo
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
             <?php if (!$isAdmin): ?>
-                <form method="POST" id="personalPreferencesForm">
-                    <section class="settings-section" id="settingsAppearance" data-settings-panel>
+                <form method="POST" id="personalPreferencesForm" hidden>
+                    <section class="settings-section" id="settingsAppearance" data-settings-panel hidden>
                         <div class="settings-section-header">
                             <span class="settings-section-icon"><i class="fas fa-palette"></i></span>
                             <div>
@@ -983,36 +1500,6 @@ include 'includes/navbar.php';
                         </div>
                     </section>
 
-                    <section class="settings-section" id="settingsRegional" data-settings-panel hidden>
-                        <div class="settings-section-header">
-                            <span class="settings-section-icon"><i class="fas fa-globe"></i></span>
-                            <div>
-                                <h2>Regional preferences</h2>
-                                <p>Set how dates and local time appear across the system.</p>
-                            </div>
-                        </div>
-                        <div class="settings-section-body">
-                            <div class="settings-regional-grid">
-                                <div>
-                                    <label class="form-label" for="timezone">Timezone</label>
-                                    <select class="form-select" id="timezone" name="timezone">
-                                        <?php foreach ($timezoneOptions as $value => $label): ?>
-                                            <option value="<?php echo htmlspecialchars($value); ?>" <?php echo $preferences['timezone'] === $value ? 'selected' : ''; ?>><?php echo htmlspecialchars($label); ?></option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="form-label" for="dateFormat">Date format</label>
-                                    <select class="form-select" id="dateFormat" name="date_format">
-                                        <?php foreach ($dateFormatOptions as $value => $label): ?>
-                                            <option value="<?php echo htmlspecialchars($value); ?>" <?php echo $preferences['date_format'] === $value ? 'selected' : ''; ?>><?php echo htmlspecialchars($label); ?></option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-                    </section>
-
                     <div class="settings-form-actions">
                         <button type="submit" name="save_preferences" class="btn btn-primary">
                             <i class="fas fa-save me-1"></i> Save preferences
@@ -1021,7 +1508,7 @@ include 'includes/navbar.php';
                 </form>
             <?php endif; ?>
 
-            <section class="settings-section" id="settingsSecurity" data-settings-panel<?php echo !$isAdmin ? ' hidden' : ''; ?>>
+            <section class="settings-section" id="settingsSecurity" data-settings-panel hidden>
                 <div class="settings-section-header">
                     <span class="settings-section-icon"><i class="fas fa-lock"></i></span>
                     <div>
@@ -1034,15 +1521,30 @@ include 'includes/navbar.php';
                         <div class="settings-security-grid">
                             <div>
                                 <label class="form-label">Current password</label>
-                                <input type="password" name="current_password" class="form-control" required autocomplete="current-password">
+                                <div class="password-field">
+                                    <input type="password" name="current_password" class="form-control" required autocomplete="current-password">
+                                    <button type="button" class="password-toggle-btn" data-password-toggle title="Show password">
+                                        <i class="fas fa-eye" aria-hidden="true"></i>
+                                    </button>
+                                </div>
                             </div>
                             <div>
                                 <label class="form-label">New password</label>
-                                <input type="password" name="password" class="form-control" minlength="6" required autocomplete="new-password">
+                                <div class="password-field">
+                                    <input type="password" name="password" class="form-control" minlength="6" required autocomplete="new-password">
+                                    <button type="button" class="password-toggle-btn" data-password-toggle title="Show password">
+                                        <i class="fas fa-eye" aria-hidden="true"></i>
+                                    </button>
+                                </div>
                             </div>
                             <div>
                                 <label class="form-label">Confirm new password</label>
-                                <input type="password" name="confirm_password" class="form-control" minlength="6" required autocomplete="new-password">
+                                <div class="password-field">
+                                    <input type="password" name="confirm_password" class="form-control" minlength="6" required autocomplete="new-password">
+                                    <button type="button" class="password-toggle-btn" data-password-toggle title="Show password">
+                                        <i class="fas fa-eye" aria-hidden="true"></i>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                         <div class="settings-security-actions">
@@ -1102,6 +1604,315 @@ document.addEventListener('DOMContentLoaded', function () {
         return;
     }
 
+    const profilePhotoForm = document.getElementById('profilePhotoForm');
+    const profilePhotoInput = document.getElementById('profilePhoto');
+    const profilePhotoPreview = document.getElementById('profilePhotoPreview');
+    const profilePhotoSummary = document.getElementById('profilePhotoSummary');
+    const profilePhotoSubmit = document.getElementById('profilePhotoSubmit');
+    const profileCropModal = document.getElementById('profileCropModal');
+    const profileCropStage = document.getElementById('profileCropStage');
+    const profileCropImagePreview = document.getElementById('profileCropImagePreview');
+    const profileCropCanvas = document.getElementById('profileCropCanvas');
+    const profileCropZoom = document.getElementById('profileCropZoom');
+    const profileCropApply = document.getElementById('profileCropApply');
+    const profileCropCancel = document.getElementById('profileCropCancel');
+    const profileCropClose = document.getElementById('profileCropClose');
+
+    if (profilePhotoInput && profilePhotoSummary && profileCropModal && profileCropStage && profileCropImagePreview && profileCropCanvas) {
+        const cropContext = profileCropCanvas.getContext('2d');
+        const cropImage = new Image();
+        let cropFile = null;
+        let cropObjectUrl = '';
+        let previewObjectUrl = '';
+        let cropScale = 1;
+        let cropZoom = 1;
+        let cropOffsetX = 0;
+        let cropOffsetY = 0;
+        let isDraggingCrop = false;
+        let hasCroppedPhoto = false;
+        let lastPointerX = 0;
+        let lastPointerY = 0;
+
+        const resetCropApplyButton = function () {
+            if (!profileCropApply) {
+                return;
+            }
+            profileCropApply.disabled = false;
+            profileCropApply.innerHTML = '<i class="fas fa-crop-alt me-1"></i> Save Photo';
+        };
+
+        const resetSelectedPhoto = function () {
+            profilePhotoInput.value = '';
+            hasCroppedPhoto = false;
+            profilePhotoSummary.textContent = 'Choose a photo, crop it, then it will upload automatically.';
+            profilePhotoSummary.classList.remove('has-file');
+            if (profilePhotoSubmit) {
+                profilePhotoSubmit.disabled = true;
+            }
+        };
+
+        const closeCropModal = function (resetInput) {
+            profileCropModal.hidden = true;
+            document.body.classList.remove('modal-open');
+            resetCropApplyButton();
+            if (cropObjectUrl) {
+                URL.revokeObjectURL(cropObjectUrl);
+                cropObjectUrl = '';
+            }
+            if (resetInput) {
+                resetSelectedPhoto();
+            }
+        };
+
+        const getCropStageSize = function () {
+            return Math.max(1, Math.round(profileCropStage.getBoundingClientRect().width || 340));
+        };
+
+        const clampCropOffsets = function () {
+            const stageSize = getCropStageSize();
+            const scaledWidth = cropImage.naturalWidth * cropScale * cropZoom;
+            const scaledHeight = cropImage.naturalHeight * cropScale * cropZoom;
+            const maxOffsetX = Math.max(0, (scaledWidth - stageSize) / 2);
+            const maxOffsetY = Math.max(0, (scaledHeight - stageSize) / 2);
+            cropOffsetX = Math.min(maxOffsetX, Math.max(-maxOffsetX, cropOffsetX));
+            cropOffsetY = Math.min(maxOffsetY, Math.max(-maxOffsetY, cropOffsetY));
+        };
+
+        const drawCropPreview = function () {
+            if (!cropContext || !cropImage.naturalWidth) {
+                return;
+            }
+
+            const stageSize = getCropStageSize();
+            const canvasSize = profileCropCanvas.width;
+            const stageToCanvas = canvasSize / stageSize;
+            const previewWidth = cropImage.naturalWidth * cropScale * cropZoom;
+            const previewHeight = cropImage.naturalHeight * cropScale * cropZoom;
+            const previewX = (stageSize - previewWidth) / 2 + cropOffsetX;
+            const previewY = (stageSize - previewHeight) / 2 + cropOffsetY;
+            const imageWidth = previewWidth * stageToCanvas;
+            const imageHeight = previewHeight * stageToCanvas;
+            const drawX = previewX * stageToCanvas;
+            const drawY = previewY * stageToCanvas;
+
+            profileCropImagePreview.style.width = previewWidth + 'px';
+            profileCropImagePreview.style.height = previewHeight + 'px';
+            profileCropImagePreview.style.transform = 'translate3d(' + previewX + 'px, ' + previewY + 'px, 0)';
+
+            cropContext.clearRect(0, 0, canvasSize, canvasSize);
+            cropContext.fillStyle = '#ffffff';
+            cropContext.fillRect(0, 0, canvasSize, canvasSize);
+            cropContext.imageSmoothingEnabled = true;
+            cropContext.imageSmoothingQuality = 'high';
+            cropContext.drawImage(cropImage, drawX, drawY, imageWidth, imageHeight);
+        };
+
+        const prepareCropImage = function () {
+            profileCropModal.hidden = false;
+            document.body.classList.add('modal-open');
+            resetCropApplyButton();
+            profileCropImagePreview.src = cropObjectUrl;
+            window.requestAnimationFrame(function () {
+                const stageSize = getCropStageSize();
+                cropScale = Math.max(stageSize / cropImage.naturalWidth, stageSize / cropImage.naturalHeight);
+                cropZoom = 1;
+                cropOffsetX = 0;
+                cropOffsetY = 0;
+                if (profileCropZoom) {
+                    profileCropZoom.value = '1';
+                }
+                drawCropPreview();
+            });
+        };
+
+        const sanitizeProfileFileName = function (fileName) {
+            const baseName = String(fileName || 'profile-photo')
+                .replace(/\.[^.]+$/, '')
+                .replace(/[^a-z0-9_-]+/gi, '-')
+                .replace(/^-+|-+$/g, '')
+                .toLowerCase();
+            return (baseName || 'profile-photo') + '-cropped.jpg';
+        };
+
+        const setCroppedFile = function (blob) {
+            if (typeof DataTransfer === 'undefined') {
+                alert('Your browser cannot attach the cropped image automatically. Please try a newer browser.');
+                return;
+            }
+            const croppedFile = new File([blob], sanitizeProfileFileName(cropFile?.name), { type: 'image/jpeg' });
+            const transfer = new DataTransfer();
+            transfer.items.add(croppedFile);
+            profilePhotoInput.files = transfer.files;
+            hasCroppedPhoto = true;
+            profilePhotoSummary.textContent = croppedFile.name + ' - cropped 512 x 512';
+            profilePhotoSummary.classList.add('has-file');
+            if (profilePhotoSubmit) {
+                profilePhotoSubmit.disabled = false;
+            }
+
+            if (previewObjectUrl) {
+                URL.revokeObjectURL(previewObjectUrl);
+            }
+            previewObjectUrl = URL.createObjectURL(croppedFile);
+            if (profilePhotoPreview) {
+                let previewImage = profilePhotoPreview.querySelector('img');
+                if (!previewImage) {
+                    previewImage = document.createElement('img');
+                    previewImage.alt = '';
+                    profilePhotoPreview.prepend(previewImage);
+                }
+                previewImage.src = previewObjectUrl;
+                profilePhotoPreview.classList.add('has-profile-image');
+            }
+            closeCropModal(false);
+            if (profilePhotoForm) {
+                if (profilePhotoSubmit) {
+                    profilePhotoSubmit.disabled = false;
+                    if (typeof profilePhotoForm.requestSubmit === 'function') {
+                        profilePhotoForm.requestSubmit(profilePhotoSubmit);
+                    } else {
+                        profilePhotoSubmit.click();
+                    }
+                } else {
+                    const uploadFlag = document.createElement('input');
+                    uploadFlag.type = 'hidden';
+                    uploadFlag.name = 'upload_profile_photo';
+                    uploadFlag.value = '1';
+                    profilePhotoForm.appendChild(uploadFlag);
+                    profilePhotoForm.submit();
+                }
+            }
+        };
+
+        profilePhotoInput.addEventListener('change', function () {
+            const selectedFile = profilePhotoInput.files && profilePhotoInput.files[0] ? profilePhotoInput.files[0] : null;
+            hasCroppedPhoto = false;
+            if (!selectedFile) {
+                resetSelectedPhoto();
+                return;
+            }
+
+            if (!/^image\/(jpeg|png|webp)$/i.test(selectedFile.type)) {
+                alert('Please choose a JPG, PNG, or WEBP photo.');
+                resetSelectedPhoto();
+                return;
+            }
+
+            if (selectedFile.size > 3 * 1024 * 1024) {
+                alert('Profile photo must be 3MB or smaller.');
+                resetSelectedPhoto();
+                return;
+            }
+
+            cropFile = selectedFile;
+            if (cropObjectUrl) {
+                URL.revokeObjectURL(cropObjectUrl);
+            }
+            cropObjectUrl = URL.createObjectURL(selectedFile);
+            cropImage.onload = function () {
+                if (cropImage.naturalWidth < 256 || cropImage.naturalHeight < 256) {
+                    alert('Profile photo must be at least 256 x 256 pixels.');
+                    closeCropModal(true);
+                    return;
+                }
+                prepareCropImage();
+            };
+            cropImage.onerror = function () {
+                alert('Unable to preview this photo. Please choose another image.');
+                closeCropModal(true);
+            };
+            cropImage.src = cropObjectUrl;
+        });
+
+        profileCropZoom?.addEventListener('input', function () {
+            cropZoom = Number(profileCropZoom.value) || 1;
+            clampCropOffsets();
+            drawCropPreview();
+        });
+
+        profileCropStage.addEventListener('pointerdown', function (event) {
+            isDraggingCrop = true;
+            lastPointerX = event.clientX;
+            lastPointerY = event.clientY;
+            profileCropStage.setPointerCapture(event.pointerId);
+        });
+
+        profileCropStage.addEventListener('pointermove', function (event) {
+            if (!isDraggingCrop) {
+                return;
+            }
+            cropOffsetX += event.clientX - lastPointerX;
+            cropOffsetY += event.clientY - lastPointerY;
+            lastPointerX = event.clientX;
+            lastPointerY = event.clientY;
+            clampCropOffsets();
+            drawCropPreview();
+        });
+
+        profileCropStage.addEventListener('pointerup', function (event) {
+            isDraggingCrop = false;
+            profileCropStage.releasePointerCapture(event.pointerId);
+        });
+
+        profileCropStage.addEventListener('pointercancel', function () {
+            isDraggingCrop = false;
+        });
+
+        profileCropStage.addEventListener('wheel', function (event) {
+            event.preventDefault();
+            if (!profileCropZoom) {
+                return;
+            }
+            const nextZoom = Math.min(3, Math.max(1, Number(profileCropZoom.value) + (event.deltaY < 0 ? .05 : -.05)));
+            profileCropZoom.value = String(nextZoom);
+            profileCropZoom.dispatchEvent(new Event('input', { bubbles: true }));
+        }, { passive: false });
+
+        profileCropApply?.addEventListener('click', function () {
+            if (!cropImage.naturalWidth) {
+                return;
+            }
+            profileCropApply.disabled = true;
+            profileCropApply.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Saving...';
+            profileCropCanvas.toBlob(function (blob) {
+                if (!blob) {
+                    alert('Unable to crop this photo. Please try another image.');
+                    resetCropApplyButton();
+                    return;
+                }
+                setCroppedFile(blob);
+            }, 'image/jpeg', .92);
+        });
+
+        profileCropCancel?.addEventListener('click', function () {
+            closeCropModal(true);
+        });
+
+        profileCropClose?.addEventListener('click', function () {
+            closeCropModal(true);
+        });
+
+        profileCropModal.addEventListener('click', function (event) {
+            if (event.target === profileCropModal) {
+                closeCropModal(true);
+            }
+        });
+
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape' && !profileCropModal.hidden) {
+                closeCropModal(true);
+            }
+        });
+
+        profilePhotoForm?.addEventListener('submit', function (event) {
+            if (!hasCroppedPhoto || !profilePhotoInput.files || !profilePhotoInput.files.length) {
+                event.preventDefault();
+                alert('Please choose and crop a profile photo before uploading.');
+                resetSelectedPhoto();
+            }
+        });
+    }
+
     const navigationItems = Array.from(workspace.querySelectorAll('[data-settings-target]'));
     const panels = Array.from(workspace.querySelectorAll('[data-settings-panel]'));
     const preferenceForm = document.getElementById('personalPreferencesForm');
@@ -1134,9 +1945,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const serverSelectedPanel = <?php
         echo json_encode(
-            ($isAdmin || isset($_POST['password']) || isset($_POST['logout_other_sessions']))
+            (isset($_POST['password']) || isset($_POST['logout_other_sessions']))
                 ? 'settingsSecurity'
-                : ''
+                : (isset($_POST['save_preferences']) ? 'settingsAppearance' : 'settingsProfile')
         );
     ?>;
 

@@ -688,10 +688,10 @@ body {
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .breadcrumb-modern,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-details-panel,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-content {
-    background: #071321 !important;
-    border-color: rgba(138, 210, 255, 0.12) !important;
-    color: #d8e6f3 !important;
-    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.32) !important;
+    background: #0b1724 !important;
+    border-color: rgba(125, 183, 222, 0.2) !important;
+    color: #e6eef7 !important;
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.34) !important;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern {
@@ -706,26 +706,26 @@ body {
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .main-card .card-header,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-header,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-detail-full .value {
-    background: #0a1b2c !important;
+    background: #101f2e !important;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .folder-tree-container,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table thead,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-details-panel,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-detail-item,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-context-metric,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-context-row,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-context-empty,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .breadcrumb-modern {
-    background: #0a1b2c !important;
+    background: #101f2e !important;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .folder-tree-card .card-header h6,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .main-card .card-header h6,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-context-header h5,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-context-section h6,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-detail-item .value {
-    color: #d8e6f3 !important;
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-detail-item .value,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-context-metric strong {
+    color: #f4f8fc !important;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .folder-name,
@@ -738,7 +738,7 @@ body {
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-context-row small,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .breadcrumb-modern .breadcrumb-item.active,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .folder-client-label {
-    color: #90aeca !important;
+    color: #afc4d8 !important;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .folder-item,
@@ -747,19 +747,53 @@ body {
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-context-metric,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-context-row,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .folder-item.is-active {
-    border-color: rgba(138, 210, 255, 0.12) !important;
+    border-color: rgba(125, 183, 222, 0.22) !important;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .folder-item:hover,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .folder-item.is-active,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table tr:hover {
-    background: rgba(31, 99, 146, 0.12) !important;
+    background: rgba(50, 129, 177, 0.2) !important;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .folder-expand,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .file-link,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .breadcrumb-modern .breadcrumb-item a {
-    color: #bfe6ff !important;
+    color: #8fd3ff !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-info-body {
+    background: #08121d;
+    scrollbar-color: #3281b1 #101f2e;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-context-section {
+    border-top-color: rgba(125, 183, 222, 0.18);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-context-pills span {
+    background: #e8eef4 !important;
+    border-color: rgba(255, 255, 255, 0.18) !important;
+    color: #24364a !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-gantt-track {
+    background: #172b3d;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-outline-modern {
+    background: transparent;
+    border-color: #4db8ef;
+    color: #9edbff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-outline-modern:hover {
+    background: rgba(77, 184, 239, 0.14);
+    color: #ffffff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table tbody td {
+    color: #d7e4f2;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .badge-folder {
@@ -1522,7 +1556,7 @@ async function bulkDelete() {
         success: function() {
             bootstrap.Modal.getInstance(document.getElementById('bulkActionsModal'))?.hide();
             loadFolderContents(currentFolderId);
-            showFolderNotice('Folders', `${selectedFiles.length} files deleted`);
+            showFolderNotice('Files deleted', `${selectedFiles.length} selected file(s) were removed from this folder.`);
         },
         error: function(xhr) {
             handleFolderApiError(xhr, 'Unable to delete selected files.');
@@ -1535,10 +1569,11 @@ function bulkDownload() {
         window.open(getFolderDownloadUrl(id), '_blank', 'noopener');
     });
     bootstrap.Modal.getInstance(document.getElementById('bulkActionsModal'))?.hide();
+    showFolderNotice('Download started', `${selectedFiles.length} selected file(s) are opening for download.`, 'info');
 }
 
 function bulkMove() {
-    showFolderNotice('Folders', 'Bulk move functionality coming soon', 'info');
+    showFolderNotice('Move files', 'Bulk move is not available yet for selected files.', 'info');
 }
 
 async function deleteFile(fileId) {
@@ -1563,7 +1598,10 @@ async function deleteFile(fileId) {
         method: 'POST',
         dataType: 'json',
         data: { id: fileId },
-        success: () => loadFolderContents(currentFolderId),
+        success: () => {
+            loadFolderContents(currentFolderId);
+            showFolderNotice('File deleted', 'The file was removed from this folder.');
+        },
         error: xhr => handleFolderApiError(xhr, 'Unable to delete this file.')
     });
 }
@@ -1593,7 +1631,10 @@ async function createFolderInCurrent() {
         method: 'POST',
         dataType: 'json',
         data: { name: name.trim(), parent_id: currentFolderId },
-        success: () => currentFolderId > 0 ? loadFolderContents(currentFolderId) : loadRootFolders(),
+        success: () => {
+            currentFolderId > 0 ? loadFolderContents(currentFolderId) : loadRootFolders();
+            showFolderNotice('Folder created', `"${name.trim()}" was created in the current folder.`);
+        },
         error: xhr => handleFolderApiError(xhr, 'Unable to create this folder.')
     });
 }
@@ -1622,7 +1663,11 @@ function uploadToCurrentFolder() {
             success: data => {
                 loadFolderContents(currentFolderId);
                 if (Array.isArray(data.failed_files) && data.failed_files.length > 0) {
-                    showFolderNotice('Folders', `${data.failed_files.length} file(s) could not be uploaded.`, 'warning');
+                    const uploadedCount = Array.isArray(data.file_ids) ? data.file_ids.length : 0;
+                    showFolderNotice('Upload partially completed', `${uploadedCount} file(s) uploaded; ${data.failed_files.length} file(s) could not be uploaded.`, 'warning');
+                } else {
+                    const uploadedCount = Array.isArray(data.file_ids) ? data.file_ids.length : Array.from(e.target.files).length;
+                    showFolderNotice('Upload complete', `${uploadedCount} file(s) uploaded to this folder.`);
                 }
             },
             error: xhr => handleFolderApiError(xhr, 'Unable to upload the selected files.')
@@ -1632,7 +1677,7 @@ function uploadToCurrentFolder() {
 }
 
 function exportCurrentFolder() {
-    showFolderNotice('Folders', 'ZIP export feature coming soon', 'info');
+    showFolderNotice('Export folder', 'ZIP export is not available yet for this folder.', 'info');
 }
 
 function refreshFolder() {

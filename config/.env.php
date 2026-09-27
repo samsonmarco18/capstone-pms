@@ -17,7 +17,7 @@ if (is_file($localConfigFile)) {
 // Detect environment - check multiple indicators
 $host = strtolower($_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? '');
 $isCliMode = php_sapi_name() === 'cli' || php_sapi_name() === 'cli-server';
-$isRender = !empty(getenv('RENDER'));
+$isRender = !empty(getenv('RENDER')) || str_contains($host, 'onrender.com');
 $appRootPath = realpath(dirname(__DIR__)) ?: dirname(__DIR__);
 
 // Determine if running locally
@@ -131,6 +131,13 @@ function detectAppUrl(string $appRootPath, bool $isRender): string
     $scheme = $isHttps ? 'https' : 'http';
     $host = trim((string) ($_SERVER['HTTP_HOST'] ?? 'localhost'));
 
+    // Render proxies requests to the container's internal PORT (commonly
+    // 10000). That port is not publicly reachable and must never become part
+    // of a browser-facing URL when APP_URL is unavailable.
+    if ($isRender) {
+        $host = preg_replace('/:\d+$/', '', $host) ?: $host;
+    }
+
     $basePathOverride = trim((string) getEnvOrDefault('APP_BASE_PATH', ''));
     if ($basePathOverride !== '') {
         return $scheme . '://' . $host . '/' . trim($basePathOverride, '/') . '/';
@@ -158,6 +165,14 @@ $appUrl = getEnvOrDefault('APP_URL', null);
 if (!$appUrl) {
     $appUrl = detectAppUrl($appRootPath, $isRender);
 }
+
+// A Render service listens on an internal PORT, but its public URL never
+// includes that port. Normalize an accidental dashboard/environment override
+// as a final safeguard for every generated link and redirect.
+if ($isRender) {
+    $appUrl = preg_replace('#^http://#i', 'https://', (string) $appUrl) ?: $appUrl;
+    $appUrl = preg_replace('#^(https?://[^/:]+):\d+(?=/|$)#i', '$1', (string) $appUrl) ?: $appUrl;
+}
 define('APP_URL', rtrim($appUrl, '/') . '/');
 
 // Security Configuration
@@ -172,6 +187,7 @@ define('UPLOAD_MAX_SIZE', (int) getEnvOrDefault('UPLOAD_MAX_SIZE', 52428800)); /
 define('APP_ROOT_PATH', $appRootPath);
 $configuredUploadPath = trim((string) getEnvOrDefault('UPLOAD_STORAGE_ROOT', ''));
 define('UPLOAD_PATH', rtrim($configuredUploadPath !== '' ? $configuredUploadPath : APP_ROOT_PATH . '/uploads', '/\\') . DIRECTORY_SEPARATOR);
+define('UPLOAD_STORAGE_BACKEND', strtolower((string) getEnvOrDefault('UPLOAD_STORAGE_BACKEND', 'filesystem')));
 define('GIT_PATH', APP_ROOT_PATH . '/git/');
 define('GIT_WORKSPACES_PATH', APP_ROOT_PATH . '/git-workspaces/');
 

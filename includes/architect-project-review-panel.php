@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/file-storage.php';
+
 $architectReviewProjectId = (int) ($architectReviewProjectId ?? $projectId ?? $selectedProjectId ?? ($_GET['id'] ?? $_GET['project_id'] ?? 0));
 $architectReviewProject = null;
 $architectReviewPanelExpanded = isset($architectReviewPanelExpanded)
@@ -8,7 +10,7 @@ $architectReviewPanelBodyId = 'architectReviewPanelBody' . max(0, $architectRevi
 
 if ($architectReviewProjectId > 0) {
     $architectReviewResult = $conn->query("
-        SELECT p.*, c.name AS client_name, c.contact_person, c.email AS client_email, c.phone AS client_phone, c.address AS client_address, c.industry AS client_industry
+        SELECT p.*, c.name AS client_name, c.contact_person, c.email AS client_email, c.phone AS client_phone, c.address AS client_address
         FROM projects p
         INNER JOIN clients c ON c.id = p.client_id
         WHERE p.id = {$architectReviewProjectId}
@@ -457,7 +459,7 @@ if ($architectReviewProject):
             <div class="architect-review-panel__value">
                 <?php if ($reviewAttachments): ?>
                     <?php foreach ($reviewAttachments as $attachment): ?>
-                        <a class="architect-review-panel__attachment" href="<?php echo BASE_URL . htmlspecialchars((string) ($attachment['path'] ?? '')); ?>" target="_blank" rel="noopener">
+                        <a class="architect-review-panel__attachment" href="<?php echo htmlspecialchars(storagePublicUrl((string) ($attachment['path'] ?? ''))); ?>" target="_blank" rel="noopener">
                             <i class="fas fa-paperclip me-1"></i><?php echo htmlspecialchars((string) ($attachment['name'] ?? 'Attachment')); ?>
                         </a>
                     <?php endforeach; ?>

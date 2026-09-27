@@ -295,6 +295,24 @@ function methodologyRoadmapEnsureSchema(mysqli|PgsqlMysqliCompatConnection $conn
         $conn->query("ALTER TABLE projects ADD COLUMN methodology_template {$columnType}");
     }
 
+    // The merge phase has a stable identity; list order must not turn custom phases into it.
+    if (!dbColumnExists($conn, 'methodology_phases', 'is_final_phase')) {
+        if (!$conn->query("ALTER TABLE methodology_phases ADD COLUMN is_final_phase INT NOT NULL DEFAULT 0")) {
+            throw new RuntimeException('Unable to initialize roadmap phase types.');
+        }
+        foreach (methodologyRoadmapTemplates() as $templateKey => $template) {
+            $definitions = $template['phases'] ?? [];
+            $finalName = (string) ($definitions[array_key_last($definitions)]['name'] ?? '');
+            if ($finalName === '') continue;
+            $stmt = $conn->prepare("UPDATE methodology_phases SET is_final_phase = 1
+                WHERE name = ? AND developer_count = 0 AND project_id IN
+                (SELECT id FROM projects WHERE methodology_template = ?)");
+            $stmt->bind_param('ss', $finalName, $templateKey);
+            if (!$stmt->execute()) throw new RuntimeException('Unable to identify template final phases.');
+            $stmt->close();
+        }
+    }
+
     $ensured = true;
 }
 
@@ -466,6 +484,7 @@ function methodologyRoadmapDistributeTemplatePhases(array $project, string $temp
             'end_date' => $end->format('Y-m-d'),
             'developer_count' => $phaseDeveloperCount,
             'sequence_no' => $index + 1,
+            'is_final_phase' => $isFinalPhase ? 1 : 0,
             'status' => 'planned',
         ];
 
@@ -512,8 +531,8 @@ function methodologyRoadmapApplyTemplate(mysqli|PgsqlMysqliCompatConnection $con
         }
 
         $insertStmt = $conn->prepare("
-            INSERT INTO methodology_phases (project_id, name, description, start_date, end_date, developer_count, sequence_no, status, created_by, updated_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO methodology_phases (project_id, name, description, start_date, end_date, developer_count, sequence_no, status, created_by, updated_by, is_final_phase)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ");
         if ($insertStmt === false) {
             throw new RuntimeException('Unable to prepare methodology phase generation.');
@@ -527,8 +546,9 @@ function methodologyRoadmapApplyTemplate(mysqli|PgsqlMysqliCompatConnection $con
             $developerCount = (int) $phase['developer_count'];
             $sequenceNo = (int) $phase['sequence_no'];
             $status = (string) $phase['status'];
+            $isFinalPhase = (int) $phase['is_final_phase'];
             $insertStmt->bind_param(
-                'issssiisii',
+                'issssiisiii',
                 $projectId,
                 $phaseName,
                 $phaseDescription,
@@ -538,7 +558,8 @@ function methodologyRoadmapApplyTemplate(mysqli|PgsqlMysqliCompatConnection $con
                 $sequenceNo,
                 $status,
                 $userId,
-                $userId
+                $userId,
+                $isFinalPhase
             );
             if (!$insertStmt->execute()) {
                 throw new RuntimeException('Unable to create methodology phase: ' . $phaseName);

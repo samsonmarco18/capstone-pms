@@ -264,6 +264,9 @@ function renderConversationList() {
     let html = '';
     items.forEach(function (item) {
         const initials = getConversationInitials(item.name, item.type);
+        const profileUrl = item.type === 'group' ? '' : (item.profile_url || '');
+        const avatarClass = profileUrl ? 'has-profile-image' : '';
+        const avatarMarkup = getChatAvatarContent(initials, profileUrl, item.name || 'User');
         const preview = item.last_message || (item.type === 'group' ? 'No group messages yet.' : 'No messages yet.');
         const timeLabel = formatConversationTime(item.last_message_at);
         const unreadMarkup = Number(item.unread_count) > 0
@@ -272,7 +275,7 @@ function renderConversationList() {
 
         html += `
             <button type="button" class="conversation-item" data-type="${escapeHtml(item.type)}" data-id="${item.id}">
-                <div class="conversation-avatar ${item.type === 'group' ? 'group' : ''}">${escapeHtml(initials)}</div>
+                <div class="conversation-avatar ${item.type === 'group' ? 'group' : ''} ${avatarClass}">${avatarMarkup}</div>
                 <div class="conversation-main">
                     <div class="conversation-topline">
                         <strong>${escapeHtml(item.name)}</strong>
@@ -337,7 +340,7 @@ function openConversation(type, id) {
     $('#chatHeader').text(type === 'group' ? 'Group Chat' : 'Messages');
     $('#chatThreadName').text(item.name);
     $('#chatThreadSubtitle').text(item.subtitle || '');
-    $('#chatThreadAvatar').text(getConversationInitials(item.name, item.type));
+    renderChatAvatar($('#chatThreadAvatar'), getConversationInitials(item.name, item.type), type === 'group' ? '' : item.profile_url, item.name || 'User');
     $('#chatGroupInfoBtn').toggleClass('d-none', type !== 'group');
 
     showThreadView();
@@ -441,7 +444,7 @@ function renderGroupInfoView(details) {
 
         return `
             <div class="chat-group-member">
-                <div class="chat-group-member-avatar">${escapeHtml(getConversationInitials(member.full_name || 'User', 'user'))}</div>
+                <div class="chat-group-member-avatar ${member.profile_url ? 'has-profile-image' : ''}">${getChatAvatarContent(getConversationInitials(member.full_name || 'User', 'user'), member.profile_url, member.full_name || 'User')}</div>
                 <div class="chat-group-member-main">
                     <strong>${escapeHtml(member.full_name || 'User')}</strong>
                     <small>${escapeHtml(member.role_label || member.role || 'Team member')}</small>
@@ -456,7 +459,7 @@ function renderGroupInfoView(details) {
         `;
     }).join('');
 
-    $('#chatGroupInfoAvatar').text(getConversationInitials(group.name || 'Group', 'group'));
+    renderChatAvatar($('#chatGroupInfoAvatar'), getConversationInitials(group.name || 'Group', 'group'), '', group.name || 'Group');
     $('#chatGroupInfoTitle').text(group.name || 'Group Info');
     $('#chatGroupInfoSubtitle').text(`${Number(group.member_count) || members.length} members`);
 
@@ -616,12 +619,13 @@ function renderAddGroupMemberPicker() {
     container.html(users.map(function (user) {
         const userId = Number(user.id);
         const initials = getConversationInitials(user.full_name || 'User', 'user');
+        const profileUrl = user.profile_url || '';
         const checked = groupAddMemberIds.has(userId) ? 'checked' : '';
 
         return `
             <label class="group-member-option">
                 <input type="checkbox" class="group-member-checkbox" value="${userId}" ${checked}>
-                <span class="group-member-avatar">${escapeHtml(initials)}</span>
+                <span class="group-member-avatar ${profileUrl ? 'has-profile-image' : ''}">${getChatAvatarContent(initials, profileUrl, user.full_name || 'User')}</span>
                 <span class="group-member-main">
                     <strong>${escapeHtml(user.full_name || 'User')}</strong>
                     <small>${escapeHtml(user.role || 'Team member')}</small>
@@ -809,8 +813,9 @@ function renderChatMessages(messages) {
         const mineClass = message.is_mine ? 'sent' : 'received';
         const senderName = message.is_mine ? 'You' : (message.sender_name || 'User');
         const sender = escapeHtml(senderName);
-        const senderInitials = escapeHtml(getConversationInitials(senderName, 'user'));
-        const avatarMarkup = `<span class="message-avatar ${mineClass}" title="${sender}" aria-label="${sender}">${senderInitials}</span>`;
+        const senderInitials = getConversationInitials(senderName, 'user');
+        const senderProfileUrl = message.sender_profile_url || '';
+        const avatarMarkup = `<span class="message-avatar ${mineClass} ${senderProfileUrl ? 'has-profile-image' : ''}" title="${sender}" aria-label="${sender}">${getChatAvatarContent(senderInitials, senderProfileUrl, senderName)}</span>`;
         const isDeleted = Boolean(message.is_deleted || message.deleted_at);
         const replySender = message.reply_is_mine ? 'You' : (message.reply_sender_name || 'Message');
         const replyText = message.reply_deleted_at
@@ -1118,11 +1123,12 @@ function renderChatForwardTargets() {
         html += `<div class="chat-forward-section-label">${section.label}</div>`;
         items.forEach(function (item) {
             const initials = getConversationInitials(item.name, section.type);
+            const profileUrl = section.type === 'group' ? '' : (item.profile_url || '');
             html += `
                 <button type="button" class="chat-forward-target"
                         data-forward-target="${section.type}"
                         data-forward-target-id="${Number(item.id)}">
-                    <span class="conversation-avatar ${section.type === 'group' ? 'group' : ''}">${escapeHtml(initials)}</span>
+                    <span class="conversation-avatar ${section.type === 'group' ? 'group' : ''} ${profileUrl ? 'has-profile-image' : ''}">${getChatAvatarContent(initials, profileUrl, item.name || 'Conversation')}</span>
                     <span class="chat-forward-target-copy">
                         <strong>${escapeHtml(item.name || 'Conversation')}</strong>
                         <small>${escapeHtml(item.subtitle || '')}</small>
@@ -1276,12 +1282,13 @@ function renderGroupMemberPicker() {
     container.html(users.map(function (user) {
         const userId = Number(user.id);
         const initials = getConversationInitials(user.full_name || 'User', 'user');
+        const profileUrl = user.profile_url || '';
         const checked = groupSelectedMemberIds.has(userId) ? 'checked' : '';
 
         return `
             <label class="group-member-option">
                 <input type="checkbox" class="group-member-checkbox" value="${userId}" ${checked}>
-                <span class="group-member-avatar">${escapeHtml(initials)}</span>
+                <span class="group-member-avatar ${profileUrl ? 'has-profile-image' : ''}">${getChatAvatarContent(initials, profileUrl, user.full_name || 'User')}</span>
                 <span class="group-member-main">
                     <strong>${escapeHtml(user.full_name || 'User')}</strong>
                     <small>${escapeHtml(user.role || 'Team member')}</small>
@@ -1423,4 +1430,19 @@ function getConversationInitials(name, type) {
     }
 
     return parts.slice(0, 2).map(part => part.charAt(0).toUpperCase()).join('');
+}
+
+function getChatAvatarContent(initials, profileUrl, altText) {
+    const imageUrl = String(profileUrl || '').trim();
+    if (!imageUrl) {
+        return escapeHtml(initials);
+    }
+
+    return `<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(altText || 'User')}" loading="lazy">`;
+}
+
+function renderChatAvatar(element, initials, profileUrl, altText) {
+    element
+        .toggleClass('has-profile-image', Boolean(profileUrl))
+        .html(getChatAvatarContent(initials, profileUrl, altText));
 }

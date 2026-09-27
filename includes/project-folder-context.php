@@ -2,6 +2,58 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/project-progress.php';
+require_once __DIR__ . '/file-storage.php';
+require_once __DIR__ . '/project-workflow.php';
+
+function projectFolderDepartmentTeams(mysqli|PgsqlMysqliCompatConnection $conn, int $projectId, array $project): array
+{
+    $teams = [];
+    $ensureDepartment = static function (string $value) use (&$teams): string {
+        $department = projectWorkflowDepartmentLabel($value) ?: 'Department not specified';
+        if (!isset($teams[$department])) {
+            $teams[$department] = ['department' => $department, 'suls' => [], 'developers' => []];
+        }
+        return $department;
+    };
+    foreach (projectWorkflowSelectedDepartments($conn, $projectId, $project) as $department) {
+        $ensureDepartment($department);
+    }
+
+    // Department lanes retain assignments even when the shared task moves to another team.
+    $sources = [
+        "SELECT u.id, u.full_name, u.department FROM tasks t JOIN users u ON u.id = t.assigned_to WHERE t.project_id = {$projectId} AND u.role = 'developer'",
+        "SELECT u.id, u.full_name, da.role AS department FROM developer_allocations da JOIN developer_allocation_assignments daa ON daa.allocation_id = da.id JOIN users u ON u.id = daa.developer_id WHERE da.project_id = {$projectId} AND daa.status <> 'rejected' AND u.role = 'developer'",
+    ];
+    foreach (['methodology_tasks', 'methodology_task_departments'] as $table) {
+        if (dbTableExists($conn, $table)) {
+            $sources[] = "SELECT u.id, u.full_name, lane.department FROM {$table} lane JOIN users u ON u.id = lane.assigned_developer_id WHERE lane.project_id = {$projectId} AND u.role = 'developer'";
+            $departments = $conn->query("SELECT DISTINCT department FROM {$table} WHERE project_id = {$projectId}");
+            while ($row = $departments->fetch_assoc()) {
+                if (trim((string) $row['department']) !== '') $ensureDepartment((string) $row['department']);
+            }
+        }
+    }
+    $members = $conn->query(implode(' UNION ', $sources));
+    while ($member = $members->fetch_assoc()) {
+        $department = $ensureDepartment((string) ($member['department'] ?? ''));
+        $teams[$department]['developers'][(int) $member['id']] = $member;
+    }
+    $legacySulId = (int) ($project['sul_id'] ?? 0);
+    $leaders = $conn->query("SELECT id, full_name, department FROM users WHERE role = 'sul' AND (status = 'active' OR id = {$legacySulId}) ORDER BY full_name, id");
+    while ($leader = $leaders->fetch_assoc()) {
+        $department = projectWorkflowDepartmentLabel((string) ($leader['department'] ?? ''));
+        if ((int) $leader['id'] === $legacySulId) $department = $ensureDepartment($department);
+        if (isset($teams[$department])) $teams[$department]['suls'][(int) $leader['id']] = $leader;
+    }
+    uasort($teams, static fn(array $a, array $b): int => projectWorkflowDepartmentSequence($a['department']) <=> projectWorkflowDepartmentSequence($b['department']));
+    foreach ($teams as &$team) {
+        $team['suls'] = array_values($team['suls']);
+        $team['developers'] = array_values($team['developers']);
+        usort($team['developers'], static fn(array $a, array $b): int => strcasecmp($a['full_name'], $b['full_name']));
+    }
+    unset($team);
+    return array_values($teams);
+}
 
 function resolveFolderProjectId(mysqli|PgsqlMysqliCompatConnection $conn, array $folder): int
 {
@@ -156,7 +208,7 @@ function fetchProjectContext(mysqli|PgsqlMysqliCompatConnection $conn, int $proj
     try {
     $projectStmt = $conn->prepare(
         'SELECT p.*, c.name AS client_name, c.contact_person, c.email AS client_email,
-                c.phone AS client_phone, c.address AS client_address, c.industry AS client_industry,
+                c.phone AS client_phone, c.address AS client_address,
                 creator.full_name AS created_by_name,
                 architect.full_name AS architect_name,
                 sul.full_name AS sul_name
@@ -176,6 +228,18 @@ function fetchProjectContext(mysqli|PgsqlMysqliCompatConnection $conn, int $proj
     if (!$project) {
         return null;
     }
+
+    if (empty($project['architect_name'])) {
+        $architectSources = ["EXISTS (SELECT 1 FROM architecture_documents ad WHERE ad.project_id = {$projectId} AND ad.uploaded_by = u.id)"];
+        foreach (['methodology_phases', 'methodology_tasks'] as $table) {
+            if (dbTableExists($conn, $table)) {
+                $architectSources[] = "EXISTS (SELECT 1 FROM {$table} plan WHERE plan.project_id = {$projectId} AND plan.created_by = u.id)";
+            }
+        }
+        $architectRows = $conn->query("SELECT u.full_name FROM users u WHERE u.role = 'architect' AND (" . implode(' OR ', $architectSources) . ") ORDER BY u.full_name, u.id");
+        $project['architect_name'] = implode(', ', array_column($architectRows->fetch_all(MYSQLI_ASSOC), 'full_name'));
+    }
+    $project['department_teams'] = projectFolderDepartmentTeams($conn, $projectId, $project);
 
     $statusStmt = $conn->prepare(
         'SELECT status, COUNT(*) AS total
@@ -389,14 +453,14 @@ function fetchProjectContext(mysqli|PgsqlMysqliCompatConnection $conn, int $proj
 
     $documents = array_map(static function (array $document): array {
         if (!empty($document['file_path']) && !str_starts_with((string) $document['file_path'], 'http')) {
-            $document['file_url'] = BASE_URL . ltrim((string) $document['file_path'], '/');
+            $document['file_url'] = storagePublicUrl((string) $document['file_path']);
         }
         return $document;
     }, $documents);
 
     $receipts = array_map(static function (array $receipt): array {
         if (!empty($receipt['file_path']) && !str_starts_with((string) $receipt['file_path'], 'http')) {
-            $receipt['file_url'] = BASE_URL . ltrim((string) $receipt['file_path'], '/');
+            $receipt['file_url'] = storagePublicUrl((string) $receipt['file_path']);
         }
         return $receipt;
     }, $receipts);
@@ -451,7 +515,7 @@ function fetchProjectContext(mysqli|PgsqlMysqliCompatConnection $conn, int $proj
 
     $project['shared_folder_files'] = array_map(static function (array $file): array {
         if (!empty($file['file_path']) && !str_starts_with((string) $file['file_path'], 'http')) {
-            $file['file_url'] = BASE_URL . ltrim((string) $file['file_path'], '/');
+            $file['file_url'] = storagePublicUrl((string) $file['file_path']);
         }
         return $file;
     }, $sharedFolderFiles);

@@ -11,6 +11,32 @@ if (!in_array($navbarThemePreference, ['tropical', 'futuristic'], true)) {
     $navbarThemePreference = 'default';
 }
 
+if (!function_exists('navbarResolveNotificationActionUrl')) {
+    function navbarResolveNotificationActionUrl(?string $actionUrl, array $notification = []): string
+    {
+        $url = trim((string) $actionUrl);
+        if ($url === '') {
+            return BASE_URL . 'notifications.php';
+        }
+
+        $resolvedUrl = preg_match('#^https?://#i', $url)
+            ? $url
+            : BASE_URL . ltrim($url, '/');
+
+        $text = strtolower((string) ($notification['title'] ?? '') . ' ' . (string) ($notification['message'] ?? ''));
+        $isSulReviewNotification = str_contains($text, 'for review')
+            || str_contains($text, 'sul review')
+            || str_contains($text, 'test results submitted')
+            || str_contains($text, 'design submitted');
+
+        if ($isSulReviewNotification && str_contains($resolvedUrl, 'modules/sul/task-allocation.php') && !str_contains($resolvedUrl, '#')) {
+            $resolvedUrl .= '#developer-review-panel';
+        }
+
+        return $resolvedUrl;
+    }
+}
+
 if ($user && $inAppNotificationsEnabled) {
     $unreadCount = getUnreadNotificationsCount((int) $user['id']);
 
@@ -59,6 +85,7 @@ $appUserContext = [
     'id' => (int) ($user['id'] ?? 0),
     'role' => (string) ($user['role'] ?? ''),
 ];
+$navbarProfileImageUrl = getUserProfileImageUrl($user['profile_pic'] ?? null);
 ?>
 
 <script>
@@ -67,18 +94,16 @@ $appUserContext = [
 
 <div id="page-content-wrapper">
     <nav class="navbar app-navbar navbar-light bg-white shadow-sm sticky-top">
-        <div class="container-fluid app-navbar-inner">
+        <div class="app-navbar-inner">
             <button class="btn btn-link nav-link nav-icon-link app-toggle sidebar-toggle-btn d-inline-flex d-lg-none" id="menu-toggle-mobile" type="button" aria-label="Toggle sidebar" title="Toggle sidebar">
                 <i class="fas fa-bars"></i>
             </button>
 
-            <ul class="navbar-nav ms-auto flex-row align-items-center gap-2 flex-wrap justify-content-end">
-                <li class="nav-item d-none d-lg-inline-flex">
-                    <button class="btn btn-link nav-link nav-icon-link app-toggle sidebar-toggle-btn" id="menu-toggle-desktop" type="button" aria-label="Toggle sidebar" title="Toggle sidebar">
-                        <i class="fas fa-bars"></i>
-                    </button>
-                </li>
+            <button class="btn btn-link nav-link nav-icon-link app-toggle sidebar-toggle-btn d-none d-lg-inline-flex" id="menu-toggle-desktop" type="button" aria-label="Toggle sidebar" title="Toggle sidebar">
+                <i class="fas fa-bars"></i>
+            </button>
 
+            <ul class="navbar-nav ms-auto flex-row align-items-center gap-2 flex-nowrap justify-content-end">
                 <li class="nav-item dropdown" id="notificationsDropdown">
                     <a class="nav-link position-relative nav-icon-link" href="#" id="navbarNotifications" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="fas fa-bell"></i>
@@ -95,9 +120,25 @@ $appUserContext = [
                                 <li><span class="dropdown-item text-muted">In-app notifications are paused.</span></li>
                             <?php elseif ($notifications): ?>
                                 <?php foreach ($notifications as $notification): ?>
+                                    <?php
+                                        $notificationActionUrl = trim((string) ($notification['action_url'] ?? ''));
+                                        if ($notificationActionUrl === '') {
+                                            $notificationActionUrl = BASE_URL . 'notifications.php';
+                                        } elseif (
+                                            !preg_match('#^(?:https?:)?//#i', $notificationActionUrl)
+                                            && !str_starts_with($notificationActionUrl, '/')
+                                            && !str_starts_with($notificationActionUrl, '#')
+                                        ) {
+                                            $notificationActionUrl = BASE_URL . ltrim($notificationActionUrl, '/');
+                                        }
+                                    ?>
                                     <li>
                                         <a class="dropdown-item py-2 <?php echo !$notification['is_read'] ? 'bg-light' : ''; ?>"
-                                           href="<?php echo htmlspecialchars($notification['action_url'] ?: BASE_URL . 'notifications.php'); ?>"
+<<<<<<< HEAD
+                                           href="<?php echo htmlspecialchars($notificationActionUrl); ?>"
+=======
+                                           href="<?php echo htmlspecialchars(navbarResolveNotificationActionUrl($notification['action_url'] ?? '', $notification)); ?>"
+>>>>>>> 08c66005162899548eed2b4bad18e56c1221ea7c
                                            onclick="markNotificationRead(<?php echo (int) $notification['id']; ?>)">
                                             <div class="notification-item-title fw-semibold small"><?php echo htmlspecialchars($notification['title']); ?></div>
                                             <div class="notification-item-message text-muted small"><?php echo htmlspecialchars($notification['message']); ?></div>
@@ -137,10 +178,13 @@ $appUserContext = [
 
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle d-flex align-items-center gap-2 nav-user-link" href="#" id="navbarUserMenu" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        <div class="user-profile-pic d-flex align-items-center justify-content-center text-white">
+                        <div class="user-profile-pic <?php echo $navbarProfileImageUrl !== '' ? 'has-profile-image ' : ''; ?>d-flex align-items-center justify-content-center text-white">
+                            <?php if ($navbarProfileImageUrl !== ''): ?>
+                                <img src="<?php echo htmlspecialchars($navbarProfileImageUrl); ?>" alt="" loading="lazy" onerror="this.remove(); this.parentElement.classList.remove('has-profile-image');">
+                            <?php endif; ?>
                             <i class="fas fa-user"></i>
                         </div>
-                        <div class="d-none d-md-flex flex-column text-start">
+                        <div class="nav-user-copy d-none d-md-flex flex-column text-start">
                             <span class="nav-user-name"><?php echo htmlspecialchars($user['full_name'] ?? 'User'); ?></span>
                             <small class="nav-user-role"><?php echo htmlspecialchars(getRoleDisplayName($user['role'] ?? '')); ?></small>
                         </div>

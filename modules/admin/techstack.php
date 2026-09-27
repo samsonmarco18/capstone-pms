@@ -47,6 +47,7 @@ function technologySaveLogoUpload(?array $file): ?string
     if (!move_uploaded_file($temporaryPath, $target['absolute_path'])) {
         throw new RuntimeException('The technology logo could not be saved.');
     }
+    storagePersistFile($target['relative_path'], $target['absolute_path'], $target['original_name'], $mimeType);
 
     return $target['relative_path'];
 }
@@ -58,10 +59,7 @@ function technologyDeleteLogo(?string $relativePath): void
         return;
     }
 
-    $absolutePath = storageResolveRelativePath($relativePath);
-    if ($absolutePath && is_file($absolutePath)) {
-        unlink($absolutePath);
-    }
+    storageDeleteFile($relativePath);
 }
 
 technologyEnsureLogoSchema($conn);
@@ -1549,6 +1547,19 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .technology-filter-input input,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .technology-filter-input select {
     border-color: var(--tech-border);
+    background-color: transparent;
+    color: var(--tech-text);
+    color-scheme: dark;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .technology-filter-input select option {
+    background-color: #071725;
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .technology-filter-input select option:checked {
+    background-color: #1f6392;
+    color: #ffffff;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .technology-filter-input > i {
@@ -1676,7 +1687,7 @@ include '../../includes/navbar.php';
         </div>
         <div class="stat-card-mini">
             <div class="stat-label">Monthly Spend</div>
-            <div class="stat-number">$<?php echo number_format((float) $technologyStats['monthly_spend'], 0); ?></div>
+            <div class="stat-number">PHP <?php echo number_format((float) $technologyStats['monthly_spend'], 0); ?></div>
         </div>
     </div>
 
@@ -1746,7 +1757,7 @@ include '../../includes/navbar.php';
             <?php while($tech = $technologies->fetch_assoc()): ?>
             <?php
             $techLogoPath = trim((string) ($tech['logo_path'] ?? ''));
-            $techLogoUrl = $techLogoPath !== '' ? BASE_URL . ltrim($techLogoPath, '/') : '';
+            $techLogoUrl = $techLogoPath !== '' ? storagePublicUrl($techLogoPath) : '';
             ?>
             <div class="tech-card-modern">
                 <div class="status-corner">
@@ -1762,6 +1773,7 @@ include '../../includes/navbar.php';
                         data-tech-id="<?php echo (int) $tech['id']; ?>"
                         data-tech-name="<?php echo htmlspecialchars($tech['name'], ENT_QUOTES); ?>"
                         data-logo-path="<?php echo htmlspecialchars($techLogoPath, ENT_QUOTES); ?>"
+                        data-logo-url="<?php echo htmlspecialchars($techLogoUrl, ENT_QUOTES); ?>"
                         aria-label="Change <?php echo htmlspecialchars($tech['name'], ENT_QUOTES); ?> logo"
                         title="Change logo"
                         onclick="openTechnologyLogoModal(this)"
@@ -1793,7 +1805,7 @@ include '../../includes/navbar.php';
                 
                 <!-- Pricing Section -->
                 <div class="pricing-section">
-                    <span class="price-amount">$<?php echo number_format($tech['price'], 2); ?></span>
+                    <span class="price-amount">PHP <?php echo number_format($tech['price'], 2); ?></span>
                     <span class="price-period">/month</span>
                 </div>
                 
@@ -2171,6 +2183,7 @@ function openTechnologyLogoModal(button) {
     const technologyId = button.dataset.techId || '';
     const technologyName = button.dataset.techName || 'this technology';
     const logoPath = String(button.dataset.logoPath || '').replace(/^\/+/, '');
+    const logoUrl = button.dataset.logoUrl || '';
     const logoInput = document.getElementById('technology_logo_file');
     const logoCurrent = document.getElementById('logo_current');
     const logoEmpty = document.getElementById('logo_empty');
@@ -2187,7 +2200,7 @@ function openTechnologyLogoModal(button) {
     logoCurrent.hidden = logoPath === '';
     logoEmpty.hidden = logoPath !== '';
     removeLogoWrap.hidden = logoPath === '';
-    logoPreview.src = logoPath === '' ? '' : `${window.BASE_URL || '../../'}${logoPath}`;
+    logoPreview.src = logoPath === '' ? '' : logoUrl;
     logoPreview.alt = logoPath === '' ? '' : `${technologyName} logo`;
 
     new bootstrap.Modal(document.getElementById('technologyLogoModal')).show();

@@ -2,6 +2,7 @@
 require_once '../../includes/auth.php';
 require_once '../../includes/project-template.php';
 require_once '../../includes/project-compilation.php';
+require_once '../../includes/file-storage.php';
 requireRole('architect');
 
 $conn = getConnection();
@@ -1458,7 +1459,7 @@ html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode)
                                  // DSS recommendations remain suggestions until the architect explicitly accepts them.
                                  $isChecked = (bool) $savedRecommendation;
                                  $techLogoPath = trim((string) ($tech['logo_path'] ?? ''));
-                                 $techLogoUrl = $techLogoPath !== '' ? BASE_URL . ltrim($techLogoPath, '/') : '';
+                                 $techLogoUrl = $techLogoPath !== '' ? storagePublicUrl($techLogoPath) : '';
                                  $techCategoryLower = strtolower((string) ($tech['category'] ?? ''));
                                  $techFallbackIcon = str_contains($techCategoryLower, 'front') ? 'code'
                                      : (str_contains($techCategoryLower, 'back') ? 'server'

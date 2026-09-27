@@ -14,6 +14,30 @@ $user = getCurrentUser();
 methodologyRoadmapEnsureSchema($conn);
 projectEstimationEnsureSchema($conn);
 
+// Older Expert dashboard links opened a feature task. The cost-estimate picker
+// works at project level, so resolve those links to their assigned project.
+$legacyTaskId = max(0, (int) ($_GET['task_id'] ?? 0));
+$requestedProjectId = max(0, (int) ($_GET['project_estimation_id'] ?? 0));
+if ($requestedProjectId === 0 && $legacyTaskId > 0) {
+    $legacyTaskStmt = $conn->prepare("\n        SELECT t.project_id\n        FROM tasks t\n        JOIN projects p ON p.id = t.project_id\n        WHERE t.id = ?\n          AND t.assigned_to = ?\n          AND t.status != 'cancelled'\n          AND p.status != 'cancelled'\n        LIMIT 1\n    ");
+    if ($legacyTaskStmt) {
+        $expertId = (int) ($user['id'] ?? 0);
+        $legacyTaskStmt->bind_param('ii', $legacyTaskId, $expertId);
+        $legacyTaskStmt->execute();
+        $legacyProject = $legacyTaskStmt->get_result()->fetch_assoc() ?: [];
+        $legacyTaskStmt->close();
+        $requestedProjectId = max(0, (int) ($legacyProject['project_id'] ?? 0));
+    }
+
+    if ($requestedProjectId > 0) {
+        $redirectParameters = $_GET;
+        unset($redirectParameters['task_id']);
+        $redirectParameters['project_estimation_id'] = $requestedProjectId;
+        header('Location: feature-estimation.php?' . http_build_query($redirectParameters));
+        exit();
+    }
+}
+
 $availableDepartments = array_values(array_unique(array_merge(array_keys(projectWorkflowDepartments()), [
     'Frontend Developer',
     'Backend Developer',
@@ -495,10 +519,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_project_estimati
     $postedAllocations = is_array($_POST['allocations'] ?? null) ? $_POST['allocations'] : [];
 
     $assignedCheck = $projectId > 0
-        ? $conn->query("SELECT id FROM tasks WHERE project_id = {$projectId} AND assigned_to = " . (int) $user['id'] . " LIMIT 1")->fetch_assoc()
+        ? $conn->query("SELECT t.id FROM tasks t JOIN projects p ON p.id = t.project_id WHERE t.project_id = {$projectId} AND t.assigned_to = " . (int) $user['id'] . " AND p.status != 'cancelled' LIMIT 1")->fetch_assoc()
         : null;
 
-    if (!$project || !$assignedCheck) {
+    if (!$project || !$assignedCheck || (string) ($project['status'] ?? '') === 'cancelled') {
         $_SESSION['error'] = 'Please select one of your assigned projects before submitting a project estimation.';
         header('Location: feature-estimation.php');
         exit();
@@ -536,11 +560,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_project_estimati
                    THEN t.id ELSE NULL END) AS completed_features
         FROM tasks t
         LEFT JOIN feature_estimations fe
-          ON fe.task_id = t.id AND fe.expert_id = " . (int) $user['id'] . "
+          ON fe.task_id = t.id
+         AND (fe.expert_id = " . (int) $user['id'] . " OR fe.expert_id IS NULL OR fe.expert_id = t.assigned_to)
         WHERE t.project_id = {$projectId}
           AND t.assigned_to = " . (int) $user['id'] . "
           AND t.task_type = 'feature'
-          AND t.status IN ('todo', 'in_review')
+          AND t.status NOT IN ('completed', 'cancelled')
     ")->fetch_assoc() ?: [];
     $requiredFeatureCount = (int) ($featureCompletion['total_features'] ?? 0);
     $completedFeatureCount = (int) ($featureCompletion['completed_features'] ?? 0);
@@ -591,7 +616,8 @@ $tasks = $conn->query("
     JOIN projects p ON t.project_id = p.id
     WHERE t.assigned_to = {$user['id']} 
       AND t.task_type = 'feature'
-      AND t.status IN ('todo', 'in_review')
+      AND t.status NOT IN ('completed', 'cancelled')
+      AND p.status != 'cancelled'
     ORDER BY 
         CASE t.status WHEN 'todo' THEN 1 ELSE 2 END,
         t.deadline ASC
@@ -601,7 +627,7 @@ $tasks = $conn->query("
 $expertProjectsResult = $conn->query("
     SELECT p.id, p.name, p.timeline_start, p.timeline_end
     FROM projects p
-    WHERE p.status != 'completed'
+    WHERE p.status NOT IN ('completed', 'cancelled')
     ORDER BY p.name ASC
 ");
 
@@ -639,27 +665,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_save_feature_est
             throw new RuntimeException('No feature estimates were provided.');
         }
 
-        $assignedTaskResult = $conn->query("
-            SELECT id
-            FROM tasks
-            WHERE project_id = {$projectId}
-              AND assigned_to = " . (int) $user['id'] . "
-              AND task_type = 'feature'
-              AND status = 'todo'
-        ");
-        $requiredTaskIds = [];
-        if ($assignedTaskResult) {
-            while ($assignedTask = $assignedTaskResult->fetch_assoc()) {
-                $requiredTaskIds[] = (int) $assignedTask['id'];
-            }
-        }
-        sort($requiredTaskIds);
-        $submittedTaskIds = $taskIds;
-        sort($submittedTaskIds);
-        if ($requiredTaskIds !== $submittedTaskIds) {
-            throw new RuntimeException('All assigned feature tasks must be completed and included in the final submission.');
-        }
-
         $taskResult = $conn->query("
             SELECT t.id, t.project_id, t.title, p.timeline_start, p.timeline_end
             FROM tasks t
@@ -668,6 +673,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_save_feature_est
               AND t.project_id = {$projectId}
               AND t.assigned_to = " . (int) $user['id'] . "
               AND t.task_type = 'feature'
+              AND t.status NOT IN ('completed', 'cancelled')
+              AND p.status != 'cancelled'
         ");
         $taskLookup = [];
         if ($taskResult) {
@@ -878,6 +885,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['task_id']) && !isset($
         FROM tasks t
         JOIN projects p ON p.id = t.project_id
         WHERE t.id = ?
+          AND p.status != 'cancelled'
         LIMIT 1
     ");
     $taskStmt->bind_param('i', $taskId);
@@ -3517,7 +3525,7 @@ textarea.form-control-custom {
                     ? date('M d, Y', strtotime($architectDeadlineValue))
                     : 'not set';
             ?>
-            <?php $isReadonly = $task['status'] !== 'todo'; ?>
+            <?php $isReadonly = in_array((string) ($task['status'] ?? ''), ['completed', 'cancelled'], true); ?>
             <div id="estimate-task-<?php echo (int) $task['id']; ?>" class="feature-row estimation-card <?php echo $isEstimated ? 'complete' : 'incomplete'; ?>" data-project-id="<?php echo (int) $task['project_id']; ?>" data-task-id="<?php echo (int) $task['id']; ?>" data-task-title="<?php echo htmlspecialchars((string) $task['title'], ENT_QUOTES, 'UTF-8'); ?>" data-readonly="<?php echo $isReadonly ? '1' : '0'; ?>" data-estimated="<?php echo $isEstimated ? '1' : '0'; ?>" data-saved-estimated="<?php echo $isEstimated ? '1' : '0'; ?>" data-architect-deadline="<?php echo htmlspecialchars($architectDeadlineValue, ENT_QUOTES, 'UTF-8'); ?>" data-project-start="<?php echo htmlspecialchars($featureWindowStart, ENT_QUOTES, 'UTF-8'); ?>" data-project-end="<?php echo htmlspecialchars($featureWindowEnd, ENT_QUOTES, 'UTF-8'); ?>" data-duration-label="<?php echo htmlspecialchars($featureWindowLabel, ENT_QUOTES, 'UTF-8'); ?>" data-estimate-duration-days="<?php echo (int) $featureEstimateDurationDays; ?>" data-evortix-estimate="<?php echo htmlspecialchars(json_encode($evortixEstimatePayload, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8'); ?>" style="display:none;">
                 <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
                     <div>
@@ -3944,12 +3952,7 @@ function mountFeatureEstimationEditors() {
 
     bulkForm.addEventListener('input', updateBulkSummary);
     bulkForm.addEventListener('change', updateBulkSummary);
-    bulkForm.addEventListener('submit', async (event) => {
-        if (bulkForm.dataset.featureConfirmed === '1') {
-            delete bulkForm.dataset.featureConfirmed;
-            return;
-        }
-
+    bulkForm.addEventListener('submit', (event) => {
         updateBulkSummary();
         const firstIncomplete = bulkForm.querySelector('[data-feature-bulk-row].is-incomplete');
         if (firstIncomplete) {
@@ -3957,69 +3960,6 @@ function mountFeatureEstimationEditors() {
             firstIncomplete.querySelector('textarea:invalid, input:invalid, textarea, input')?.focus();
             return;
         }
-
-        event.preventDefault();
-        const saveButton = bulkForm.querySelector('.feature-bulk-save-button');
-        const rows = Array.from(bulkForm.querySelectorAll('[data-feature-bulk-row]'));
-        const totalPert = Number(saveButton?.dataset.totalPert || 0);
-        const changedCount = Number(saveButton?.dataset.changedCount || 0);
-        const detailRows = rows.map((row) => {
-            const title = row.querySelector('.feature-bulk-name')?.textContent?.trim() || 'Feature';
-            const phase = row.querySelector('.feature-bulk-phase')?.textContent?.trim() || 'Roadmap phase';
-            const expectation = row.querySelector('textarea')?.value.trim() || 'No expectation';
-            const numberInputs = Array.from(row.querySelectorAll('input[type="number"]'));
-            const minDays = numberInputs[0]?.value || '—';
-            const likelyDays = numberInputs[1]?.value || '—';
-            const maxDays = numberInputs[2]?.value || '—';
-            const schedule = row.querySelector('.feature-bulk-schedule')?.textContent?.replace(/\s+/g, ' ').trim() || 'Not scheduled';
-            const pert = row.querySelector('[data-feature-bulk-pert]')?.textContent?.trim() || '—';
-            return `
-                <tr>
-                    <td><strong>${escapeHtml(title)}</strong><small>${escapeHtml(phase)}</small></td>
-                    <td>${escapeHtml(expectation)}</td>
-                    <td><strong>${escapeHtml(`${minDays} / ${likelyDays} / ${maxDays} days`)}</strong><small>Min / likely / max · PERT ${escapeHtml(pert)}</small></td>
-                    <td>${escapeHtml(schedule)}</td>
-                </tr>
-            `;
-        }).join('');
-
-        let confirmed = true;
-        if (typeof window.appConfirm === 'function') {
-            const confirmModal = document.getElementById('appConfirmModal');
-            confirmModal?.classList.add('feature-estimate-confirm-modal');
-            const confirmation = window.appConfirm({
-                title: 'Save Feature Estimates',
-                titleIcon: 'fas fa-list-check',
-                subject: `Save all ${rows.length} completed feature estimates?`,
-                message: 'These estimates will be validated and saved. Use the Project Cost Summary for the final submission to Sales.',
-                icon: 'fas fa-table-list',
-                confirmIcon: 'fas fa-paper-plane',
-                confirmText: 'Save Estimates',
-                cancelText: 'Continue Editing'
-            });
-            const message = document.getElementById('appConfirmMessage');
-            if (message) {
-                message.innerHTML = `
-                    <div class="feature-save-confirm-overview">
-                        <span>${rows.length} features · ${changedCount} edited</span>
-                        <strong>${totalPert.toFixed(1)} total PERT days</strong>
-                    </div>
-                    <div class="feature-save-confirm-table-wrap">
-                        <table class="feature-save-confirm-table">
-                            <thead>
-                                <tr><th>Feature</th><th>Expectation</th><th>Estimate</th><th>Schedule</th></tr>
-                            </thead>
-                            <tbody>${detailRows}</tbody>
-                        </table>
-                    </div>
-                `;
-            }
-            confirmed = await confirmation;
-            confirmModal?.classList.remove('feature-estimate-confirm-modal');
-        } else {
-            confirmed = window.confirm(`Save all ${rows.length} feature estimates?`);
-        }
-        if (!confirmed) return;
 
         try {
             window.sessionStorage.setItem('evortix.expert.estimation.scroll', JSON.stringify({
@@ -4029,8 +3969,12 @@ function mountFeatureEstimationEditors() {
         } catch (error) {
             // Saving remains available when browser storage is unavailable.
         }
-        bulkForm.dataset.featureConfirmed = '1';
-        bulkForm.requestSubmit(saveButton || undefined);
+
+        const saveButton = bulkForm.querySelector('.feature-bulk-save-button');
+        if (saveButton) {
+            saveButton.disabled = true;
+            saveButton.innerHTML = '<i class="fas fa-circle-notch fa-spin" aria-hidden="true"></i><span>Saving Estimates...</span>';
+        }
     });
     updateBulkSummary();
     scheduleEvortixFeatureReview(projectId);
@@ -4701,6 +4645,7 @@ function showEvortixFeatureDecision() {
 function startEvortixFeatureReview(projectId, replay = false) {
     const normalizedProjectId = String(projectId || '');
     if (!normalizedProjectId) return;
+    if (window.evortixDeveloperClassificationReady && !window.evortixDeveloperClassificationReady(normalizedProjectId)) return;
     if (evortixFeatureReviewTimer) window.clearTimeout(evortixFeatureReviewTimer);
 
     const cards = Array.from(document.querySelectorAll(`.estimation-card[data-project-id="${normalizedProjectId}"]`))
@@ -5677,9 +5622,37 @@ body.expert-feature-estimation-page .chat-bot-speech.evortix-architect-dss .evor
         max-height: min(390px, calc(100vh - 80px));
     }
 }
+
+/* Solid dark surfaces keep feature recommendations readable in every dark theme. */
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .chat-bot-speech.evortix-architect-dss .evortix-feature-message-card {
+    background: #102c40 !important;
+    border-color: #346078 !important;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .chat-bot-speech.evortix-architect-dss :is(.evortix-feature-message-copy, .evortix-feature-message-facts, .evortix-feature-estimate-chips span) {
+    background: #091f30 !important;
+    border-color: #346078 !important;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .chat-bot-speech.evortix-architect-dss :is(.evortix-feature-message-title, .evortix-feature-estimate-chips strong, .evortix-feature-message-facts strong) {
+    color: #f1f8ff !important;
+    opacity: 1 !important;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .chat-bot-speech.evortix-architect-dss :is(.evortix-feature-message-intro, .evortix-feature-message-copy, .evortix-feature-message-details, .evortix-feature-message-details summary, .evortix-feature-message-facts span, .evortix-feature-estimate-chips span) {
+    color: #c5e4f5 !important;
+    opacity: 1 !important;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .chat-bot-speech.evortix-architect-dss .evortix-feature-message-actions button {
+    background: #183f59 !important;
+    border-color: #4a809c !important;
+    color: #f1f8ff !important;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .chat-bot-speech.evortix-architect-dss .evortix-feature-message-actions button:last-child {
+    background: #14618f !important;
+}
 </style>
 <script>
 document.body.classList.add('expert-feature-estimation-page');
 </script>
 
 <?php include '../../includes/footer.php'; ?>
+
+

@@ -21,12 +21,18 @@ try {
         $folderStmt->close();
 
         if ($folder) {
+            if (!folderApiCanAccessFolderWithProject($conn, $folder, $user)) {
+                folderApiRespond(['success' => false, 'error' => 'You do not have access to this project folder.'], 403);
+            }
             $projectId = resolveFolderProjectId($conn, $folder);
         }
     }
 
     $projectContext = null;
     if ($projectId > 0) {
+        if (!folderApiCanAccessProject($conn, $projectId, $user)) {
+            folderApiRespond(['success' => false, 'error' => 'You do not have access to this project.'], 403);
+        }
         $projectContext = fetchProjectContext($conn, $projectId, $user);
     }
 

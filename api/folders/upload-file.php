@@ -21,7 +21,7 @@ try {
     if (!$folderExists) {
         folderApiRespond(['success' => false, 'error' => 'Upload folder not found.'], 404);
     }
-    if (!folderApiCanAccessFolder($folderExists, $user)) {
+    if (!folderApiCanAccessFolderWithProject($conn, $folderExists, $user)) {
         folderApiRespond(['success' => false, 'error' => 'You do not have access to this folder.'], 403);
     }
 
@@ -35,6 +35,8 @@ if (!move_uploaded_file($file['tmp_name'], $target['absolute_path'])) {
 }
 
 try {
+    storagePersistFile($target['relative_path'], $target['absolute_path'], $target['original_name'], (string) ($file['type'] ?? ''));
+
     $extension = strtolower((string) pathinfo($target['original_name'], PATHINFO_EXTENSION));
     $stmt = folderApiPrepare($conn,
         'INSERT INTO files (folder_id, original_file_name, stored_file_name, file_type, file_size, file_path, uploaded_by)
@@ -45,7 +47,7 @@ try {
     $stmt->bind_param('isssisi', $folderId, $target['original_name'], $target['stored_name'], $extension, $fileSize, $target['relative_path'], $userId);
 
     if (!$stmt->execute()) {
-        @unlink($target['absolute_path']);
+        storageDeleteFile($target['relative_path']);
         throw new RuntimeException('Database operation failed: ' . ($conn->error ?: 'unknown error'));
     }
 
@@ -56,7 +58,7 @@ logActivity((int) $user['id'], 'upload_file', 'files', $fileId, null, ['folder_i
 
     folderApiRespond(['success' => true, 'file_id' => $fileId]);
 } catch (Throwable $e) {
-    @unlink($target['absolute_path']);
+    storageDeleteFile($target['relative_path']);
     folderApiError($e, 'Upload file API failed', 'Unable to save the uploaded file right now.');
 }
 ?>

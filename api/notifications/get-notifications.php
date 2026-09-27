@@ -13,6 +13,30 @@ if (!isLoggedIn()) {
 $user = getCurrentUser();
 $conn = getConnection();
 
+function notificationApiResolveActionUrl(?string $actionUrl, array $notification = []): string
+{
+    $url = trim((string) $actionUrl);
+    if ($url === '') {
+        return BASE_URL . 'notifications.php';
+    }
+
+    $resolvedUrl = preg_match('#^https?://#i', $url)
+        ? $url
+        : BASE_URL . ltrim($url, '/');
+
+    $text = strtolower((string) ($notification['title'] ?? '') . ' ' . (string) ($notification['message'] ?? ''));
+    $isSulReviewNotification = str_contains($text, 'for review')
+        || str_contains($text, 'sul review')
+        || str_contains($text, 'test results submitted')
+        || str_contains($text, 'design submitted');
+
+    if ($isSulReviewNotification && str_contains($resolvedUrl, 'modules/sul/task-allocation.php') && !str_contains($resolvedUrl, '#')) {
+        $resolvedUrl .= '#developer-review-panel';
+    }
+
+    return $resolvedUrl;
+}
+
 $stmt = $conn->prepare(
     "SELECT notifications.*,
             TIMESTAMPDIFF(MINUTE, created_at, CURRENT_TIMESTAMP) AS age_minutes
@@ -31,6 +55,7 @@ while ($row = $result->fetch_assoc()) {
     $ageMinutes = max(0, (int) floor((float) ($row['age_minutes'] ?? 0)));
     $row['time_ago'] = formatMinutesAgo($ageMinutes);
     $row['formatted_created_at'] = date('M d, Y h:i A', time() - ($ageMinutes * 60));
+    $row['action_url'] = notificationApiResolveActionUrl($row['action_url'] ?? '', $row);
     unset($row['age_minutes']);
     $notifications[] = $row;
 }

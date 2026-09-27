@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/project-delay-insights.php';
 
 function di_float(mixed $value): float
 {
@@ -137,7 +138,14 @@ function di_access_rule(array $user): array
         'sales' => ['where' => '1 = 1', 'types' => '', 'params' => []],
         'sul' => ['where' => '1 = 1', 'types' => '', 'params' => []],
         'architect' => ['where' => '(p.architect_id = ? OR p.architect_id IS NULL)', 'types' => 'i', 'params' => [$userId]],
-        'expert' => ['where' => 'EXISTS (SELECT 1 FROM tasks tx WHERE tx.project_id = p.id AND tx.assigned_to = ?)', 'types' => 'i', 'params' => [$userId]],
+        // Experts may be connected to a project by an assigned task or by a
+        // feature estimation. Keep this in sync with the Expert dashboard's
+        // project-insights scope so estimation-only projects remain visible.
+        'expert' => [
+            'where' => '(EXISTS (SELECT 1 FROM tasks tx WHERE tx.project_id = p.id AND tx.assigned_to = ?) OR EXISTS (SELECT 1 FROM feature_estimations fe WHERE fe.project_id = p.id AND fe.expert_id = ?))',
+            'types' => 'ii',
+            'params' => [$userId, $userId],
+        ],
         'developer' => ['where' => 'EXISTS (SELECT 1 FROM tasks tx WHERE tx.project_id = p.id AND tx.assigned_to = ?)', 'types' => 'i', 'params' => [$userId]],
     ];
 
@@ -218,6 +226,40 @@ function di_load_attention_project_summaries(mysqli|PgsqlMysqliCompatConnection 
         ];
     }
 
+    foreach (di_load_accessible_projects($conn, $user) as $project) {
+        $projectId = (int) ($project['id'] ?? 0);
+        $projectStatus = strtolower(trim((string) ($project['status'] ?? '')));
+        if ($projectId <= 0 || $projectStatus === 'cancelled') {
+            continue;
+        }
+
+        $insight = delayInsightsBuildProjectInsight($conn, $projectId);
+        if ($insight === null || (string) ($insight['before']['risk_level'] ?? '') !== 'High') {
+            continue;
+        }
+
+        $summaries[$projectId] = array_replace([
+            'id' => $projectId,
+            'name' => (string) ($project['name'] ?? 'Project'),
+            'issue_count' => 1,
+            'blocked_count' => 0,
+            'revision_count' => 0,
+            'overdue_count' => 0,
+        ], $summaries[$projectId] ?? [], [
+            'risk_level' => 'High',
+            'delay_probability' => max(0, min(100, (int) ($insight['before']['delay_probability'] ?? 0))),
+        ]);
+    }
+
+    uasort($summaries, static function (array $left, array $right): int {
+        $leftRisk = (string) ($left['risk_level'] ?? '') === 'High' ? 1 : 0;
+        $rightRisk = (string) ($right['risk_level'] ?? '') === 'High' ? 1 : 0;
+
+        return ($rightRisk <=> $leftRisk)
+            ?: ((int) ($right['issue_count'] ?? 0) <=> (int) ($left['issue_count'] ?? 0))
+            ?: strcmp((string) ($left['name'] ?? ''), (string) ($right['name'] ?? ''));
+    });
+
     return $summaries;
 }
 
@@ -274,6 +316,10 @@ function di_render_project_attention_banner(mysqli|PgsqlMysqliCompatConnection $
     }
     if ((int) $summary['revision_count'] > 0) {
         $details[] = (int) $summary['revision_count'] . ' failed or revision';
+    }
+    if ((string) ($summary['risk_level'] ?? '') === 'High') {
+        $delayProbability = (int) ($summary['delay_probability'] ?? 0);
+        $details[] = $delayProbability > 0 ? $delayProbability . '% high risk' : 'high risk';
     }
     $detailText = $details === [] ? $issueCount . ' item needs attention' : implode(', ', $details);
     $title = trim((string) ($options['title'] ?? 'Project Insights needs attention'));
@@ -523,7 +569,6 @@ function di_load_decision_insights(mysqli|PgsqlMysqliCompatConnection $conn, int
         SELECT
             p.*,
             c.name AS client_name,
-            c.industry AS client_industry,
             (
                 SELECT COUNT(*)
                 FROM projects px

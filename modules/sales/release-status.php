@@ -972,20 +972,27 @@ include '../../includes/navbar.php';
     min-height: 40px;
     padding: 0.55rem 0.85rem;
     border-radius: 8px;
-    background: var(--theme-primary);
-    color: #fff;
+    background: #e8f4fa;
+    border: 1px solid #b9deee;
+    color: #075a7a;
     font-size: 0.82rem;
     font-weight: 700;
     text-decoration: none;
     white-space: nowrap;
-    transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease, border-color 0.18s ease;
 }
 
 .release-download-btn:hover {
-    background: var(--theme-dark);
+    background: #075a7a;
+    border-color: #075a7a;
     color: #fff;
     transform: translateY(-1px);
     box-shadow: 0 8px 18px rgba(31, 99, 146, 0.22);
+}
+
+.release-download-btn:focus-visible {
+    outline: 3px solid rgba(7, 90, 122, 0.25);
+    outline-offset: 2px;
 }
 
 .release-receipt-btn {

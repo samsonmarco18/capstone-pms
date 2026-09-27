@@ -30,7 +30,7 @@ $headerAccent = $headerThemeAccentOptions[$headerThemePreference]
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ERNI PMS</title>
+    <title>ERNI Development Center Philippines Inc.</title>
     <script>
         window.APP_USER_PREFERENCES = <?php echo json_encode([
             'theme' => (string) $headerPreferences['theme_preference'],
