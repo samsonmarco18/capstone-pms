@@ -10,9 +10,49 @@ $conn = getConnection();
 // Get statistics
 $techCount = $conn->query("SELECT COUNT(*) as count FROM technologies")->fetch_assoc()['count'];
 $userCount = $conn->query("SELECT COUNT(*) as count FROM users")->fetch_assoc()['count'];
-$securityReports = $conn->query("SELECT COUNT(*) as count FROM audit_logs WHERE action LIKE '%security%'")->fetch_assoc()['count'];
+$securityReports = $conn->query("SELECT COUNT(*) as count FROM audit_logs WHERE action LIKE '%security%' OR action LIKE 'login_failed%'")->fetch_assoc()['count'];
 $passwordResetCounts = getPasswordResetRequestCounts();
 $passwordResetPending = (int) ($passwordResetCounts['pending'] ?? 0);
+$adminExpiringTechnologies = [];
+$adminExpiringResult = $conn->query("
+    SELECT id, name, category, status, expiry_date,
+           CASE WHEN expiry_date IS NULL THEN NULL ELSE DATEDIFF(expiry_date, CURDATE()) END AS days_left
+    FROM technologies
+    WHERE status IN ('expiring', 'expired')
+       OR (expiry_date IS NOT NULL AND expiry_date <= DATE_ADD(CURDATE(), INTERVAL 30 DAY))
+    ORDER BY CASE WHEN expiry_date IS NULL THEN 1 ELSE 0 END, expiry_date ASC, id ASC
+    LIMIT 4
+");
+if ($adminExpiringResult) {
+    while ($row = $adminExpiringResult->fetch_assoc()) {
+        $adminExpiringTechnologies[] = $row;
+    }
+}
+$adminLoginThreats = [];
+$adminLoginThreatResult = $conn->query("
+    SELECT al.user_id, al.ip_address, MAX(al.created_at) AS last_seen,
+           COUNT(*) AS attempt_count,
+           SUM(CASE WHEN al.action = 'login_failed_locked' THEN 1 ELSE 0 END) AS lock_count,
+           u.full_name, u.email
+    FROM audit_logs al
+    LEFT JOIN users u ON u.id = al.user_id
+    WHERE al.action IN (
+        'login_failed_wrong_password',
+        'login_failed_inactive',
+        'login_failed_locked',
+        'login_failed_user_not_found'
+    )
+      AND al.created_at > DATE_SUB(NOW(), INTERVAL 15 MINUTE)
+    GROUP BY al.user_id, al.ip_address, u.full_name, u.email
+    HAVING attempt_count >= 3 OR lock_count > 0
+    ORDER BY lock_count DESC, attempt_count DESC, last_seen DESC
+    LIMIT 4
+");
+if ($adminLoginThreatResult) {
+    while ($row = $adminLoginThreatResult->fetch_assoc()) {
+        $adminLoginThreats[] = $row;
+    }
+}
 
 // Get data for charts
 $techStatus = $conn->query("SELECT status, COUNT(*) as count FROM technologies GROUP BY status");
@@ -206,6 +246,7 @@ html:not([data-theme="dark"]) #page-content-wrapper {
 .dashboard-chart-title {
     color: var(--dashboard-heading) !important;
 }
+
 </style>
 
 <div class="container-fluid px-4 py-3 role-dashboard-shell">

@@ -4645,6 +4645,7 @@ function showEvortixFeatureDecision() {
 function startEvortixFeatureReview(projectId, replay = false) {
     const normalizedProjectId = String(projectId || '');
     if (!normalizedProjectId) return;
+    if (window.evortixDeveloperClassificationReady && !window.evortixDeveloperClassificationReady(normalizedProjectId)) return;
     if (evortixFeatureReviewTimer) window.clearTimeout(evortixFeatureReviewTimer);
 
     const cards = Array.from(document.querySelectorAll(`.estimation-card[data-project-id="${normalizedProjectId}"]`))
@@ -5620,6 +5621,32 @@ body.expert-feature-estimation-page .chat-bot-speech.evortix-architect-dss .evor
         min-width: 215px;
         max-height: min(390px, calc(100vh - 80px));
     }
+}
+
+/* Solid dark surfaces keep feature recommendations readable in every dark theme. */
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .chat-bot-speech.evortix-architect-dss .evortix-feature-message-card {
+    background: #102c40 !important;
+    border-color: #346078 !important;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .chat-bot-speech.evortix-architect-dss :is(.evortix-feature-message-copy, .evortix-feature-message-facts, .evortix-feature-estimate-chips span) {
+    background: #091f30 !important;
+    border-color: #346078 !important;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .chat-bot-speech.evortix-architect-dss :is(.evortix-feature-message-title, .evortix-feature-estimate-chips strong, .evortix-feature-message-facts strong) {
+    color: #f1f8ff !important;
+    opacity: 1 !important;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .chat-bot-speech.evortix-architect-dss :is(.evortix-feature-message-intro, .evortix-feature-message-copy, .evortix-feature-message-details, .evortix-feature-message-details summary, .evortix-feature-message-facts span, .evortix-feature-estimate-chips span) {
+    color: #c5e4f5 !important;
+    opacity: 1 !important;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .chat-bot-speech.evortix-architect-dss .evortix-feature-message-actions button {
+    background: #183f59 !important;
+    border-color: #4a809c !important;
+    color: #f1f8ff !important;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .chat-bot-speech.evortix-architect-dss .evortix-feature-message-actions button:last-child {
+    background: #14618f !important;
 }
 </style>
 <script>

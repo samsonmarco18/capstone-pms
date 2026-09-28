@@ -168,6 +168,13 @@ function renderArchitectSection(project) {
     const summary = project.architecture_summary || {};
     const documents = Array.isArray(project.architecture_documents) ? project.architecture_documents : [];
     const technologies = Array.isArray(project.technology_recommendations) ? project.technology_recommendations : [];
+    const canOpenArchitectPages = project.current_user_role === 'architect';
+    const architectActions = canOpenArchitectPages
+        ? `
+            ${summary.summary_url ? `<a href="${escapeHtml(summary.summary_url)}" class="btn-primary-modern btn-sm"><i class="fas fa-external-link-alt"></i> Open Full Summary</a>` : ''}
+            ${summary.review_url ? `<a href="${escapeHtml(summary.review_url)}" class="btn-outline-modern btn-sm ms-2"><i class="fas fa-clipboard-check"></i> Project Review</a>` : ''}
+        `
+        : '<div class="project-context-empty">Full Summary and Project Review are available to Architect accounts.</div>';
 
     return `
         <div class="project-context-section">
@@ -194,8 +201,7 @@ function renderArchitectSection(project) {
                 ${renderProjectTextBlock('Additional Services', project.additional_services)}
             </div>
             <div class="project-context-list">
-                ${summary.summary_url ? `<a href="${escapeHtml(summary.summary_url)}" target="_blank" class="btn-primary-modern btn-sm"><i class="fas fa-external-link-alt"></i> Open Full Summary</a>` : ''}
-                ${summary.review_url ? `<a href="${escapeHtml(summary.review_url)}" target="_blank" class="btn-outline-modern btn-sm ms-2"><i class="fas fa-clipboard-check"></i> Project Review</a>` : ''}
+                ${architectActions}
             </div>
             <div class="project-context-list">
                 <label>Recommended Technologies</label>
@@ -222,6 +228,23 @@ function renderArchitectSection(project) {
     `;
 }
 
+function renderProjectDepartmentTeams(project) {
+    const teams = Array.isArray(project.department_teams) ? project.department_teams : [];
+    return teams.map(team => `
+        <div class="project-context-list">
+            <h6>${escapeHtml(team.department)}</h6>
+            <div class="project-context-row">
+                <span>Service Unit Leader</span>
+                <small>${escapeHtml((team.suls || []).map(member => member.full_name).join(', ') || 'No department SUL assigned')}</small>
+            </div>
+            <label>Assigned Developers</label>
+            ${(team.developers || []).length ? team.developers.map(member => `
+                <div class="project-context-row"><span>${escapeHtml(member.full_name)}</span></div>
+            `).join('') : '<div class="project-context-empty">No developers assigned yet.</div>'}
+        </div>
+    `).join('') || '<div class="project-context-empty">No department assignments yet.</div>';
+}
+
 function renderSulSection(project) {
     const assignments = project.sul_assignments || {};
     const experts = groupAssignmentsByUser(assignments.experts || []);
@@ -238,10 +261,7 @@ function renderSulSection(project) {
     return `
         <div class="project-context-section">
             <h6><i class="fas fa-users-cog"></i> SUL — Team Assignments</h6>
-            <div class="project-detail-item project-detail-full">
-                <label>Service Unit Leader</label>
-                <div class="value">${escapeHtml(assignments.sul_name || project.sul_name || 'Unassigned')}</div>
-            </div>
+            ${renderProjectDepartmentTeams(project)}
             <div class="project-context-list">
                 <label>Assigned Experts</label>
                 ${experts.length ? experts.map(expert => `
@@ -251,7 +271,7 @@ function renderSulSection(project) {
                     </div>
                 `).join('') : '<div class="project-context-empty">No experts assigned yet.</div>'}
             </div>
-            <div class="project-context-list">
+            ${!Array.isArray(project.department_teams) ? `<div class="project-context-list">
                 <label>Assigned Developers</label>
                 ${(developerTasks.length || allocationRows) ? `
                     ${developerTasks.map(developer => `
@@ -262,7 +282,7 @@ function renderSulSection(project) {
                     `).join('')}
                     ${allocationRows}
                 ` : '<div class="project-context-empty">No developers assigned yet.</div>'}
-            </div>
+            </div>` : ''}
         </div>
     `;
 }
@@ -322,6 +342,10 @@ function renderFullProjectPanel(project, options = {}) {
                     <div class="value">${escapeHtml(project.client_name || 'N/A')}</div>
                 </div>
                 <div class="project-detail-item">
+                    <label>Project Type</label>
+                    <div class="value">${escapeHtml(project.project_type || 'Not specified')}</div>
+                </div>
+                <div class="project-detail-item">
                     <label>Timeline</label>
                     <div class="value">${formatProjectDate(project.timeline_start)} to ${formatProjectDate(project.timeline_end)}</div>
                 </div>
@@ -336,10 +360,6 @@ function renderFullProjectPanel(project, options = {}) {
                 <div class="project-detail-item">
                     <label>Architect</label>
                     <div class="value">${escapeHtml(project.architect_name || 'Unassigned')}</div>
-                </div>
-                <div class="project-detail-item">
-                    <label>SUL</label>
-                    <div class="value">${escapeHtml(project.sul_name || 'Unassigned')}</div>
                 </div>
             </div>
 

@@ -231,9 +231,9 @@ function ensureUserPasswordSecurityColumns(): bool
 function getDeveloperClassificationOptions(): array
 {
     return [
-        'junior' => 'Junior Developer',
-        'senior' => 'Senior Developer',
-        'professional' => 'Professional Developer',
+        'junior' => 'Junior',
+        'senior' => 'Senior',
+        'professional' => 'Professional',
     ];
 }
 
@@ -271,9 +271,9 @@ function ensureUserDeveloperClassificationColumn(): bool
             }
         }
 
-        // Existing developer accounts need a visible classification until an
+        // Existing delivery accounts need a visible classification until an
         // administrator assigns a more specific level.
-        $conn->query("UPDATE users SET developer_classification = 'professional' WHERE role = 'developer' AND (developer_classification IS NULL OR developer_classification = '')");
+        $conn->query("UPDATE users SET developer_classification = 'professional' WHERE role IN ('developer', 'qa') AND (developer_classification IS NULL OR developer_classification = '')");
         $ensured = true;
         return true;
     } catch (Throwable $e) {
@@ -542,7 +542,26 @@ function logoutUser(): void
     }
 
     $_SESSION = [];
-    session_destroy();
+    if (ini_get('session.use_cookies')) {
+        $params = session_get_cookie_params();
+        setcookie(
+            session_name(),
+            '',
+            [
+                'expires' => time() - 42000,
+                'path' => $params['path'] ?? '/',
+                'domain' => $params['domain'] ?? '',
+                'secure' => (bool) ($params['secure'] ?? false),
+                'httponly' => (bool) ($params['httponly'] ?? true),
+                'samesite' => $params['samesite'] ?? 'Lax',
+            ]
+        );
+    }
+
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        session_destroy();
+    }
+
     header('Location: ' . BASE_URL . 'login.php');
     exit();
 }

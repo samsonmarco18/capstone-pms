@@ -50,12 +50,19 @@ if ((int) ($project['architect_id'] ?? 0) < 1) {
 }
 
 $memberQueries = [
-    'SELECT DISTINCT assigned_to AS user_id FROM tasks WHERE project_id = ? AND assigned_to IS NOT NULL',
-    'SELECT DISTINCT assigned_developer_id AS user_id FROM methodology_tasks WHERE project_id = ? AND assigned_developer_id IS NOT NULL',
-    'SELECT DISTINCT daa.developer_id AS user_id FROM developer_allocation_assignments daa INNER JOIN developer_allocations da ON da.id = daa.allocation_id WHERE da.project_id = ?',
+    'tasks' => 'SELECT DISTINCT assigned_to AS user_id FROM tasks WHERE project_id = ? AND assigned_to IS NOT NULL',
+    'methodology_tasks' => 'SELECT DISTINCT assigned_developer_id AS user_id FROM methodology_tasks WHERE project_id = ? AND assigned_developer_id IS NOT NULL',
+    'methodology_task_departments' => 'SELECT DISTINCT assigned_developer_id AS user_id FROM methodology_task_departments WHERE project_id = ? AND assigned_developer_id IS NOT NULL',
+    'expert_project_estimations' => 'SELECT DISTINCT expert_id AS user_id FROM expert_project_estimations WHERE project_id = ?',
+    'developer_allocation_assignments' => 'SELECT DISTINCT daa.developer_id AS user_id FROM developer_allocation_assignments daa INNER JOIN developer_allocations da ON da.id = daa.allocation_id WHERE da.project_id = ?',
 ];
 
-foreach ($memberQueries as $sql) {
+foreach ($memberQueries as $table => $sql) {
+    // These workflow tables are created lazily on older installations.
+    if (!dbTableExists($conn, $table)
+        || ($table === 'developer_allocation_assignments' && !dbTableExists($conn, 'developer_allocations'))) {
+        continue;
+    }
     $stmt = $conn->prepare($sql);
     if (!$stmt) {
         continue;

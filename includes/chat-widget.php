@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 $isSulRoute = str_contains($_SERVER['REQUEST_URI'] ?? '', '/modules/sul/');
 $evortixProjectTeamNotification = null;
 $evortixSulRevisionNotification = null;
@@ -15,7 +15,7 @@ if (function_exists('isLoggedIn') && isLoggedIn()) {
         $evortixUserId = (int) ($evortixUser['id'] ?? 0);
         if ($evortixUserId > 0) {
             $evortixStmt = getConnection()->prepare(
-                "SELECT id, title, message, action_url, related_id
+                "SELECT id, title, message, action_url, related_id, related_table
                  FROM notifications
                  WHERE user_id = ?
                    AND is_read = FALSE
@@ -45,8 +45,7 @@ if (function_exists('isLoggedIn') && isLoggedIn()) {
                        OR message LIKE 'SUL requested revision%'
                        OR title LIKE 'QA Revision Assigned:%'
                        OR title LIKE 'QA Revision Queued:%'
-                       OR title LIKE 'QA Revision Now Assigned:%'
-                       OR title LIKE 'QA Passed:%'
+                        OR title LIKE 'QA Revision Now Assigned:%'
                    )
                  ORDER BY created_at DESC, id DESC
                  LIMIT 1"
@@ -65,7 +64,7 @@ if (function_exists('isLoggedIn') && isLoggedIn()) {
 
 $evortixRequestPath = (string) parse_url((string) ($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH);
 if (
-    preg_match('#/modules/(admin|architect|qa|expert|developer)/dashboard\.php$#', $evortixRequestPath, $evortixDashboardMatch)
+    preg_match('#/modules/(admin|sales|architect|sul|qa|expert|developer)/dashboard(?:\.php)?/?$#', $evortixRequestPath, $evortixDashboardMatch)
 ) {
     try {
         $summaryUser = getCurrentUser();
@@ -95,15 +94,97 @@ if (
             $adminTechnologyCount = 0;
             $adminUserCount = 0;
             $adminSecurityReports = 0;
+            $adminExpiringTechnologyCount = 0;
+            $adminExpiringTechnologies = [];
+            $adminLoginThreat = null;
             $adminOverviewItem = null;
+            $adminOverviewItems = [];
+            $adminWatchGroups = [];
+            $salesWatchGroups = [];
+            $developerWatchGroups = [];
             if ($summaryRole === 'admin') {
                 $adminPasswordRequests = dbTableExists($summaryConn, 'password_reset_requests')
                     ? $summaryCount("SELECT COUNT(*) AS count FROM password_reset_requests WHERE status = 'pending'")
                     : 0;
                 $adminTechnologyCount = $summaryCount("SELECT COUNT(*) AS count FROM technologies");
                 $adminUserCount = $summaryCount("SELECT COUNT(*) AS count FROM users");
-                $adminSecurityReports = $summaryCount("SELECT COUNT(*) AS count FROM audit_logs WHERE action LIKE '%security%'");
-                if ($adminPasswordRequests > 0) {
+                $adminSecurityReports = $summaryCount("SELECT COUNT(*) AS count FROM audit_logs WHERE action LIKE '%security%' OR action LIKE 'login_failed%'");
+                $adminExpiringTechnologyCount = $summaryCount("
+                    SELECT COUNT(*) AS count
+                    FROM technologies
+                    WHERE status IN ('expiring', 'expired')
+                       OR (expiry_date IS NOT NULL AND expiry_date <= DATE_ADD(CURDATE(), INTERVAL 30 DAY))
+                ");
+                $adminExpiringResult = $summaryConn->query("
+                    SELECT id, name, category, status, expiry_date,
+                           CASE WHEN expiry_date IS NULL THEN NULL ELSE DATEDIFF(expiry_date, CURDATE()) END AS days_left
+                    FROM technologies
+                    WHERE status IN ('expiring', 'expired')
+                       OR (expiry_date IS NOT NULL AND expiry_date <= DATE_ADD(CURDATE(), INTERVAL 30 DAY))
+                    ORDER BY CASE WHEN expiry_date IS NULL THEN 1 ELSE 0 END, expiry_date ASC, id ASC
+                    LIMIT 5
+                ");
+                if ($adminExpiringResult) {
+                    while ($expiringTechnology = $adminExpiringResult->fetch_assoc()) {
+                        $adminExpiringTechnologies[] = $expiringTechnology;
+                    }
+                }
+
+                $loginThreatResult = $summaryConn->query("
+                    SELECT al.user_id, al.ip_address, MAX(al.created_at) AS last_seen,
+                           COUNT(*) AS attempt_count,
+                           SUM(CASE WHEN al.action = 'login_failed_locked' THEN 1 ELSE 0 END) AS lock_count,
+                           u.full_name, u.email
+                    FROM audit_logs al
+                    LEFT JOIN users u ON u.id = al.user_id
+                    WHERE al.action IN (
+                        'login_failed_wrong_password',
+                        'login_failed_inactive',
+                        'login_failed_locked',
+                        'login_failed_user_not_found'
+                    )
+                      AND al.created_at > DATE_SUB(NOW(), INTERVAL 15 MINUTE)
+                    GROUP BY al.user_id, al.ip_address, u.full_name, u.email
+                    HAVING attempt_count >= 3 OR lock_count > 0
+                    ORDER BY lock_count DESC, attempt_count DESC, last_seen DESC
+                    LIMIT 1
+                ");
+                $adminLoginThreat = $loginThreatResult ? ($loginThreatResult->fetch_assoc() ?: null) : null;
+
+                if ($adminLoginThreat) {
+                    $threatName = trim((string) ($adminLoginThreat['full_name'] ?? ''));
+                    $threatEmail = trim((string) ($adminLoginThreat['email'] ?? ''));
+                    $threatTarget = $threatName !== ''
+                        ? $threatName
+                        : ($threatEmail !== '' ? $threatEmail : 'Unknown account');
+                    $threatIp = trim((string) ($adminLoginThreat['ip_address'] ?? 'Unknown IP'));
+                    $lockCount = (int) ($adminLoginThreat['lock_count'] ?? 0);
+                    $attemptCount = (int) ($adminLoginThreat['attempt_count'] ?? 0);
+                    $adminOverviewItem = [
+                        'icon' => 'fa-user-lock',
+                        'title' => 'Brute-force lockout watch: ' . $threatTarget,
+                        'meta' => $attemptCount . ' failed attempt' . ($attemptCount === 1 ? '' : 's')
+                            . ($lockCount > 0 ? ' · ' . $lockCount . ' lockout' . ($lockCount === 1 ? '' : 's') : '')
+                            . ' · ' . $threatIp,
+                        'action_url' => BASE_URL . 'modules/admin/audit-log.php?search=login_failed#auditDirectory',
+                    ];
+                } elseif ($adminExpiringTechnologies !== []) {
+                    $expiringTechnology = $adminExpiringTechnologies[0];
+                    $daysLeft = isset($expiringTechnology['days_left']) ? (int) $expiringTechnology['days_left'] : null;
+                    $expiryLabel = $daysLeft === null
+                        ? 'expiry date needs review'
+                        : ($daysLeft < 0
+                            ? 'expired ' . abs($daysLeft) . ' day' . (abs($daysLeft) === 1 ? '' : 's') . ' ago'
+                            : ($daysLeft === 0 ? 'expires today' : 'expires in ' . $daysLeft . ' day' . ($daysLeft === 1 ? '' : 's')));
+                    $adminOverviewItem = [
+                        'icon' => 'fa-clock-rotate-left',
+                        'title' => 'Renew: ' . (string) ($expiringTechnology['name'] ?? 'technology stack'),
+                        'meta' => (string) ($expiringTechnology['category'] ?? 'Technology')
+                            . ' · ' . $expiryLabel
+                            . ' · ' . $adminExpiringTechnologyCount . ' renewal signal' . ($adminExpiringTechnologyCount === 1 ? '' : 's'),
+                        'action_url' => BASE_URL . 'modules/admin/techstack.php?search=' . rawurlencode((string) ($expiringTechnology['name'] ?? '')) . '#technologyDirectory',
+                    ];
+                } elseif ($adminPasswordRequests > 0) {
                     $adminOverviewItem = [
                         'icon' => 'fa-heart-pulse',
                         'title' => 'Review password requests',
@@ -125,13 +206,294 @@ if (
                         'action_url' => BASE_URL . 'modules/admin/user-management.php',
                     ];
                 }
+                if ($adminExpiringTechnologies !== []) {
+                    $renewalTechnology = $adminExpiringTechnologies[0];
+                    $renewalDaysLeft = isset($renewalTechnology['days_left']) ? (int) $renewalTechnology['days_left'] : null;
+                    $renewalExpiryLabel = $renewalDaysLeft === null
+                        ? 'Expiry date needs review'
+                        : ($renewalDaysLeft < 0
+                            ? 'Expired ' . abs($renewalDaysLeft) . ' day' . (abs($renewalDaysLeft) === 1 ? '' : 's') . ' ago'
+                            : ($renewalDaysLeft === 0 ? 'Expires today' : 'Expires in ' . $renewalDaysLeft . ' day' . ($renewalDaysLeft === 1 ? '' : 's')));
+                    $adminOverviewItems[] = [
+                        'icon' => 'fa-clock-rotate-left',
+                        'title' => 'Renewal Watch',
+                        'meta' => (string) ($renewalTechnology['name'] ?? 'Technology stack') . ' - ' . $renewalExpiryLabel,
+                        'action_url' => BASE_URL . 'modules/admin/techstack.php?search=' . rawurlencode((string) ($renewalTechnology['name'] ?? '')) . '#technologyDirectory',
+                    ];
+                } else {
+                    $adminOverviewItems[] = [
+                        'icon' => 'fa-circle-check',
+                        'title' => 'Renewal Watch',
+                        'meta' => 'No technology stack is expiring in the next 30 days.',
+                        'action_url' => BASE_URL . 'modules/admin/techstack.php#technologyDirectory',
+                    ];
+                }
+
+                if ($adminLoginThreat) {
+                    $adminOverviewItems[] = [
+                        'icon' => 'fa-user-lock',
+                        'title' => 'Login Attack Watch',
+                        'meta' => (string) ($adminOverviewItem['meta'] ?? 'Review recent failed login activity.'),
+                        'action_url' => BASE_URL . 'modules/admin/audit-log.php?search=login_failed#auditDirectory',
+                    ];
+                } else {
+                    $adminOverviewItems[] = [
+                        'icon' => 'fa-shield-halved',
+                        'title' => 'Login Attack Watch',
+                        'meta' => 'No brute-force lockout pattern detected in the last 15 minutes.',
+                        'action_url' => BASE_URL . 'modules/admin/audit-log.php?search=login_failed#auditDirectory',
+                    ];
+                }
+                $adminRenewalRows = [];
+                foreach ($adminExpiringTechnologies as $renewalRow) {
+                    $rowDaysLeft = isset($renewalRow['days_left']) ? (int) $renewalRow['days_left'] : null;
+                    $rowExpiryLabel = $rowDaysLeft === null
+                        ? 'Expiry date needs review'
+                        : ($rowDaysLeft < 0
+                            ? 'Expired ' . abs($rowDaysLeft) . ' day' . (abs($rowDaysLeft) === 1 ? '' : 's') . ' ago'
+                            : ($rowDaysLeft === 0 ? 'Expires today' : 'Expires in ' . $rowDaysLeft . ' day' . ($rowDaysLeft === 1 ? '' : 's')));
+                    $adminRenewalRows[] = [
+                        'name' => (string) ($renewalRow['name'] ?? 'Technology stack'),
+                        'meta' => (string) ($renewalRow['category'] ?? 'Technology') . ' - ' . $rowExpiryLabel,
+                        'url' => BASE_URL . 'modules/admin/techstack.php?search=' . rawurlencode((string) ($renewalRow['name'] ?? '')) . '#technologyDirectory',
+                    ];
+                }
+
+                $adminLoginRows = [];
+                if ($adminLoginThreat) {
+                    $adminLoginRows[] = [
+                        'name' => 'Login Attack Watch',
+                        'meta' => (string) ($adminOverviewItems[1]['meta'] ?? 'Review recent failed login activity.'),
+                        'url' => BASE_URL . 'modules/admin/audit-log.php?search=login_failed#auditDirectory',
+                    ];
+                }
+
+                $adminRecoveryRows = [];
+                if ($adminPasswordRequests > 0) {
+                    $adminRecoveryRows[] = [
+                        'name' => 'Password reset requests',
+                        'meta' => $adminPasswordRequests . ' pending account recovery',
+                        'url' => BASE_URL . 'modules/admin/password-reset-requests.php',
+                    ];
+                }
+
+                $adminWatchGroups = [
+                    'renewals' => [
+                        'label' => 'Renewals',
+                        'icon' => 'fa-clock-rotate-left',
+                        'total' => $adminExpiringTechnologyCount,
+                        'list_title' => 'Renewal Watch',
+                        'entity_label' => 'technology',
+                        'empty' => 'No technology stack is expiring in the next 30 days.',
+                        'items' => $adminRenewalRows,
+                    ],
+                    'login' => [
+                        'label' => 'Login',
+                        'icon' => 'fa-user-lock',
+                        'total' => $adminLoginThreat ? 1 : 0,
+                        'list_title' => 'Login Attack Watch',
+                        'entity_label' => 'signal',
+                        'empty' => 'No brute-force lockout pattern detected in the last 15 minutes.',
+                        'items' => $adminLoginRows,
+                    ],
+                    'recovery' => [
+                        'label' => 'Recovery',
+                        'icon' => 'fa-heart-pulse',
+                        'total' => $adminPasswordRequests,
+                        'list_title' => 'Password Recovery',
+                        'entity_label' => 'request',
+                        'empty' => 'No password recovery requests are pending.',
+                        'items' => $adminRecoveryRows,
+                    ],
+                ];
+            }
+            if ($summaryRole === 'sales') {
+                $salesEstimationRows = [];
+                $salesReleaseRows = [];
+                $salesOverdueRows = [];
+
+                if (dbTableExists($summaryConn, 'expert_project_estimations')) {
+                    $salesEstimationResult = $summaryConn->query("
+                        SELECT e.id, e.project_id, e.overall_estimated_project_cost, p.name AS project_name, c.name AS client_name
+                        FROM expert_project_estimations e
+                        JOIN projects p ON p.id = e.project_id
+                        LEFT JOIN clients c ON c.id = p.client_id
+                        WHERE e.status = 'submitted'
+                        ORDER BY e.submitted_at ASC, e.id ASC
+                        LIMIT 5
+                    ");
+                    if ($salesEstimationResult) {
+                        while ($row = $salesEstimationResult->fetch_assoc()) {
+                            $salesEstimationRows[] = [
+                                'name' => (string) ($row['project_name'] ?? 'Project estimation'),
+                                'meta' => trim((string) ($row['client_name'] ?? 'Client') . ' - Awaiting estimation approval'),
+                                'url' => BASE_URL . 'modules/sales/estimation-approval.php',
+                            ];
+                        }
+                    }
+                }
+
+                $salesReleaseResult = $summaryConn->query("
+                    SELECT t.id, t.title, t.status, p.id AS project_id, p.name AS project_name, c.name AS client_name
+                    FROM tasks t
+                    JOIN projects p ON p.id = t.project_id
+                    LEFT JOIN clients c ON c.id = p.client_id
+                    WHERE p.status != 'cancelled'
+                      AND t.status IN ('qa_passed', 'architect_review', 'merged', 'ready_for_release')
+                    ORDER BY CASE t.status
+                        WHEN 'ready_for_release' THEN 0
+                        WHEN 'merged' THEN 1
+                        WHEN 'architect_review' THEN 2
+                        ELSE 3
+                    END, t.updated_at DESC, t.id DESC
+                    LIMIT 5
+                ");
+                if ($salesReleaseResult) {
+                    while ($row = $salesReleaseResult->fetch_assoc()) {
+                        $salesReleaseRows[] = [
+                            'name' => (string) ($row['project_name'] ?? 'Release project'),
+                            'meta' => (string) ($row['title'] ?? 'Feature') . ' - ' . str_replace('_', ' ', (string) ($row['status'] ?? 'release status')),
+                            'url' => BASE_URL . 'modules/sales/release-status.php?project_id=' . (int) ($row['project_id'] ?? 0),
+                        ];
+                    }
+                }
+
+                $salesOverdueResult = $summaryConn->query("
+                    SELECT p.id, p.name AS project_name, c.name AS client_name, p.timeline_end
+                    FROM projects p
+                    LEFT JOIN clients c ON c.id = p.client_id
+                    WHERE p.timeline_end < CURRENT_DATE
+                      AND p.status NOT IN ('completed', 'cancelled')
+                    ORDER BY p.timeline_end ASC, p.id ASC
+                    LIMIT 5
+                ");
+                if ($salesOverdueResult) {
+                    while ($row = $salesOverdueResult->fetch_assoc()) {
+                        $salesOverdueRows[] = [
+                            'name' => (string) ($row['project_name'] ?? 'Overdue project'),
+                            'meta' => (string) ($row['client_name'] ?? 'Client') . ' - Due ' . (string) ($row['timeline_end'] ?? 'past deadline'),
+                            'url' => BASE_URL . 'modules/sales/clients.php?project=' . (int) ($row['id'] ?? 0),
+                        ];
+                    }
+                }
+
+                $salesWatchGroups = [
+                    'estimation' => [
+                        'label' => 'Estimation Approval',
+                        'icon' => 'fa-calculator',
+                        'total' => count($salesEstimationRows),
+                        'list_title' => 'Estimation Approval',
+                        'entity_label' => 'estimation',
+                        'empty' => 'No estimations are waiting for Sales approval.',
+                        'items' => $salesEstimationRows,
+                    ],
+                    'release' => [
+                        'label' => 'Release Status',
+                        'icon' => 'fa-bullhorn',
+                        'total' => count($salesReleaseRows),
+                        'list_title' => 'Release Status',
+                        'entity_label' => 'release',
+                        'empty' => 'No release items need Sales attention.',
+                        'items' => $salesReleaseRows,
+                    ],
+                    'overdue' => [
+                        'label' => 'Overdue',
+                        'icon' => 'fa-triangle-exclamation',
+                        'total' => count($salesOverdueRows),
+                        'list_title' => 'Overdue Projects',
+                        'entity_label' => 'project',
+                        'empty' => 'No overdue projects need attention.',
+                        'items' => $salesOverdueRows,
+                    ],
+                ];
+            }
+            if ($summaryRole === 'developer') {
+                $developerRowsByGroup = [
+                    'tasks' => [],
+                    'progress' => [],
+                    'overdue' => [],
+                ];
+                $developerTaskResult = $summaryConn->query("
+                    SELECT t.id, t.title, t.status, t.deadline, p.name AS project_name
+                    FROM tasks t
+                    JOIN projects p ON p.id = t.project_id
+                    WHERE t.assigned_to = {$summaryUserId}
+                      AND t.status != 'completed'
+                      AND p.status != 'cancelled'
+                    ORDER BY CASE
+                        WHEN t.deadline < NOW() THEN 0
+                        WHEN t.status = 'in_progress' THEN 1
+                        ELSE 2
+                    END, CASE WHEN t.deadline IS NULL THEN 1 ELSE 0 END, t.deadline ASC, t.id ASC
+                    LIMIT 10
+                ");
+                if ($developerTaskResult) {
+                    while ($row = $developerTaskResult->fetch_assoc()) {
+                        $deadline = trim((string) ($row['deadline'] ?? ''));
+                        $item = [
+                            'name' => (string) ($row['title'] ?? 'Developer task'),
+                            'meta' => (string) ($row['project_name'] ?? 'Project') . ' - ' . str_replace('_', ' ', (string) ($row['status'] ?? 'task')) . ($deadline !== '' ? ' - Due ' . $deadline : ''),
+                            'url' => BASE_URL . 'modules/developer/task.php?id=' . (int) ($row['id'] ?? 0),
+                        ];
+                        $isOverdue = $deadline !== '' && strtotime($deadline) !== false && strtotime($deadline) < time();
+                        if ($isOverdue) {
+                            $developerRowsByGroup['overdue'][] = $item;
+                        }
+                        if ((string) ($row['status'] ?? '') === 'in_progress') {
+                            $developerRowsByGroup['progress'][] = $item;
+                        }
+                        $developerRowsByGroup['tasks'][] = $item;
+                    }
+                }
+                $developerWatchGroups = [
+                    'tasks' => [
+                        'label' => 'Tasks',
+                        'icon' => 'fa-list-check',
+                        'total' => count($developerRowsByGroup['tasks']),
+                        'list_title' => 'Assigned Tasks',
+                        'entity_label' => 'task',
+                        'empty' => 'No assigned tasks need attention.',
+                        'items' => array_slice($developerRowsByGroup['tasks'], 0, 5),
+                    ],
+                    'progress' => [
+                        'label' => 'Progress',
+                        'icon' => 'fa-play',
+                        'total' => count($developerRowsByGroup['progress']),
+                        'list_title' => 'In Progress',
+                        'entity_label' => 'task',
+                        'empty' => 'No active in-progress tasks were detected.',
+                        'items' => array_slice($developerRowsByGroup['progress'], 0, 5),
+                    ],
+                    'overdue' => [
+                        'label' => 'Overdue',
+                        'icon' => 'fa-triangle-exclamation',
+                        'total' => count($developerRowsByGroup['overdue']),
+                        'list_title' => 'Overdue Work',
+                        'entity_label' => 'task',
+                        'empty' => 'No overdue developer work was detected.',
+                        'items' => array_slice($developerRowsByGroup['overdue'], 0, 5),
+                    ],
+                ];
             }
             $roleSummaries = [
                 'admin' => [
-                    'variant' => 'compact',
+                    'variant' => 'tabbed',
                     'title' => 'Live Overview',
-                    'intro' => "{$adminPasswordRequests} password requests, {$adminTechnologyCount} services, {$adminUserCount} users, and {$adminSecurityReports} security reports.",
+                    'intro' => "{$adminPasswordRequests} password requests, {$adminExpiringTechnologyCount} expiring technologies, {$adminUserCount} users, and {$adminSecurityReports} login/security events.",
                     'item' => $adminOverviewItem,
+                    'items' => $adminOverviewItems,
+                    'tab_groups' => $adminWatchGroups,
+                    'tab_order' => ['renewals', 'login', 'recovery'],
+                    'metrics' => [],
+                ],
+                'sales' => [
+                    'variant' => 'tabbed',
+                    'title' => 'Live Overview',
+                    'intro' => count($salesWatchGroups['estimation']['items'] ?? []) . ' estimation approvals, '
+                        . count($salesWatchGroups['release']['items'] ?? []) . ' release status items, and '
+                        . count($salesWatchGroups['overdue']['items'] ?? []) . ' overdue projects.',
+                    'tab_groups' => $salesWatchGroups,
+                    'tab_order' => ['estimation', 'release', 'overdue'],
                     'metrics' => [],
                 ],
                 'architect' => [
@@ -162,20 +524,20 @@ if (
                     ],
                 ],
                 'developer' => [
-                    'title' => 'Your developer dashboard snapshot',
-                    'metrics' => [
-                        ['icon' => 'fa-list-check', 'label' => 'Assigned Tasks', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM tasks t JOIN projects p ON p.id = t.project_id WHERE t.assigned_to = {$summaryUserId} AND p.status != 'cancelled'"), 'meta' => 'All assigned work'],
-                        ['icon' => 'fa-play', 'label' => 'In Progress', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM tasks t JOIN projects p ON p.id = t.project_id WHERE t.assigned_to = {$summaryUserId} AND t.status = 'in_progress' AND p.status != 'cancelled'"), 'meta' => 'Currently active'],
-                        ['icon' => 'fa-circle-check', 'label' => 'Completed', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM tasks t JOIN projects p ON p.id = t.project_id WHERE t.assigned_to = {$summaryUserId} AND t.status = 'completed' AND p.status != 'cancelled'"), 'meta' => 'Finished tasks'],
-                        ['icon' => 'fa-triangle-exclamation', 'label' => 'Overdue', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM tasks t JOIN projects p ON p.id = t.project_id WHERE t.assigned_to = {$summaryUserId} AND t.deadline < NOW() AND t.status != 'completed' AND p.status != 'cancelled'"), 'meta' => 'Needs attention', 'overdue' => true],
-                    ],
+                    'variant' => 'tabbed',
+                    'title' => 'Live Overview',
+                    'intro' => count($developerWatchGroups['tasks']['items'] ?? []) . ' assigned tasks, '
+                        . count($developerWatchGroups['progress']['items'] ?? []) . ' in progress, and '
+                        . count($developerWatchGroups['overdue']['items'] ?? []) . ' overdue.',
+                    'tab_groups' => $developerWatchGroups,
+                    'tab_order' => ['tasks', 'progress', 'overdue'],
+                    'metrics' => [],
                 ],
             ];
             $compactMetricIndexesByRole = [
                 'architect' => [1, 2, 3],
                 'qa' => [0, 1, 3],
-                'expert' => [0, 1, 3],
-                'developer' => [1, 2, 3],
+                'expert' => [1, 3],
             ];
             $compactActionUrlsByRole = [
                 'qa' => BASE_URL . 'modules/qa/testing.php',
@@ -269,38 +631,15 @@ if (
                 ];
             }
             $evortixRoleDashboardSummary = $roleSummaries[$summaryRole] ?? null;
-            if ($summaryRole === 'architect' && $evortixRoleDashboardSummary) {
-                $planningResult = $summaryConn->query("
-                    SELECT p.id, p.name, p.status, p.timeline_end,
-                           (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id) AS task_count
-                    FROM projects p
-                    WHERE (p.architect_id = {$summaryUserId} OR p.architect_id IS NULL)
-                      AND p.status IN ('pending', 'review', 'architectural_review')
-                    ORDER BY CASE WHEN p.timeline_end IS NULL THEN 1 ELSE 0 END,
-                             p.timeline_end ASC, p.created_at ASC
-                    LIMIT 1
-                ");
-                $planningProject = $planningResult ? $planningResult->fetch_assoc() : null;
-                if ($planningProject) {
-                    $planningStarted = (int) ($planningProject['task_count'] ?? 0) > 0;
-                    $planningDeadline = !empty($planningProject['timeline_end'])
-                        ? date('M d, Y', strtotime((string) $planningProject['timeline_end']))
-                        : 'No target deadline';
-                    $evortixRoleDashboardSummary['item'] = [
-                        'icon' => 'fa-diagram-project',
-                        'title' => ($planningStarted ? 'Continue: ' : 'Start: ') . (string) $planningProject['name'],
-                        'meta' => ($planningStarted ? 'Planning underway' : 'Awaiting architecture review')
-                            . ' · Target ' . $planningDeadline,
-                        'action_url' => BASE_URL . 'modules/architect/project-review.php?id=' . (int) $planningProject['id'],
-                    ];
-                } else {
-                    $evortixRoleDashboardSummary['item'] = [
-                        'icon' => 'fa-circle-check',
-                        'title' => 'Architecture queue clear',
-                        'meta' => 'No project is waiting for planning',
-                        'action_url' => '',
-                    ];
-                }
+            if ($summaryRole === 'architect') {
+                require_once __DIR__ . '/architect-overview.php';
+                $architectSummaryData = $architectOverviewData ?? architectOverview($summaryConn, $summaryUserId);
+                $evortixRoleDashboardSummary = $architectSummaryData['summary'];
+            }
+            if ($summaryRole === 'expert') {
+                require_once __DIR__ . '/expert-estimation-overview.php';
+                $expertOverviewData = $expertEstimationOverview ?? expertEstimationOverview($summaryConn, $summaryUserId);
+                $evortixRoleDashboardSummary = $expertOverviewData['summary'];
             }
             unset($_SESSION['evortix_role_dashboard_welcome_pending']);
         }
@@ -369,6 +708,247 @@ document.addEventListener('DOMContentLoaded', () => {
     ), 1200);
 });
 </script>
+<script>
+(() => {
+    const dashboardMatch = window.location.pathname.match(/\/modules\/(admin|sales|architect|qa|expert|developer)\/dashboard(?:\.php)?\/?$/i);
+    if (!dashboardMatch) return;
+
+    const role = dashboardMatch[1].toLowerCase();
+    const tabSets = {
+        admin: [['renewals', 'Renewals', 'fa-clock-rotate-left', 'Renewal Watch', 'No technology stack is expiring in the next 30 days.'], ['login', 'Login', 'fa-user-lock', 'Login Attack Watch', 'No brute-force lockout pattern detected in the last 15 minutes.'], ['recovery', 'Recovery', 'fa-heart-pulse', 'Password Recovery', 'No password recovery requests are pending.']],
+        sales: [['estimation', 'Estimation Approval', 'fa-calculator', 'Estimation Approval', 'No estimations are waiting for Sales approval.'], ['release', 'Release Status', 'fa-bullhorn', 'Release Status', 'No release items need Sales attention.'], ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Projects', 'No overdue projects need attention.']],
+        architect: [['review', 'Review', 'fa-folder-open', 'Architecture Review', 'No architecture reviews need attention.'], ['progress', 'Progress', 'fa-gears', 'Planning Progress', 'No planning work needs attention.'], ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Watch', 'No overdue architecture work was detected.']],
+        qa: [['testing', 'Testing', 'fa-vial', 'Testing Queue', 'No tasks are waiting for QA.'], ['failed', 'Failed', 'fa-circle-xmark', 'Failed Checks', 'No failed QA checks need attention.'], ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue QA', 'No overdue QA items were detected.']],
+        expert: [['estimate', 'Estimate', 'fa-calculator', 'Estimation Queue', 'No estimation items need attention.'], ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Work', 'No overdue expert work was detected.']],
+        developer: [['tasks', 'Tasks', 'fa-list-check', 'Assigned Tasks', 'No assigned tasks need attention.'], ['progress', 'Progress', 'fa-play', 'In Progress', 'No active in-progress tasks were detected.'], ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Work', 'No overdue developer work was detected.']]
+    };
+    const escapeHtml = value => {
+        const node = document.createElement('div');
+        node.textContent = String(value ?? '');
+        return node.innerHTML;
+    };
+    const openDashboardEvortix = () => {
+        const float = document.getElementById('chat-bot-float');
+        const speech = float?.querySelector('.chat-bot-speech');
+        if (!float || !speech) return false;
+
+        const tabs = tabSets[role] || tabSets.sales;
+        const cards = [...document.querySelectorAll('.admin-stat-card, .admin-metric-card, .stat-card-modern, .dashboard-stat-card, .stats-grid > *, .role-stats-row .card')]
+            .map(card => {
+                const label = card.querySelector('.admin-stat-label, .stat-label, h6, small, [class*="label"], [class*="title"]')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+                const value = card.querySelector('.admin-stat-value, .stat-value, h2, h3, .h1, .display-4, [class*="value"], [class*="count"]')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+                const meta = card.querySelector('.admin-stat-sub, .stat-description, p, small:last-child, [class*="meta"], [class*="desc"]')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+                return label && value ? { label, meta: `${value}${meta && meta !== label && meta !== value ? ` - ${meta}` : ''}` } : null;
+            })
+            .filter(Boolean)
+            .slice(0, 6);
+
+        const renderTab = selected => {
+            const items = cards.slice(0, 3);
+            speech.querySelectorAll('[data-evortix-auto-tab]').forEach(button => {
+                const active = button.dataset.evortixAutoTab === selected[0];
+                button.classList.toggle('is-active', active);
+                button.setAttribute('aria-selected', active ? 'true' : 'false');
+                if (active) button.querySelector('strong').textContent = String(items.length);
+            });
+            const title = speech.querySelector('[data-evortix-auto-title]');
+            const count = speech.querySelector('[data-evortix-auto-count]');
+            const list = speech.querySelector('[data-evortix-auto-list]');
+            if (title) title.textContent = selected[3];
+            if (count) count.textContent = `${items.length} item${items.length === 1 ? '' : 's'}`;
+            if (list) {
+                list.innerHTML = items.length
+                    ? items.map(item => `<a class="evortix-project-link" href="#"><span class="evortix-project-link-copy"><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.meta)}</small></span><i class="fas fa-arrow-right" aria-hidden="true"></i></a>`).join('')
+                    : `<div class="evortix-project-list-empty">${escapeHtml(selected[4])}</div>`;
+            }
+        };
+
+        speech.className = 'chat-bot-speech evortix-role-dashboard-summary is-compact has-project-list';
+        speech.hidden = false;
+        speech.removeAttribute('hidden');
+        speech.setAttribute('aria-hidden', 'false');
+        speech.setAttribute('role', 'status');
+        speech.style.pointerEvents = 'auto';
+        speech.innerHTML = `
+            <div class="evortix-role-summary-head is-compact"><strong class="evortix-role-summary-title">Live Overview</strong><button type="button" class="evortix-role-summary-close" aria-label="Dismiss dashboard overview"><i class="fas fa-xmark"></i></button></div>
+            <div class="evortix-role-summary-intro is-compact">${escapeHtml(role.charAt(0).toUpperCase() + role.slice(1))} overview is ready. Review the current dashboard signals.</div>
+            <div class="evortix-project-status-tabs" role="tablist" aria-label="Evortix dashboard status">${tabs.map(tab => `<button type="button" class="evortix-project-status-tab" data-evortix-auto-tab="${escapeHtml(tab[0])}" role="tab" aria-selected="false"><i class="fas ${escapeHtml(tab[2])}" aria-hidden="true"></i><span>${escapeHtml(tab[1])}</span><strong>0</strong></button>`).join('')}</div>
+            <div class="evortix-project-list-head"><strong data-evortix-auto-title></strong><span data-evortix-auto-count></span></div>
+            <div class="evortix-project-list" data-evortix-auto-list></div>`;
+        speech.querySelectorAll('[data-evortix-auto-tab]').forEach(button => {
+            const tab = tabs.find(item => item[0] === button.dataset.evortixAutoTab) || tabs[0];
+            button.addEventListener('click', () => renderTab(tab));
+        });
+        renderTab(tabs[0]);
+
+        float.hidden = false;
+        float.removeAttribute('hidden');
+        float.setAttribute('aria-hidden', 'false');
+        float.style.display = 'block';
+        float.classList.remove('is-returning-bed', 'is-preparing-speech');
+        float.classList.add('is-speaking');
+        window.chatBotWidgetRobot?.setMode?.('empty-bed');
+        window.chatBotFloatRobot?.setMode?.('standing');
+        window.setTimeout(() => float.classList.remove('is-speaking'), 700);
+        speech.querySelector('.evortix-role-summary-close')?.addEventListener('click', event => {
+            event.stopPropagation();
+            speech.hidden = true;
+            speech.setAttribute('aria-hidden', 'true');
+        });
+        return true;
+    };
+
+    const scheduleOpen = () => [50, 250, 700, 1400, 2600, 5000].forEach(delay => window.setTimeout(openDashboardEvortix, delay));
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', scheduleOpen, { once: true });
+    else scheduleOpen();
+    window.addEventListener('load', () => window.setTimeout(openDashboardEvortix, 120), { once: true });
+    document.addEventListener('chatbot:controllable-robot-ready', () => window.setTimeout(openDashboardEvortix, 100), { once: true });
+})();
+</script>
+<script>
+(() => {
+    const isRoleDashboard = () => /\/modules\/(admin|sales|architect|qa|expert|developer)\/dashboard(?:\.php)?\/?$/i.test(window.location.pathname);
+    if (!isRoleDashboard()) return;
+
+    const escapeEvortixText = value => {
+        const node = document.createElement('div');
+        node.textContent = String(value ?? '');
+        return node.innerHTML;
+    };
+    const roleTabs = {
+        admin: [
+            ['renewals', 'Renewals', 'fa-clock-rotate-left', 'Renewal Watch', 'No technology stack is expiring in the next 30 days.'],
+            ['login', 'Login', 'fa-user-lock', 'Login Attack Watch', 'No brute-force lockout pattern detected in the last 15 minutes.'],
+            ['recovery', 'Recovery', 'fa-heart-pulse', 'Password Recovery', 'No password recovery requests are pending.']
+        ],
+        sales: [
+            ['projects', 'Projects', 'fa-diagram-project', 'Project Watch', 'No project signals need attention.'],
+            ['clients', 'Clients', 'fa-users', 'Client Watch', 'No client signals need attention.'],
+            ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Watch', 'No overdue projects need attention.']
+        ],
+        architect: [
+            ['review', 'Review', 'fa-folder-open', 'Architecture Review', 'No architecture reviews need attention.'],
+            ['progress', 'Progress', 'fa-gears', 'Planning Progress', 'No planning work needs attention.'],
+            ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Watch', 'No overdue architecture work was detected.']
+        ],
+        qa: [
+            ['testing', 'Testing', 'fa-vial', 'Testing Queue', 'No tasks are waiting for QA.'],
+            ['failed', 'Failed', 'fa-circle-xmark', 'Failed Checks', 'No failed QA checks need attention.'],
+            ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue QA', 'No overdue QA items were detected.']
+        ],
+        expert: [
+            ['estimate', 'Estimate', 'fa-calculator', 'Estimation Queue', 'No estimation items need attention.'],
+            ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Work', 'No overdue expert work was detected.']
+        ],
+        developer: [
+            ['tasks', 'Tasks', 'fa-list-check', 'Assigned Tasks', 'No assigned tasks need attention.'],
+            ['progress', 'Progress', 'fa-play', 'In Progress', 'No active in-progress tasks were detected.'],
+            ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Work', 'No overdue developer work was detected.']
+        ]
+    };
+
+    const announceRoleDashboard = () => {
+        const roleMatch = window.location.pathname.match(/\/modules\/([^/]+)\/dashboard(?:\.php)?\/?$/i);
+        const role = (roleMatch?.[1] || 'dashboard').toLowerCase();
+        const float = document.getElementById('chat-bot-float');
+        const speech = float?.querySelector('.chat-bot-speech');
+        if (!float || !speech) return false;
+
+        const tabs = roleTabs[role] || roleTabs.sales;
+        const cards = [...document.querySelectorAll('.admin-stat-card, .admin-metric-card, .stat-card-modern, .dashboard-stat-card, .stats-grid > *, .role-stats-row .card')]
+            .map(card => {
+                const label = card.querySelector('.admin-stat-label, .stat-label, h6, small, [class*="label"], [class*="title"]')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+                const value = card.querySelector('.admin-stat-value, .stat-value, h2, h3, .h1, .display-4, [class*="value"], [class*="count"]')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+                const meta = card.querySelector('.admin-stat-sub, .stat-description, p, small:last-child, [class*="meta"], [class*="desc"]')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+                return label && value ? { label, meta: `${value}${meta && meta !== label && meta !== value ? ` - ${meta}` : ''}` } : null;
+            })
+            .filter(Boolean)
+            .slice(0, 6);
+        const renderItems = tab => {
+            const matched = cards.filter(card => card.label.toLowerCase().includes(tab[1].slice(0, 5).toLowerCase()));
+            const items = (matched.length ? matched : cards).slice(0, 3);
+            const list = speech.querySelector('[data-evortix-final-list]');
+            const title = speech.querySelector('[data-evortix-final-title]');
+            const count = speech.querySelector('[data-evortix-final-count]');
+            speech.querySelectorAll('[data-evortix-final-tab]').forEach(button => {
+                const active = button.dataset.evortixFinalTab === tab[0];
+                button.classList.toggle('is-active', active);
+                button.setAttribute('aria-selected', active ? 'true' : 'false');
+                if (active) button.querySelector('strong').textContent = String(items.length);
+            });
+            if (title) title.textContent = tab[3];
+            if (count) count.textContent = `${items.length} item${items.length === 1 ? '' : 's'}`;
+            if (list) {
+                list.innerHTML = items.length
+                    ? items.map(item => `
+                        <a class="evortix-project-link" href="#">
+                            <span class="evortix-project-link-copy">
+                                <strong>${escapeEvortixText(item.label)}</strong>
+                                <small>${escapeEvortixText(item.meta)}</small>
+                            </span>
+                            <i class="fas fa-arrow-right" aria-hidden="true"></i>
+                        </a>
+                    `).join('')
+                    : `<div class="evortix-project-list-empty">${escapeEvortixText(tab[4])}</div>`;
+            }
+        };
+
+        speech.className = 'chat-bot-speech evortix-role-dashboard-summary is-compact has-project-list';
+        speech.hidden = false;
+        speech.removeAttribute('hidden');
+        speech.setAttribute('aria-hidden', 'false');
+        speech.setAttribute('role', 'status');
+        speech.style.pointerEvents = 'auto';
+        speech.innerHTML = `
+            <div class="evortix-role-summary-head is-compact"><strong class="evortix-role-summary-title">Live Overview</strong><button type="button" class="evortix-role-summary-close" aria-label="Dismiss dashboard overview"><i class="fas fa-xmark"></i></button></div>
+            <div class="evortix-role-summary-intro is-compact">${escapeEvortixText(role.charAt(0).toUpperCase() + role.slice(1))} overview is ready. Review the current dashboard signals.</div>
+            <div class="evortix-project-status-tabs" role="tablist" aria-label="Evortix dashboard status">
+                ${tabs.map(tab => `
+                    <button type="button" class="evortix-project-status-tab" data-evortix-final-tab="${escapeEvortixText(tab[0])}" role="tab" aria-selected="false">
+                        <i class="fas ${escapeEvortixText(tab[2])}" aria-hidden="true"></i>
+                        <span>${escapeEvortixText(tab[1])}</span>
+                        <strong>0</strong>
+                    </button>
+                `).join('')}
+            </div>
+            <div class="evortix-project-list-head">
+                <strong data-evortix-final-title></strong>
+                <span data-evortix-final-count></span>
+            </div>
+            <div class="evortix-project-list" data-evortix-final-list></div>`;
+        speech.querySelectorAll('[data-evortix-final-tab]').forEach(button => {
+            const tab = tabs.find(item => item[0] === button.dataset.evortixFinalTab) || tabs[0];
+            button.addEventListener('click', () => renderItems(tab));
+        });
+        renderItems(tabs[0]);
+
+        float.hidden = false;
+        float.removeAttribute('hidden');
+        float.setAttribute('aria-hidden', 'false');
+        float.style.display = 'block';
+        float.classList.remove('is-returning-bed', 'is-preparing-speech');
+        float.classList.add('is-speaking');
+        window.chatBotWidgetRobot?.setMode?.('empty-bed');
+        window.chatBotFloatRobot?.setMode?.('standing');
+        window.setTimeout(() => float.classList.remove('is-speaking'), 700);
+        speech.querySelector('.evortix-role-summary-close')?.addEventListener('click', event => {
+            event.stopPropagation();
+            speech.hidden = true;
+            speech.setAttribute('aria-hidden', 'true');
+        });
+        return true;
+    };
+
+    const runAfterReady = () => [100, 450, 1000, 2200, 4200].forEach(delay => window.setTimeout(announceRoleDashboard, delay));
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', runAfterReady, { once: true });
+    } else {
+        runAfterReady();
+    }
+    window.addEventListener('load', () => window.setTimeout(announceRoleDashboard, 250), { once: true });
+    document.addEventListener('chatbot:controllable-robot-ready', () => window.setTimeout(announceRoleDashboard, 120), { once: true });
+})();
+</script>
 <?php endif; ?>
 
 <style>
@@ -402,6 +982,7 @@ document.addEventListener('DOMContentLoaded', () => {
 .chat-bot-speech .evortix-role-summary-head.is-compact .evortix-role-summary-title { font-size:1rem }
 .evortix-role-summary-intro.is-compact { margin:.65rem 0 .75rem; font-size:.73rem; line-height:1.45 }
 .evortix-role-summary-item { align-items:center; background:rgba(255,255,255,.82); border:1px solid rgba(8,123,185,.16); border-radius:13px; color:inherit; display:grid; gap:.68rem; grid-template-columns:32px minmax(0,1fr) auto; padding:.68rem .78rem; text-decoration:none; transition:transform .18s ease,background .18s ease,border-color .18s ease }
+.evortix-role-summary-item + .evortix-role-summary-item { margin-top:.45rem }
 .evortix-role-summary-item:hover { background:#fff; border-color:rgba(8,123,185,.3); color:inherit; transform:translateY(-1px) }
 .evortix-role-summary-item:focus-visible { border-color:rgba(8,123,185,.45); box-shadow:0 0 0 3px rgba(19,126,179,.14); outline:0 }
 .chat-bot-speech .evortix-role-summary-item-icon { align-items:center; align-self:center; background:#e4f4fb; border:1px solid rgba(8,123,185,.14); border-radius:9px; color:#157baa; display:inline-flex; font-size:.78rem; height:32px; justify-content:center; margin:0; padding:0; position:static; transform:none; width:32px }
@@ -411,6 +992,8 @@ document.addEventListener('DOMContentLoaded', () => {
 .evortix-role-summary-item-meta { color:#5b7f97; display:block; font-size:.65rem; font-weight:700; line-height:1.35; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
 .evortix-role-summary-item-arrow { color:#157baa; font-size:.72rem }
 .chat-bot-speech.evortix-role-dashboard-summary.has-project-list { width:min(430px,calc(100vw - 190px)); min-width:380px }
+.evortix-project-status-tabs:not(:has(> :nth-child(3))),
+.evortix-project-status-tabs:has(> :nth-child(4)) { grid-template-columns:repeat(2,minmax(0,1fr)); }
 .evortix-project-status-tabs { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.38rem; margin-bottom:.68rem }
 .evortix-project-status-tab { align-items:center; background:rgba(255,255,255,.58); border:1px solid rgba(8,123,185,.14); border-radius:10px; color:#426f8c; display:grid; font-size:.6rem; font-weight:800; gap:.18rem; grid-template-columns:auto minmax(0,1fr) auto; min-width:0; padding:.46rem .48rem; text-align:left; transition:background .16s ease,border-color .16s ease,color .16s ease }
 .evortix-project-status-tab i { color:#1784b6; font-size:.61rem }
@@ -839,7 +1422,8 @@ document.addEventListener('DOMContentLoaded', function () {
         speech?.querySelector('.evortix-project-notification-action')?.remove();
         let title = botFloat.querySelector('[data-chat-bot-type="title"]');
         if (!title) {
-            speech.innerHTML = '<strong data-chat-bot-type="title" data-chat-bot-text="Hi, good day!"></strong>';
+            const defaultGreeting = activeEvortixRoleDashboardSummary ? 'Live Overview' : 'Hi, good day!';
+            speech.innerHTML = `<strong data-chat-bot-type="title" data-chat-bot-text="${defaultGreeting}"></strong>`;
             title = speech.querySelector('[data-chat-bot-type="title"]');
         }
 
@@ -888,9 +1472,17 @@ document.addEventListener('DOMContentLoaded', function () {
     };
 
     window.evortixAnnounceNotification = function (heading, message, actionUrl) {
-        if (!evortixEnabled || !evortixSuggestionsEnabled || !botFloat) return;
+        if (!evortixEnabled || !evortixSuggestionsEnabled || !botFloat) return false;
         const speech = botFloat.querySelector('.chat-bot-speech');
-        if (!speech) return;
+        if (!speech) return false;
+        // Do not replace an active decision or confirmation panel. Retry on the next poll.
+        if (!botFloat.hidden && !speech.hidden && speech.getAttribute('aria-hidden') !== 'true'
+            && speech.querySelector('button, input, select, textarea')) return false;
+
+        clearTimeout(botTransitionTimer);
+        clearTimeout(botTypeTimer);
+        clearTimeout(evortixSpeechTimer);
+        speech.className = 'chat-bot-speech evortix-project-notification';
 
         speech.hidden = false;
         speech.classList.remove('evortix-dashboard-summary');
@@ -920,62 +1512,486 @@ document.addEventListener('DOMContentLoaded', function () {
         announceEvortixAudio(`${heading || 'Project update'}. ${message || ''}`);
         window.chatBotWidgetRobot?.wake?.();
         window.chatBotFloatRobot?.wink?.('right');
+        botFloat.classList.remove('is-returning-bed', 'is-preparing-speech', 'is-leaving-bed');
+        botFloat.classList.add('is-speaking');
+        window.chatBotWidgetRobot?.setMode?.('empty-bed');
+        window.chatBotFloatRobot?.setMode?.('standing');
         typeBotSpeech(180);
+        return true;
     };
 
     const evortixRoleDashboardSummary = <?php echo json_encode($evortixRoleDashboardSummary, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
-    if (evortixEnabled && evortixSuggestionsEnabled && evortixRoleDashboardSummary && botFloat) {
-        window.setTimeout(() => {
+    window.__evortixRoleDashboardSummary = evortixRoleDashboardSummary;
+    const buildDomDashboardSummary = function () {
+        const dashboardMatch = window.location.pathname.match(/\/modules\/([^/]+)\/dashboard(?:\.php)?\/?$/i);
+        if (!dashboardMatch) return null;
+        if (/\/modules\/sul\/dashboard(?:\.php)?\/?$/i.test(window.location.pathname)) return null;
+        const dashboardRole = (dashboardMatch[1] || 'dashboard').toLowerCase();
+        const roleNames = {
+            admin: 'Administration',
+            sales: 'Sales',
+            architect: 'Architecture',
+            qa: 'QA',
+            expert: 'Expert',
+            developer: 'Developer'
+        };
+        const readNumber = text => {
+            const number = String(text || '').match(/-?\d+/);
+            return number ? Number(number[0]) : 0;
+        };
+
+        const statCards = [...document.querySelectorAll('.admin-stat-card, .admin-metric-card, .stat-card-modern, .dashboard-stat-card, .role-stats-row .card, .stats-grid .card, .admin-stats-grid > *, .stats-grid > *')]
+            .map(card => {
+                const label = card.querySelector('.admin-stat-label, .stat-label, .text-uppercase, h6, small, [class*="label"], [class*="title"]')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+                const value = card.querySelector('.admin-stat-value, .stat-value, .h1, h3, h2, [class*="value"], [class*="count"], .display-4')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+                const meta = card.querySelector('.admin-stat-sub, .stat-description, p, small:last-child, [class*="meta"], [class*="desc"]')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+                const normalizedLabel = label || card.getAttribute('aria-label') || '';
+                return normalizedLabel && value ? {
+                    name: normalizedLabel,
+                    meta: `${value}${meta && meta !== normalizedLabel && meta !== value ? ` - ${meta}` : ''}`,
+                    value: readNumber(value),
+                    url: ''
+                } : null;
+            })
+            .filter(Boolean)
+            .slice(0, 8);
+
+        const findStat = patterns => statCards.find(card => patterns.some(pattern => pattern.test(card.name))) || null;
+        const makeGroup = (key, label, icon, listTitle, empty, patterns, entityLabel = 'signal') => {
+            const matched = patterns.length ? statCards.filter(card => patterns.some(pattern => pattern.test(card.name))) : statCards;
+            const items = matched.map(card => ({ name: card.name, meta: card.meta, url: card.url || '#' }));
+            return {
+                label,
+                icon,
+                total: matched.reduce((sum, card) => sum + (Number.isFinite(card.value) ? card.value : 0), 0),
+                list_title: listTitle,
+                entity_label: entityLabel,
+                empty,
+                items
+            };
+        };
+
+        if (dashboardRole === 'admin') {
+            const renewals = makeGroup(
+                'renewals',
+                'Renewals',
+                'fa-clock-rotate-left',
+                'Renewal Watch',
+                'No technology stack is expiring in the next 30 days.',
+                [/technolog/i, /service/i, /active service/i],
+                'technology'
+            );
+            const login = makeGroup(
+                'login',
+                'Login',
+                'fa-user-lock',
+                'Login Attack Watch',
+                'No brute-force lockout pattern detected in the last 15 minutes.',
+                [/security/i, /audit/i, /login/i],
+                'signal'
+            );
+            const recovery = makeGroup(
+                'recovery',
+                'Recovery',
+                'fa-heart-pulse',
+                'Password Recovery',
+                'No password recovery requests are pending.',
+                [/password/i, /recovery/i],
+                'request'
+            );
+            return {
+                variant: 'tabbed',
+                title: 'Live Overview',
+                intro: 'Administration overview is ready. Review renewals, login security, and recovery requests.',
+                tab_order: ['renewals', 'login', 'recovery'],
+                tab_groups: { renewals, login, recovery },
+                metrics: []
+            };
+        }
+
+        const relatedTabsByRole = {
+            sales: [
+                ['projects', 'Projects', 'fa-diagram-project', 'Project Watch', 'No project signals need attention.', [/project/i], 'project'],
+                ['clients', 'Clients', 'fa-users', 'Client Watch', 'No client signals need attention.', [/client/i], 'client'],
+                ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Watch', 'No overdue projects need attention.', [/overdue/i], 'project']
+            ],
+            architect: [
+                ['review', 'Review', 'fa-folder-open', 'Architecture Review', 'No architecture reviews need attention.', [/review|pending/i], 'project'],
+                ['progress', 'Progress', 'fa-gears', 'Planning Progress', 'No planning work needs attention.', [/progress|active/i], 'project'],
+                ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Watch', 'No overdue architecture work was detected.', [/overdue/i], 'item']
+            ],
+            qa: [
+                ['testing', 'Testing', 'fa-vial', 'Testing Queue', 'No tasks are waiting for QA.', [/testing|ready/i], 'task'],
+                ['failed', 'Failed', 'fa-circle-xmark', 'Failed Checks', 'No failed QA checks need attention.', [/failed/i], 'task'],
+                ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue QA', 'No overdue QA items were detected.', [/overdue/i], 'task']
+            ],
+            expert: [
+                ['estimate', 'Estimate', 'fa-calculator', 'Estimation Queue', 'No estimation items need attention.', [/estimate/i], 'task'],
+                ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Work', 'No overdue expert work was detected.', [/overdue/i], 'task']
+            ],
+            developer: [
+                ['tasks', 'Tasks', 'fa-list-check', 'Assigned Tasks', 'No assigned tasks need attention.', [/assigned|task/i], 'task'],
+                ['progress', 'Progress', 'fa-play', 'In Progress', 'No active in-progress tasks were detected.', [/progress|active/i], 'task'],
+                ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Work', 'No overdue developer work was detected.', [/overdue/i], 'task']
+            ]
+        };
+        const tabDefinitions = relatedTabsByRole[dashboardRole] || [
+            ['overview', 'Overview', 'fa-chart-line', 'Dashboard Signals', 'No dashboard signals are available.', [], 'signal'],
+            ['attention', 'Attention', 'fa-triangle-exclamation', 'Items Needing Attention', 'No urgent dashboard items were detected.', [/overdue|pending|failed|risk/i], 'item'],
+            ['activity', 'Activity', 'fa-wave-square', 'Recent Activity', 'No recent dashboard activity was detected.', [/active|completed|total/i], 'item']
+        ];
+        const tabGroups = {};
+        tabDefinitions.forEach(([key, label, icon, listTitle, empty, patterns, entityLabel]) => {
+            tabGroups[key] = makeGroup(key, label, icon, listTitle, empty, patterns, entityLabel);
+        });
+
+        const roleLabel = document.querySelector('[class*="overview-badge"], .sidebar-role, .role-label')?.textContent?.replace(/\s+/g, ' ').trim() || 'Dashboard';
+        return {
+            variant: 'tabbed',
+            title: 'Live Overview',
+            intro: `${roleNames[dashboardRole] || roleLabel} overview is ready. Review the current dashboard signals.`,
+            tab_order: tabDefinitions.map(tab => tab[0]),
+            tab_groups: tabGroups,
+            metrics: []
+        };
+    };
+    const domEvortixRoleDashboardSummary = buildDomDashboardSummary();
+    const activeEvortixRoleDashboardSummary = evortixRoleDashboardSummary?.variant === 'tabbed'
+        ? evortixRoleDashboardSummary
+        : (domEvortixRoleDashboardSummary || evortixRoleDashboardSummary);
+    let evortixDashboardSummaryLastRender = 0;
+    const showEvortixRoleDashboardSummary = function (options = {}) {
+        if (!evortixEnabled || !activeEvortixRoleDashboardSummary || !botFloat || window.__evortixDashboardAutoRendered) return false;
             const speech = botFloat.querySelector('.chat-bot-speech');
-            if (!speech) return;
+            if (!speech) return false;
+            if (speech.dataset.dashboardSummaryDismissed === 'true' && !options.force) return false;
             const escapeSummary = value => {
                 const node = document.createElement('div');
                 node.textContent = String(value ?? '');
                 return node.innerHTML;
             };
-            const metricMarkup = (evortixRoleDashboardSummary.metrics || []).map(metric => `
+            const metricMarkup = (activeEvortixRoleDashboardSummary.metrics || []).map(metric => `
                 <div class="evortix-role-summary-metric${metric.overdue ? ' is-overdue' : ''}">
                     <div class="evortix-role-summary-top"><i class="fas ${escapeSummary(metric.icon)}"></i><strong class="evortix-role-summary-value">${escapeSummary(metric.value)}</strong></div>
                     <div class="evortix-role-summary-label">${escapeSummary(metric.label)}</div>
                     <div class="evortix-role-summary-meta">${escapeSummary(metric.meta)}</div>
                 </div>`).join('');
-            const isCompactSummary = evortixRoleDashboardSummary.variant === 'compact';
-            const compactItem = evortixRoleDashboardSummary.item || {};
-            const compactItemTag = compactItem.action_url ? 'a' : 'div';
-            const compactItemHref = compactItem.action_url ? ` href="${escapeSummary(compactItem.action_url)}"` : '';
-            speech.className = `chat-bot-speech evortix-role-dashboard-summary${isCompactSummary ? ' is-compact' : ''}`;
+            const isServerTabbedSummary = activeEvortixRoleDashboardSummary.variant === 'tabbed';
+            const compactItem = activeEvortixRoleDashboardSummary.item || {};
+            const compactItems = Array.isArray(activeEvortixRoleDashboardSummary.items) && activeEvortixRoleDashboardSummary.items.length
+                ? activeEvortixRoleDashboardSummary.items
+                : [compactItem];
+            const compactItemsMarkup = compactItems.map(item => {
+                const itemTag = item.action_url ? 'a' : 'div';
+                const itemHref = item.action_url ? ` href="${escapeSummary(item.action_url)}"` : '';
+                return `
+                <${itemTag} class="evortix-role-summary-item"${itemHref}>
+                    <span class="evortix-role-summary-item-icon"><i class="fas ${escapeSummary(item.icon || 'fa-circle-info')}"></i></span>
+                    <span class="evortix-role-summary-item-copy"><strong class="evortix-role-summary-item-title">${escapeSummary(item.title)}</strong><span class="evortix-role-summary-item-meta">${escapeSummary(item.meta)}</span></span>
+                    ${item.action_url ? '<i class="fas fa-arrow-right evortix-role-summary-item-arrow" aria-hidden="true"></i>' : ''}
+                </${itemTag}>`;
+            }).join('');
+            const compactTabGroups = activeEvortixRoleDashboardSummary.variant === 'compact' ? {
+                overview: {
+                    label: compactItem.title || 'Overview',
+                    icon: compactItem.icon || 'fa-circle-info',
+                    total: compactItems.length,
+                    list_title: compactItem.title || 'Live Overview',
+                    entity_label: 'item',
+                    empty: 'No dashboard items need attention.',
+                    items: compactItems.map(item => ({
+                        name: item.title || 'Current status',
+                        meta: item.meta || '',
+                        url: item.action_url || ''
+                    }))
+                }
+            } : {};
+            const tabGroups = isServerTabbedSummary
+                ? (activeEvortixRoleDashboardSummary.tab_groups || {})
+                : compactTabGroups;
+            const isTabbedSummary = isServerTabbedSummary || Object.keys(compactTabGroups).length > 0;
+            const isCompactSummary = false;
+            const tabOrder = Array.isArray(activeEvortixRoleDashboardSummary.tab_order)
+                ? activeEvortixRoleDashboardSummary.tab_order.filter(key => tabGroups[key])
+                : Object.keys(tabGroups);
+            const initialTab = tabOrder.find(key => Number(tabGroups[key]?.total || 0) > 0) || tabOrder[0] || '';
+            const tabbedMarkup = isTabbedSummary ? `
+                <div class="evortix-role-summary-head is-compact"><strong class="evortix-role-summary-title">${escapeSummary(activeEvortixRoleDashboardSummary.title)}</strong><button type="button" class="evortix-role-summary-close" aria-label="Dismiss dashboard overview"><i class="fas fa-xmark"></i></button></div>
+                <div class="evortix-role-summary-intro is-compact">${escapeSummary(activeEvortixRoleDashboardSummary.intro)}</div>
+                <div class="evortix-project-status-tabs" role="tablist" aria-label="Evortix dashboard status">
+                    ${tabOrder.map(key => {
+                        const group = tabGroups[key] || {};
+                        return `
+                        <button type="button" class="evortix-project-status-tab" data-evortix-summary-tab="${escapeSummary(key)}" role="tab" aria-selected="false">
+                            <i class="fas ${escapeSummary(group.icon || 'fa-circle-info')}" aria-hidden="true"></i>
+                            <span>${escapeSummary(group.label || key)}</span>
+                            <strong>${escapeSummary(group.total ?? 0)}</strong>
+                        </button>`;
+                    }).join('')}
+                </div>
+                <div class="evortix-project-list-head">
+                    <strong data-evortix-summary-list-title></strong>
+                    <span data-evortix-summary-list-count></span>
+                </div>
+                <div class="evortix-project-list" data-evortix-summary-list></div>` : '';
+            speech.className = `chat-bot-speech evortix-role-dashboard-summary${(isCompactSummary || isTabbedSummary) ? ' is-compact' : ''}${isTabbedSummary ? ' has-project-list' : ''}`;
             speech.hidden = false;
             speech.style.pointerEvents = 'auto';
             speech.setAttribute('aria-hidden', 'false');
             speech.setAttribute('role', 'status');
-            speech.innerHTML = isCompactSummary ? `
-                <div class="evortix-role-summary-head is-compact"><strong class="evortix-role-summary-title">${escapeSummary(evortixRoleDashboardSummary.title)}</strong><button type="button" class="evortix-role-summary-close" aria-label="Dismiss dashboard overview"><i class="fas fa-xmark"></i></button></div>
-                <div class="evortix-role-summary-intro is-compact">${escapeSummary(evortixRoleDashboardSummary.intro)}</div>
-                <${compactItemTag} class="evortix-role-summary-item"${compactItemHref}>
-                    <span class="evortix-role-summary-item-icon"><i class="fas ${escapeSummary(compactItem.icon || 'fa-circle-info')}"></i></span>
-                    <span class="evortix-role-summary-item-copy"><strong class="evortix-role-summary-item-title">${escapeSummary(compactItem.title)}</strong><span class="evortix-role-summary-item-meta">${escapeSummary(compactItem.meta)}</span></span>
-                    ${compactItem.action_url ? '<i class="fas fa-arrow-right evortix-role-summary-item-arrow" aria-hidden="true"></i>' : ''}
-                </${compactItemTag}>` : `
-                <div class="evortix-role-summary-head"><div><div class="evortix-role-summary-eyebrow">Live overview</div><strong class="evortix-role-summary-title">${escapeSummary(evortixRoleDashboardSummary.title)}</strong></div><button type="button" class="evortix-role-summary-close" aria-label="Dismiss dashboard overview"><i class="fas fa-xmark"></i></button></div>
+            speech.innerHTML = isTabbedSummary ? tabbedMarkup : (isCompactSummary ? `
+                <div class="evortix-role-summary-head is-compact"><strong class="evortix-role-summary-title">${escapeSummary(activeEvortixRoleDashboardSummary.title)}</strong><button type="button" class="evortix-role-summary-close" aria-label="Dismiss dashboard overview"><i class="fas fa-xmark"></i></button></div>
+                <div class="evortix-role-summary-intro is-compact">${escapeSummary(activeEvortixRoleDashboardSummary.intro)}</div>
+                ${compactItemsMarkup}` : `
+                <div class="evortix-role-summary-head"><div><div class="evortix-role-summary-eyebrow">Live overview</div><strong class="evortix-role-summary-title">${escapeSummary(activeEvortixRoleDashboardSummary.title)}</strong></div><button type="button" class="evortix-role-summary-close" aria-label="Dismiss dashboard overview"><i class="fas fa-xmark"></i></button></div>
                 <div class="evortix-role-summary-intro">Here is the information most relevant to your role right now.</div>
                 <div class="evortix-role-summary-grid">${metricMarkup}</div>
-                ${evortixRoleDashboardSummary.suggestion ? `<div class="evortix-role-planning-suggestion"><div class="evortix-role-planning-eyebrow">${escapeSummary(evortixRoleDashboardSummary.suggestion.eyebrow)}</div><strong class="evortix-role-planning-title">${escapeSummary(evortixRoleDashboardSummary.suggestion.title)}</strong><p class="evortix-role-planning-copy">${escapeSummary(evortixRoleDashboardSummary.suggestion.message)}</p>${evortixRoleDashboardSummary.suggestion.action_url ? `<a class="evortix-role-planning-action" href="${escapeSummary(evortixRoleDashboardSummary.suggestion.action_url)}"><i class="fas fa-arrow-right"></i>${escapeSummary(evortixRoleDashboardSummary.suggestion.action_label)}</a>` : ''}</div>` : ''}`;
+                ${activeEvortixRoleDashboardSummary.suggestion ? `<div class="evortix-role-planning-suggestion"><div class="evortix-role-planning-eyebrow">${escapeSummary(activeEvortixRoleDashboardSummary.suggestion.eyebrow)}</div><strong class="evortix-role-planning-title">${escapeSummary(activeEvortixRoleDashboardSummary.suggestion.title)}</strong><p class="evortix-role-planning-copy">${escapeSummary(activeEvortixRoleDashboardSummary.suggestion.message)}</p>${activeEvortixRoleDashboardSummary.suggestion.action_url ? `<a class="evortix-role-planning-action" href="${escapeSummary(activeEvortixRoleDashboardSummary.suggestion.action_url)}"><i class="fas fa-arrow-right"></i>${escapeSummary(activeEvortixRoleDashboardSummary.suggestion.action_label)}</a>` : ''}</div>` : ''}`);
+            if (isTabbedSummary) {
+                const renderSummaryTab = key => {
+                    const group = tabGroups[key] || {};
+                    const items = Array.isArray(group.items) ? group.items : [];
+                    speech.querySelectorAll('[data-evortix-summary-tab]').forEach(tab => {
+                        const isSelected = tab.dataset.evortixSummaryTab === key;
+                        tab.classList.toggle('is-active', isSelected);
+                        tab.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+                    });
+                    const title = speech.querySelector('[data-evortix-summary-list-title]');
+                    const count = speech.querySelector('[data-evortix-summary-list-count]');
+                    const list = speech.querySelector('[data-evortix-summary-list]');
+                    if (title) title.textContent = group.list_title || group.label || 'Status';
+                    if (count) {
+                        const label = group.entity_label || 'item';
+                        count.textContent = `${items.length} ${label}${items.length === 1 ? '' : 's'}`;
+                    }
+                    if (!list) return;
+                    list.innerHTML = items.length
+                        ? items.map(item => `
+                            <a class="evortix-project-link" href="${escapeSummary(item.url || '#')}">
+                                <span class="evortix-project-link-copy">
+                                    <strong>${escapeSummary(item.name || item.title || 'Item')}</strong>
+                                    <small>${escapeSummary(item.meta || '')}</small>
+                                </span>
+                                <i class="fas fa-arrow-right" aria-hidden="true"></i>
+                            </a>
+                        `).join('')
+                        : `<div class="evortix-project-list-empty">${escapeSummary(group.empty || 'No items need attention.')}</div>`;
+                };
+                speech.querySelectorAll('[data-evortix-summary-tab]').forEach(tab => {
+                    tab.addEventListener('click', () => renderSummaryTab(tab.dataset.evortixSummaryTab));
+                });
+                if (initialTab) renderSummaryTab(initialTab);
+            }
             window.chatBotWidgetRobot?.setMode?.('empty-bed');
             window.chatBotFloatRobot?.setMode?.('standing');
             botFloat.hidden = false;
             botFloat.setAttribute('aria-hidden', 'false');
+            evortixDashboardSummaryLastRender = Date.now();
             const metricSpeech = isCompactSummary
-                ? `${evortixRoleDashboardSummary.intro || ''} ${compactItem.title || ''}. ${compactItem.meta || ''}`
-                : (evortixRoleDashboardSummary.metrics || [])
+                ? `${activeEvortixRoleDashboardSummary.intro || ''} ${compactItems.map(item => `${item.title || ''}. ${item.meta || ''}`).join(' ')}`
+                : isTabbedSummary
+                    ? `${activeEvortixRoleDashboardSummary.intro || ''} ${tabOrder.map(key => `${tabGroups[key]?.label || key}: ${tabGroups[key]?.total || 0}.`).join(' ')}`
+                : (activeEvortixRoleDashboardSummary.metrics || [])
                     .map(metric => `${metric.label}: ${metric.value}. ${metric.meta || ''}`)
                     .join(' ');
-            announceEvortixAudio(`${evortixRoleDashboardSummary.title}. ${metricSpeech}`);
+            announceEvortixAudio(`${activeEvortixRoleDashboardSummary.title}. ${metricSpeech}`);
             window.chatBotFloatRobot?.point?.('left', 6500);
             speech.querySelector('.evortix-role-summary-close')?.addEventListener('click', () => {
                 speech.hidden = true;
                 speech.setAttribute('aria-hidden', 'true');
+                speech.dataset.dashboardSummaryDismissed = 'true';
             });
-        }, 800);
+            document.dispatchEvent(new CustomEvent('evortix:dashboard-welcome-complete'));
+            return true;
+    };
+    if (false && evortixEnabled && activeEvortixRoleDashboardSummary && botFloat) {
+        const openEvortixDashboardAnnouncer = function (force = false) {
+            clearTimeout(botTransitionTimer);
+            clearTimeout(botTypeTimer);
+            botFloat.hidden = false;
+            botFloat.setAttribute('aria-hidden', 'false');
+            botFloat.classList.remove('is-returning-bed', 'is-preparing-speech');
+            botFloat.classList.add('is-leaving-bed', 'is-speaking');
+            window.chatBotWidgetRobot?.wake?.();
+            window.chatBotFloatRobot?.setMode?.('standing');
+            window.setTimeout(() => {
+                botFloat.classList.remove('is-leaving-bed');
+                showEvortixRoleDashboardSummary({ force });
+                window.chatBotFloatRobot?.point?.('left', 6500);
+                window.setTimeout(() => botFloat.classList.remove('is-speaking'), 620);
+            }, 180);
+        };
+        const scheduleDashboardSummary = function (delay = 0, force = false) {
+            window.setTimeout(() => openEvortixDashboardAnnouncer(force), delay);
+        };
+        document.body.classList.add('evortix-dashboard-announcer-ready');
+        scheduleDashboardSummary(240, true);
+        scheduleDashboardSummary(650, true);
+        scheduleDashboardSummary(1600, false);
+        document.addEventListener('chatbot:controllable-robot-ready', () => {
+            scheduleDashboardSummary(160, true);
+        }, { once: true });
+        window.addEventListener('pageshow', () => scheduleDashboardSummary(260, true));
+        const dashboardSpeechObserver = new MutationObserver(() => {
+            const speech = botFloat.querySelector('.chat-bot-speech');
+            if (!speech || speech.hidden) return;
+            if (speech.classList.contains('evortix-role-dashboard-summary')) return;
+            if (Date.now() - evortixDashboardSummaryLastRender < 400) return;
+            const text = speech.textContent.replace(/\s+/g, ' ').trim().toLowerCase();
+            if (!text || text.includes('hi, good day') || text === 'live overview') {
+                scheduleDashboardSummary(40, true);
+            }
+        });
+        dashboardSpeechObserver.observe(botFloat, {
+            subtree: true,
+            childList: true,
+            characterData: true,
+            attributes: true,
+            attributeFilter: ['class', 'hidden', 'aria-hidden']
+        });
+    }
+
+    const forceEvortixDashboardOverview = function () {
+        const dashboardMatch = window.location.pathname.match(/\/modules\/([^/]+)\/dashboard(?:\.php)?\/?$/i);
+        if (!dashboardMatch || /\/modules\/sul\/dashboard(?:\.php)?\/?$/i.test(window.location.pathname)) return false;
+        if (!evortixEnabled || !botFloat || window.__evortixDashboardAutoRendered) return false;
+        const speech = botFloat.querySelector('.chat-bot-speech');
+        if (!speech) return false;
+        if (speech.dataset.evortixDashboardDismissed === 'true') return false;
+
+        const role = (dashboardMatch[1] || 'dashboard').toLowerCase();
+        const escapeHtml = value => {
+            const node = document.createElement('div');
+            node.textContent = String(value ?? '');
+            return node.innerHTML;
+        };
+        const currentText = speech.textContent.replace(/\s+/g, ' ').trim().toLowerCase();
+        if (speech.classList.contains('evortix-role-dashboard-summary') && !currentText.includes('hi, good day')) {
+            botFloat.hidden = false;
+            botFloat.setAttribute('aria-hidden', 'false');
+            return true;
+        }
+
+        const roleTabs = {
+            admin: [
+                ['renewals', 'Renewals', 'fa-clock-rotate-left', 'Renewal Watch', 'No technology stack is expiring in the next 30 days.'],
+                ['login', 'Login', 'fa-user-lock', 'Login Attack Watch', 'No brute-force lockout pattern detected in the last 15 minutes.'],
+                ['recovery', 'Recovery', 'fa-heart-pulse', 'Password Recovery', 'No password recovery requests are pending.']
+            ],
+            sales: [
+                ['projects', 'Projects', 'fa-diagram-project', 'Project Watch', 'No project signals need attention.'],
+                ['clients', 'Clients', 'fa-users', 'Client Watch', 'No client signals need attention.'],
+                ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Watch', 'No overdue projects need attention.']
+            ],
+            architect: [
+                ['review', 'Review', 'fa-folder-open', 'Architecture Review', 'No architecture reviews need attention.'],
+                ['progress', 'Progress', 'fa-gears', 'Planning Progress', 'No planning work needs attention.'],
+                ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Watch', 'No overdue architecture work was detected.']
+            ],
+            qa: [
+                ['testing', 'Testing', 'fa-vial', 'Testing Queue', 'No tasks are waiting for QA.'],
+                ['failed', 'Failed', 'fa-circle-xmark', 'Failed Checks', 'No failed QA checks need attention.'],
+                ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue QA', 'No overdue QA items were detected.']
+            ],
+            expert: [
+                ['estimate', 'Estimate', 'fa-calculator', 'Estimation Queue', 'No estimation items need attention.'],
+                ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Work', 'No overdue expert work was detected.']
+            ],
+            developer: [
+                ['tasks', 'Tasks', 'fa-list-check', 'Assigned Tasks', 'No assigned tasks need attention.'],
+                ['progress', 'Progress', 'fa-play', 'In Progress', 'No active in-progress tasks were detected.'],
+                ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Work', 'No overdue developer work was detected.']
+            ]
+        };
+        const tabs = roleTabs[role] || [
+            ['overview', 'Overview', 'fa-chart-line', 'Dashboard Signals', 'No dashboard signals are available.'],
+            ['attention', 'Attention', 'fa-triangle-exclamation', 'Items Needing Attention', 'No urgent dashboard items were detected.'],
+            ['activity', 'Activity', 'fa-wave-square', 'Recent Activity', 'No recent dashboard activity was detected.']
+        ];
+        const statCards = [...document.querySelectorAll('.admin-stat-card, .admin-metric-card, .stat-card-modern, .dashboard-stat-card, .role-stats-row .card, .stats-grid .card, .stats-grid > *')]
+            .map(card => {
+                const label = card.querySelector('.admin-stat-label, .stat-label, .text-uppercase, h6, small, [class*="label"], [class*="title"]')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+                const value = card.querySelector('.admin-stat-value, .stat-value, .h1, h3, h2, [class*="value"], [class*="count"], .display-4')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+                const meta = card.querySelector('.admin-stat-sub, .stat-description, p, small:last-child, [class*="meta"], [class*="desc"]')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+                return label && value ? { name: label, meta: `${value}${meta && meta !== label && meta !== value ? ` - ${meta}` : ''}` } : null;
+            })
+            .filter(Boolean);
+        const matchTabItems = label => {
+            const needle = String(label || '').toLowerCase();
+            const matched = statCards.filter(card => card.name.toLowerCase().includes(needle.slice(0, 5)));
+            return (matched.length ? matched : statCards.slice(0, 2)).slice(0, 5);
+        };
+
+        speech.className = 'chat-bot-speech evortix-role-dashboard-summary is-compact has-project-list';
+        speech.hidden = false;
+        speech.style.pointerEvents = 'auto';
+        speech.setAttribute('aria-hidden', 'false');
+        speech.setAttribute('role', 'status');
+        speech.innerHTML = `
+            <div class="evortix-role-summary-head is-compact"><strong class="evortix-role-summary-title">Live Overview</strong><button type="button" class="evortix-role-summary-close" aria-label="Dismiss dashboard overview"><i class="fas fa-xmark"></i></button></div>
+            <div class="evortix-role-summary-intro is-compact">${escapeHtml(role.charAt(0).toUpperCase() + role.slice(1))} overview is ready. Review the current dashboard signals.</div>
+            <div class="evortix-project-status-tabs" role="tablist" aria-label="Evortix dashboard status">
+                ${tabs.map(tab => `
+                    <button type="button" class="evortix-project-status-tab" data-evortix-force-tab="${escapeHtml(tab[0])}" role="tab" aria-selected="false">
+                        <i class="fas ${escapeHtml(tab[2])}" aria-hidden="true"></i>
+                        <span>${escapeHtml(tab[1])}</span>
+                        <strong>0</strong>
+                    </button>
+                `).join('')}
+            </div>
+            <div class="evortix-project-list-head">
+                <strong data-evortix-force-list-title></strong>
+                <span data-evortix-force-list-count></span>
+            </div>
+            <div class="evortix-project-list" data-evortix-force-list></div>`;
+        const renderForceTab = key => {
+            const config = tabs.find(tab => tab[0] === key) || tabs[0];
+            const items = matchTabItems(config[1]);
+            speech.querySelectorAll('[data-evortix-force-tab]').forEach(tab => {
+                const active = tab.dataset.evortixForceTab === config[0];
+                tab.classList.toggle('is-active', active);
+                tab.setAttribute('aria-selected', active ? 'true' : 'false');
+                if (active) tab.querySelector('strong').textContent = String(items.length);
+            });
+            const title = speech.querySelector('[data-evortix-force-list-title]');
+            const count = speech.querySelector('[data-evortix-force-list-count]');
+            const list = speech.querySelector('[data-evortix-force-list]');
+            if (title) title.textContent = config[3];
+            if (count) count.textContent = `${items.length} item${items.length === 1 ? '' : 's'}`;
+            if (list) {
+                list.innerHTML = items.length
+                    ? items.map(item => `
+                        <a class="evortix-project-link" href="#">
+                            <span class="evortix-project-link-copy">
+                                <strong>${escapeHtml(item.name)}</strong>
+                                <small>${escapeHtml(item.meta)}</small>
+                            </span>
+                            <i class="fas fa-arrow-right" aria-hidden="true"></i>
+                        </a>
+                    `).join('')
+                    : `<div class="evortix-project-list-empty">${escapeHtml(config[4])}</div>`;
+            }
+        };
+        speech.querySelectorAll('[data-evortix-force-tab]').forEach(tab => {
+            tab.addEventListener('click', () => renderForceTab(tab.dataset.evortixForceTab));
+        });
+        renderForceTab(tabs[0][0]);
+        botFloat.hidden = false;
+        botFloat.setAttribute('aria-hidden', 'false');
+        botFloat.classList.remove('is-returning-bed', 'is-preparing-speech');
+        window.chatBotWidgetRobot?.setMode?.('empty-bed');
+        window.chatBotFloatRobot?.setMode?.('standing');
+        speech.querySelector('.evortix-role-summary-close')?.addEventListener('click', event => {
+            event.stopPropagation();
+            speech.hidden = true;
+            speech.setAttribute('aria-hidden', 'true');
+        });
+        document.dispatchEvent(new CustomEvent('evortix:dashboard-welcome-complete'));
+        return true;
+    };
+    if (false && evortixEnabled && botFloat) {
+        [350, 900, 1800, 3200].forEach(delay => window.setTimeout(forceEvortixDashboardOverview, delay));
+        document.addEventListener('chatbot:controllable-robot-ready', () => window.setTimeout(forceEvortixDashboardOverview, 120), { once: true });
     }
 
     if (botFloat && evortixSoundEnabled) {
@@ -1051,15 +2067,10 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     if (evortixProjectTeamNotification) {
-        const storageKey = `evortix.projectNotification.${evortixProjectTeamNotification.id}`;
         const announceProjectNotification = () => {
-            if (sessionStorage.getItem(storageKey)) return;
-            sessionStorage.setItem(storageKey, '1');
-            window.setTimeout(() => window.evortixAnnounceNotification(
-                evortixProjectTeamNotification.title,
-                evortixProjectTeamNotification.message,
-                evortixProjectTeamNotification.action_url
-            ), 700);
+            window.setTimeout(() => {
+                window.announceProjectTeamNotification?.([evortixProjectTeamNotification]);
+            }, 700);
         };
         if (window.evortixDashboardWelcomeActive) {
             document.addEventListener('evortix:dashboard-welcome-complete', announceProjectNotification, { once:true });
@@ -1076,14 +2087,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 const isExpertRevision = evortixSulRevisionNotification.related_table === 'expert_project_estimations';
                 const notificationTitle = String(evortixSulRevisionNotification.title || '');
                 const isQaRevision = notificationTitle.startsWith('QA Revision');
-                const isQaPassed = notificationTitle.startsWith('QA Passed:');
                 const guidance = isExpertRevision
                     ? 'Review the SUL reason, update the affected estimates, staffing, cost, and timeline, then save and resubmit the project estimation.'
                     : isQaRevision
                         ? 'Evortix is relaying the QA decision. Review the QA notes, follow the assigned department order, correct the finding, and resubmit the work to your SUL.'
-                        : isQaPassed
-                            ? 'QA passed this feature. Review the result and continue with Architect final approval.'
-                            : 'Review the SUL comment, update the implementation and evidence, then resubmit the task or pull request for SUL review.';
+                        : 'Review the SUL comment, update the implementation and evidence, then resubmit the task or pull request for SUL review.';
                 window.evortixAnnounceNotification?.(
                     notificationTitle || (isQaRevision ? 'QA revision received' : 'SUL revision requested'),
                     `${evortixSulRevisionNotification.message || 'Your SUL requested changes.'} ${guidance}`,
@@ -1091,9 +2099,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 );
                 const action = document.querySelector('#chat-bot-float .evortix-project-notification-action');
                 if (action) {
-                    action.textContent = isQaPassed
-                        ? 'Review QA result'
-                        : (isQaRevision ? 'Open QA revision' : 'Review revision');
+                    action.textContent = isQaRevision ? 'Open QA revision' : 'Review revision';
                 }
 
                 const currentPath = window.location.pathname;
@@ -1178,7 +2184,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 botFloat.classList.remove('is-leaving-bed');
                 botFloat.classList.remove('is-preparing-speech');
                 botFloat.classList.add('is-speaking');
-                typeBotSpeech(260);
+                if (!showEvortixRoleDashboardSummary()) {
+                    typeBotSpeech(260);
+                }
                 botTransitionTimer = window.setTimeout(function () {
                     botFloat.classList.remove('is-speaking');
                 }, 520);
@@ -1715,19 +2723,162 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 });
 </script>
-<?php if ($evortixCompilationImpact): ?>
 <script>
-document.addEventListener('DOMContentLoaded', () => {
-    const impact = <?php echo json_encode($evortixCompilationImpact, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
-    const items = Object.entries(impact.items || {}).filter(([, message]) => message !== 'No recalculation required.');
-    const message = items.length
-        ? items.map(([area, detail]) => `${area}: ${detail}`).join(' ')
-        : 'The saved plan did not require downstream recalculation.';
-    window.setTimeout(() => window.evortixAnnounceNotification?.(
-        `New compilation #${impact.compilation_no}`,
-        message,
-        ''
-    ), 900);
-});
+(() => {
+    const dashboardMatch = window.location.pathname.match(/\/modules\/(admin|sales|architect|qa|expert|developer)\/dashboard(?:\.php)?\/?$/i);
+    if (!dashboardMatch) return;
+
+    const role = dashboardMatch[1].toLowerCase();
+    const tabsByRole = {
+        admin: [['renewals', 'Renewals', 'fa-clock-rotate-left', 'Renewal Watch', 'No technology stack is expiring in the next 30 days.'], ['login', 'Login', 'fa-user-lock', 'Login Attack Watch', 'No brute-force lockout pattern detected in the last 15 minutes.'], ['recovery', 'Recovery', 'fa-heart-pulse', 'Password Recovery', 'No password recovery requests are pending.']],
+        sales: [['estimation', 'Estimation Approval', 'fa-calculator', 'Estimation Approval', 'No estimations are waiting for Sales approval.'], ['release', 'Release Status', 'fa-bullhorn', 'Release Status', 'No release items need Sales attention.'], ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Projects', 'No overdue projects need attention.']],
+        architect: [['review', 'Review', 'fa-folder-open', 'Architecture Review', 'No architecture reviews need attention.'], ['progress', 'Progress', 'fa-gears', 'Planning Progress', 'No planning work needs attention.'], ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Watch', 'No overdue architecture work was detected.']],
+        qa: [['testing', 'Testing', 'fa-vial', 'Testing Queue', 'No tasks are waiting for QA.'], ['failed', 'Failed', 'fa-circle-xmark', 'Failed Checks', 'No failed QA checks need attention.'], ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue QA', 'No overdue QA items were detected.']],
+        expert: [['estimate', 'Estimate', 'fa-calculator', 'Estimation Queue', 'No estimation items need attention.'], ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Work', 'No overdue expert work was detected.']],
+        developer: [['tasks', 'Tasks', 'fa-list-check', 'Assigned Tasks', 'No assigned tasks need attention.'], ['progress', 'Progress', 'fa-play', 'In Progress', 'No active in-progress tasks were detected.'], ['overdue', 'Overdue', 'fa-triangle-exclamation', 'Overdue Work', 'No overdue developer work was detected.']]
+    };
+    const escapeHtml = value => {
+        const node = document.createElement('div');
+        node.textContent = String(value ?? '');
+        return node.innerHTML;
+    };
+    const openEvortixOverview = () => {
+        const float = document.getElementById('chat-bot-float');
+        const speech = float?.querySelector('.chat-bot-speech');
+        if (!float || !speech) return false;
+        if (speech.dataset.evortixDashboardDismissed === 'true' || window.__evortixDashboardAutoRendered) return false;
+
+        const serverSummary = window.__evortixRoleDashboardSummary?.variant === 'tabbed'
+            ? window.__evortixRoleDashboardSummary
+            : null;
+        const serverGroups = serverSummary?.tab_groups || {};
+        const serverOrder = Array.isArray(serverSummary?.tab_order)
+            ? serverSummary.tab_order.filter(key => serverGroups[key])
+            : Object.keys(serverGroups);
+        const tabs = serverOrder.length
+            ? serverOrder.map(key => {
+                const group = serverGroups[key] || {};
+                return [
+                    key,
+                    group.label || key,
+                    group.icon || 'fa-circle-info',
+                    group.list_title || group.label || 'Status',
+                    group.empty || 'No items need attention.',
+                    Array.isArray(group.items) ? group.items : []
+                ];
+            })
+            : (tabsByRole[role] || tabsByRole.sales);
+        const cards = [...document.querySelectorAll('.admin-stat-card, .admin-metric-card, .stat-card-modern, .dashboard-stat-card, .stats-grid > *, .role-stats-row .card')]
+            .map(card => {
+                const label = card.querySelector('.admin-stat-label, .stat-label, h6, small, [class*="label"], [class*="title"]')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+                const value = card.querySelector('.admin-stat-value, .stat-value, h2, h3, .h1, .display-4, [class*="value"], [class*="count"]')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+                const meta = card.querySelector('.admin-stat-sub, .stat-description, p, small:last-child, [class*="meta"], [class*="desc"]')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+                const numericValue = Number((value.match(/-?\d+/) || ['0'])[0]);
+                return label && value ? { label, meta: `${value}${meta && meta !== label && meta !== value ? ` - ${meta}` : ''}`, value: numericValue } : null;
+            })
+            .filter(Boolean)
+            .slice(0, 6);
+        const fallbackPatterns = {
+            admin: {
+                renewals: [/expir|renew|technolog|service/i],
+                login: [/login|security|audit|attack/i],
+                recovery: [/password|recovery|reset/i]
+            },
+            sales: {
+                projects: [/project/i],
+                clients: [/client/i],
+                overdue: [/overdue|late|delay/i]
+            },
+            architect: {
+                review: [/review|pending/i],
+                progress: [/progress|active/i],
+                overdue: [/overdue|late|delay/i]
+            },
+            qa: {
+                testing: [/testing|ready/i],
+                failed: [/failed|revision/i],
+                overdue: [/overdue|late|delay/i]
+            },
+            expert: {
+                tasks: [/assigned|task/i],
+                estimate: [/estimate|estimation/i],
+                overdue: [/overdue|late|delay/i]
+            },
+            developer: {
+                tasks: [/assigned|task/i],
+                progress: [/progress|active/i],
+                overdue: [/overdue|late|delay/i]
+            }
+        };
+        const renderTab = tab => {
+            const serverItems = Array.isArray(tab[5]) ? tab[5].map(item => ({
+                label: item.name || item.title || 'Item',
+                meta: item.meta || '',
+                url: item.url || item.action_url || '#'
+            })) : [];
+            const patterns = fallbackPatterns[role]?.[tab[0]] || [];
+            const fallbackItems = patterns.length
+                ? cards.filter(card => card.value > 0 && patterns.some(pattern => pattern.test(card.label)))
+                : cards.filter(card => card.value > 0);
+            const items = serverSummary ? serverItems : fallbackItems;
+            speech.querySelectorAll('[data-evortix-tail-tab]').forEach(button => {
+                const active = button.dataset.evortixTailTab === tab[0];
+                button.classList.toggle('is-active', active);
+                button.setAttribute('aria-selected', active ? 'true' : 'false');
+                if (active) button.querySelector('strong').textContent = String(items.length);
+            });
+            speech.querySelector('[data-evortix-tail-title]').textContent = tab[3];
+            speech.querySelector('[data-evortix-tail-count]').textContent = `${items.length} item${items.length === 1 ? '' : 's'}`;
+            speech.querySelector('[data-evortix-tail-list]').innerHTML = items.length
+                ? items.map(item => `<a class="evortix-project-link" href="${escapeHtml(item.url || '#')}"><span class="evortix-project-link-copy"><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.meta)}</small></span><i class="fas fa-arrow-right" aria-hidden="true"></i></a>`).join('')
+                : `<div class="evortix-project-list-empty">${escapeHtml(tab[4])}</div>`;
+        };
+
+        speech.className = 'chat-bot-speech evortix-role-dashboard-summary is-compact has-project-list';
+        speech.hidden = false;
+        speech.removeAttribute('hidden');
+        speech.setAttribute('aria-hidden', 'false');
+        speech.setAttribute('role', 'status');
+        speech.style.pointerEvents = 'auto';
+        speech.innerHTML = `
+            <div class="evortix-role-summary-head is-compact"><strong class="evortix-role-summary-title">Live Overview</strong><button type="button" class="evortix-role-summary-close" aria-label="Dismiss dashboard overview"><i class="fas fa-xmark"></i></button></div>
+            <div class="evortix-role-summary-intro is-compact">${escapeHtml(serverSummary?.intro || `${role.charAt(0).toUpperCase() + role.slice(1)} overview is ready. Review the needed actions.`)}</div>
+            <div class="evortix-project-status-tabs" role="tablist" aria-label="Evortix dashboard status">${tabs.map(tab => `<button type="button" class="evortix-project-status-tab" data-evortix-tail-tab="${escapeHtml(tab[0])}" role="tab" aria-selected="false"><i class="fas ${escapeHtml(tab[2])}" aria-hidden="true"></i><span>${escapeHtml(tab[1])}</span><strong>${escapeHtml(serverSummary ? (Array.isArray(tab[5]) ? tab[5].length : 0) : 0)}</strong></button>`).join('')}</div>
+            <div class="evortix-project-list-head"><strong data-evortix-tail-title></strong><span data-evortix-tail-count></span></div>
+            <div class="evortix-project-list" data-evortix-tail-list></div>`;
+        speech.querySelectorAll('[data-evortix-tail-tab]').forEach(button => {
+            const tab = tabs.find(item => item[0] === button.dataset.evortixTailTab) || tabs[0];
+            button.addEventListener('click', () => renderTab(tab));
+        });
+        const initialTab = serverSummary
+            ? (tabs.find(tab => Array.isArray(tab[5]) && tab[5].length > 0) || tabs[0])
+            : tabs[0];
+        renderTab(initialTab);
+
+        float.hidden = false;
+        float.removeAttribute('hidden');
+        float.setAttribute('aria-hidden', 'false');
+        float.style.display = 'block';
+        float.classList.remove('is-returning-bed', 'is-preparing-speech');
+        float.classList.add('is-speaking');
+        window.__evortixDashboardAutoRendered = true;
+        window.chatBotWidgetRobot?.setMode?.('empty-bed');
+        window.chatBotFloatRobot?.setMode?.('standing');
+        window.setTimeout(() => float.classList.remove('is-speaking'), 700);
+        speech.querySelector('.evortix-role-summary-close')?.addEventListener('click', event => {
+            event.stopPropagation();
+            speech.dataset.evortixDashboardDismissed = 'true';
+            window.__evortixDashboardAutoRendered = true;
+            speech.hidden = true;
+            speech.setAttribute('aria-hidden', 'true');
+        });
+        return true;
+    };
+
+    const scheduleEvortixOverview = () => [80, 300, 800, 1500, 2800, 5200].forEach(delay => window.setTimeout(openEvortixOverview, delay));
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', scheduleEvortixOverview, { once: true });
+    else scheduleEvortixOverview();
+    window.addEventListener('load', () => window.setTimeout(openEvortixOverview, 140), { once: true });
+    document.addEventListener('chatbot:controllable-robot-ready', () => window.setTimeout(openEvortixOverview, 120), { once: true });
+})();
 </script>
-<?php endif; ?>

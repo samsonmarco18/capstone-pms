@@ -15,6 +15,7 @@ $departments = getDepartmentOptions();
 $developerClassificationOptions = getDeveloperClassificationOptions();
 $errors = [];
 $formValues = [];
+$saveAttempted = false;
 
 $stmt = $conn->prepare('SELECT * FROM users WHERE id = ? LIMIT 1');
 $stmt->bind_param('i', $userId);
@@ -28,6 +29,7 @@ if (!$selectedUser) {
 }
 
 if ($isPost && $userId > 0) {
+    $saveAttempted = true;
     if ($postedUserId !== $userId) {
         $errors[] = 'The selected account changed while editing. Please reopen the user and try again.';
     }
@@ -39,7 +41,7 @@ if ($isPost && $userId > 0) {
     $role = trim((string) ($_POST['role'] ?? ''));
     $status = trim((string) ($_POST['status'] ?? ''));
     $designation = trim((string) ($_POST['designation'] ?? ''));
-    $developerClassification = $role === 'developer'
+    $developerClassification = in_array($role, ['developer', 'qa'], true)
         ? normalizeDeveloperClassification($_POST['developer_classification'] ?? null)
         : null;
 
@@ -59,11 +61,11 @@ if ($isPost && $userId > 0) {
     if ($role === 'sul' && $department === '') {
         $errors[] = 'SUL users must be assigned to a department.';
     }
-    if ($role === 'developer' && $developerClassification === null) {
-        $errors[] = 'Select a developer classification.';
+    if (in_array($role, ['developer', 'qa'], true) && $developerClassification === null) {
+        $errors[] = 'Select a classification.';
     }
-    if (!$hasDeveloperClassification) {
-        $errors[] = 'Unable to prepare developer classifications. Please try again.';
+    if (in_array($role, ['developer', 'qa'], true) && !$hasDeveloperClassification) {
+        $errors[] = 'Unable to prepare classifications. Please try again.';
     }
     if (!in_array($status, ['active', 'inactive', 'suspended'], true)) {
         $errors[] = 'Please select a valid status.';
@@ -78,34 +80,65 @@ if ($isPost && $userId > 0) {
     $uniqueStmt->close();
 
     if (!$errors) {
-        $stmt = $conn->prepare('UPDATE users SET full_name = ?, username = ?, email = ?, department = ?, role = ?, status = ?, designation = ?, developer_classification = ? WHERE id = ?');
-        $stmt->bind_param(
-            'ssssssssi',
-            $fullName,
-            $username,
-            $email,
-            $department,
-            $role,
-            $status,
-            $designation,
-            $developerClassification,
-            $userId
-        );
-        $stmt->execute();
-        $stmt->close();
+        $updateSql = $hasDeveloperClassification
+            ? 'UPDATE users SET full_name = ?, username = ?, email = ?, department = ?, role = ?, status = ?, designation = ?, developer_classification = ? WHERE id = ?'
+            : 'UPDATE users SET full_name = ?, username = ?, email = ?, department = ?, role = ?, status = ?, designation = ? WHERE id = ?';
+        $stmt = $conn->prepare($updateSql);
+        if ($stmt === false) {
+            $errors[] = 'Unable to prepare the user update. Please try again.';
+            error_log('edit-user prepare failed: ' . ($conn->error ?? 'unknown error'));
+        } else {
+            if ($hasDeveloperClassification) {
+                $stmt->bind_param(
+                    'ssssssssi',
+                    $fullName,
+                    $username,
+                    $email,
+                    $department,
+                    $role,
+                    $status,
+                    $designation,
+                    $developerClassification,
+                    $userId
+                );
+            } else {
+                $stmt->bind_param(
+                    'sssssssi',
+                    $fullName,
+                    $username,
+                    $email,
+                    $department,
+                    $role,
+                    $status,
+                    $designation,
+                    $userId
+                );
+            }
 
-        logActivity((int) $admin['id'], 'edit_user', 'users', $userId, null, [
-            'full_name' => $fullName,
-            'username' => $username,
-            'email' => $email,
-            'department' => $department,
-            'role' => $role,
-            'status' => $status,
-            'designation' => $designation,
-            'developer_classification' => $developerClassification,
-        ]);
-        header('Location: view-user.php?id=' . $userId);
-        exit();
+            if (!$stmt->execute()) {
+                $errors[] = 'Unable to save changes: ' . ($stmt->error ?: 'database update failed');
+                error_log('edit-user execute failed for user_id=' . $userId . ': ' . ($stmt->error ?: 'unknown error'));
+            } else {
+                $changedRows = $stmt->affected_rows;
+                logActivity((int) $admin['id'], 'edit_user', 'users', $userId, null, [
+                    'full_name' => $fullName,
+                    'username' => $username,
+                    'email' => $email,
+                    'department' => $department,
+                    'role' => $role,
+                    'status' => $status,
+                    'designation' => $designation,
+                    'developer_classification' => $developerClassification,
+                ]);
+
+                $_SESSION['success'] = 'User profile saved successfully.';
+                $stmt->close();
+                header('Location: view-user.php?id=' . $userId);
+                exit();
+            }
+
+            $stmt->close();
+        }
     }
     $stmt = $conn->prepare('SELECT * FROM users WHERE id = ? LIMIT 1');
     $stmt->bind_param('i', $userId);
@@ -138,6 +171,11 @@ include '../../includes/navbar.php';
                 <h5 class="mb-0">Edit User</h5>
             </div>
             <div class="card-body">
+                <?php if ($saveAttempted && !$errors): ?>
+                    <div class="alert alert-warning">
+                        The save request was received, but no update was completed. Please try again.
+                    </div>
+                <?php endif; ?>
                 <?php if ($errors): ?>
                     <div class="alert alert-danger">
                         <?php foreach ($errors as $error): ?>
@@ -145,24 +183,24 @@ include '../../includes/navbar.php';
                         <?php endforeach; ?>
                     </div>
                 <?php endif; ?>
-                <form method="POST" action="edit-user.php?id=<?php echo (int) $selectedUser['id']; ?>" autocomplete="off" data-selected-user-form data-generic-draft-disabled="true" data-restore-server-values="<?php echo $usePostedValues ? '0' : '1'; ?>">
+                <form method="POST" action="edit-user.php?id=<?php echo (int) $selectedUser['id']; ?>" autocomplete="off" novalidate data-generic-draft-disabled="true" data-confirm-skip="true" onsubmit="this.dataset.confirmedSubmit = '1';">
                     <input type="hidden" name="id" value="<?php echo (int) $selectedUser['id']; ?>">
                     <div class="row g-3">
                         <div class="col-md-6">
-                            <label class="form-label">Full Name</label>
-                            <input type="text" name="full_name" class="form-control" value="<?php echo htmlspecialchars($formValues['full_name']); ?>" data-server-value="<?php echo htmlspecialchars($formValues['full_name'], ENT_QUOTES); ?>" autocomplete="new-password" required>
+                            <label class="form-label" for="editFullName">Full Name</label>
+                            <input type="text" id="editFullName" name="full_name" class="form-control" value="<?php echo htmlspecialchars($formValues['full_name']); ?>" autocomplete="off" required>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Username</label>
-                            <input type="text" name="username" class="form-control" value="<?php echo htmlspecialchars($formValues['username']); ?>" data-server-value="<?php echo htmlspecialchars($formValues['username'], ENT_QUOTES); ?>" autocomplete="new-password" required>
+                            <label class="form-label" for="editUsername">Username</label>
+                            <input type="text" id="editUsername" name="username" class="form-control" value="<?php echo htmlspecialchars($formValues['username']); ?>" autocomplete="off" required>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Email Address</label>
-                            <input type="email" name="email" class="form-control" value="<?php echo htmlspecialchars($formValues['email']); ?>" data-server-value="<?php echo htmlspecialchars($formValues['email'], ENT_QUOTES); ?>" autocomplete="new-password" required>
+                            <label class="form-label" for="editEmail">Email Address</label>
+                            <input type="email" id="editEmail" name="email" class="form-control" value="<?php echo htmlspecialchars($formValues['email']); ?>" autocomplete="off" required>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Department</label>
-                            <select name="department" class="form-select" data-server-value="<?php echo htmlspecialchars($formValues['department'], ENT_QUOTES); ?>">
+                            <label class="form-label" for="editDepartment">Department</label>
+                            <select name="department" id="editDepartment" class="form-select">
                                 <option value="">Select department</option>
                                 <?php $selectedDepartment = $formValues['department']; ?>
                                 <?php foreach ($departments as $department): ?>
@@ -178,8 +216,8 @@ include '../../includes/navbar.php';
                             </select>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Role</label>
-                            <select name="role" class="form-select" data-server-value="<?php echo htmlspecialchars($formValues['role'], ENT_QUOTES); ?>">
+                            <label class="form-label" for="editRole">Role</label>
+                            <select name="role" id="editRole" class="form-select">
                                 <?php $selectedRole = $formValues['role']; ?>
                                 <?php foreach (['admin', 'sales', 'architect', 'sul', 'qa', 'expert', 'developer'] as $role): ?>
                                     <option value="<?php echo $role; ?>" <?php echo $selectedRole === $role ? 'selected' : ''; ?>>
@@ -189,8 +227,8 @@ include '../../includes/navbar.php';
                             </select>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Status</label>
-                            <select name="status" class="form-select" data-server-value="<?php echo htmlspecialchars($formValues['status'], ENT_QUOTES); ?>">
+                            <label class="form-label" for="editStatus">Status</label>
+                            <select name="status" id="editStatus" class="form-select">
                                 <?php $selectedStatus = $formValues['status']; ?>
                                 <?php foreach (['active', 'inactive', 'suspended'] as $status): ?>
                                     <option value="<?php echo $status; ?>" <?php echo $selectedStatus === $status ? 'selected' : ''; ?>>
@@ -200,12 +238,12 @@ include '../../includes/navbar.php';
                             </select>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Designation</label>
-                            <input type="text" name="designation" class="form-control" value="<?php echo htmlspecialchars($formValues['designation']); ?>" data-server-value="<?php echo htmlspecialchars($formValues['designation'], ENT_QUOTES); ?>" autocomplete="new-password">
+                            <label class="form-label" for="editDesignation">Designation</label>
+                            <input type="text" id="editDesignation" name="designation" class="form-control" value="<?php echo htmlspecialchars($formValues['designation']); ?>" autocomplete="off">
                         </div>
-                        <div class="col-md-6<?php echo $formValues['role'] === 'developer' ? '' : ' d-none'; ?>" data-developer-classification-field>
-                            <label class="form-label" for="developerClassification">Developer Classification</label>
-                            <select name="developer_classification" id="developerClassification" class="form-select" data-server-value="<?php echo htmlspecialchars($formValues['developer_classification'], ENT_QUOTES); ?>" <?php echo $formValues['role'] === 'developer' ? 'required' : 'disabled'; ?>>
+                        <div class="col-md-6<?php echo in_array($formValues['role'], ['developer', 'qa'], true) ? '' : ' d-none'; ?>" data-developer-classification-field>
+                            <label class="form-label" for="developerClassification">Classification</label>
+                            <select name="developer_classification" id="developerClassification" class="form-select" <?php echo in_array($formValues['role'], ['developer', 'qa'], true) ? 'required' : 'disabled'; ?>>
                                 <option value="">Select classification</option>
                                 <?php foreach ($developerClassificationOptions as $value => $label): ?>
                                 <option value="<?php echo htmlspecialchars($value); ?>" <?php echo $formValues['developer_classification'] === $value ? 'selected' : ''; ?>><?php echo htmlspecialchars($label); ?></option>
@@ -214,7 +252,7 @@ include '../../includes/navbar.php';
                         </div>
                     </div>
                     <div class="mt-4">
-                        <button type="submit" class="btn btn-primary">Save Changes</button>
+                        <button type="button" class="btn btn-primary" name="save_user" value="1" onclick="HTMLFormElement.prototype.submit.call(this.form);">Save Changes</button>
                         <a href="view-user.php?id=<?php echo (int) $selectedUser['id']; ?>" class="btn btn-outline-secondary">Cancel</a>
                     </div>
                 </form>
@@ -225,35 +263,17 @@ include '../../includes/navbar.php';
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    const form = document.querySelector('[data-selected-user-form]');
-    if (!form || form.dataset.restoreServerValues !== '1') {
-        return;
-    }
-
-    const restoreServerValues = function () {
-        form.querySelectorAll('[data-server-value]').forEach(function (field) {
-            field.value = field.dataset.serverValue || '';
-        });
-        form.querySelector('select[name="role"]')?.dispatchEvent(new Event('change'));
-    };
-
-    restoreServerValues();
-    window.setTimeout(restoreServerValues, 100);
-    window.setTimeout(restoreServerValues, 500);
-});
-
-document.addEventListener('DOMContentLoaded', function () {
     const roleSelect = document.querySelector('select[name="role"]');
     const classificationField = document.querySelector('[data-developer-classification-field]');
     const classificationSelect = document.getElementById('developerClassification');
     if (!roleSelect || !classificationField || !classificationSelect) return;
 
     const toggleClassification = function () {
-        const isDeveloper = roleSelect.value === 'developer';
-        classificationField.classList.toggle('d-none', !isDeveloper);
-        classificationSelect.disabled = !isDeveloper;
-        classificationSelect.required = isDeveloper;
-        if (!isDeveloper) classificationSelect.value = '';
+        const needsClassification = ['developer', 'qa'].includes(roleSelect.value);
+        classificationField.classList.toggle('d-none', !needsClassification);
+        classificationSelect.disabled = !needsClassification;
+        classificationSelect.required = needsClassification;
+        if (!needsClassification) classificationSelect.value = '';
     };
 
     roleSelect.addEventListener('change', toggleClassification);

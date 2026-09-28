@@ -2438,6 +2438,17 @@ html[data-app-theme="futuristic"] {
     color: var(--skin-primary) !important;
 }
 
+#sidebar-wrapper.collapsed .menu-item.has-attention,
+#sidebar-wrapper.collapsed .menu-item.has-attention:hover,
+#sidebar-wrapper.collapsed .menu-item.has-attention.active {
+    background: transparent !important;
+    box-shadow: inset 0 0 0 1px rgba(249, 115, 22, 0.82) !important;
+}
+
+#sidebar-wrapper.collapsed .sidebar-attention-badge {
+    display: none !important;
+}
+
 #page-content-wrapper :is(a, button, .btn, .menu-item, .nav-link):focus-visible {
     outline: 3px solid var(--skin-focus) !important;
     outline-offset: 2px;

@@ -852,6 +852,42 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .progress-meta strong {
     color: #d7e4f2;
 }
+
+/* Give the directory the same separated toolbar and paged rows as Sales. */
+.directory-tools { padding: 1rem 1.5rem; width: 100%; align-items: center; justify-content: space-between; }
+.directory-tools .project-search { flex: 1 1 auto; width: auto; max-width: 520px; }
+.project-table { min-width: 700px; }
+.project-table th:nth-child(1) { width: 34%; }
+.project-table th:nth-child(2) { width: 26%; }
+.project-table th:nth-child(3) { width: 25%; }
+.project-table th:nth-child(4) { width: 15%; text-align: right; }
+.project-table td { padding: 1.15rem 1.5rem; }
+.project-table td:last-child { text-align: right; }
+.project-name, .client-name { overflow-wrap: anywhere; }
+.project-actions-toggle { display: inline-grid; place-items: center; width: 36px; height: 36px; border: 1px solid var(--gray-200); border-radius: 9px; cursor: pointer; background: transparent; color: var(--theme-primary); }
+.project-actions-toggle:focus-visible { outline: 2px solid var(--theme-primary); outline-offset: 3px; }
+.project-actions-content { position: fixed; inset: auto; margin: 0; width: 280px; max-width: calc(100vw - 24px); padding: 1rem; border: 1px solid var(--gray-200); border-radius: 12px; background: #fff; color: #41566b; box-shadow: 0 12px 32px rgba(0,0,0,.2); text-align: left; }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-actions-content { background: #102535; color: #c7dce9; border-color: #345269; }
+.project-actions-content .project-action-buttons { flex-direction: column; align-items: stretch; }
+.project-actions-content a { justify-content: center; }
+.project-actions-content .progress-meta { gap: .4rem; }
+.project-actions-content .progress-meta span { border: 0; padding: 0; }
+.project-pagination, .project-pagination-meta, .project-pagination-controls, #projectPageButtons { display: flex; align-items: center; gap: .5rem; }
+.project-pagination { justify-content: space-between; flex-wrap: wrap; padding: 1rem 1.5rem; border-top: 1px solid var(--gray-200); color: var(--gray-600); font-size: .78rem; }
+.project-pagination button, .project-pagination select { min-height: 36px; padding: .4rem .75rem; border: 1px solid var(--gray-200); border-radius: 7px; background: transparent; color: inherit; }
+.project-pagination button[aria-current="page"] { background: var(--theme-primary); color: #fff; border-color: var(--theme-primary); }
+.project-pagination button:disabled { opacity: .45; cursor: default; }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-pagination { color: #b8cbdb; border-color: #213e53; background: #102535; }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-pagination select option { background: #102535; }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-pagination button,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-pagination select,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-actions-toggle { border-color: #345269; color: #c7dce9; }
+@media (max-width: 768px) {
+    .directory-tools .project-search { max-width: none; }
+    .project-pagination { align-items: stretch; gap: .85rem; }
+    .project-pagination-controls { flex-wrap: wrap; }
+}
+
 </style>
 
 <div class="container-fluid px-4 py-4">
@@ -926,7 +962,9 @@ include '../../includes/navbar.php';
                     Project Directory
                 </h5>
             </div>
-            <div class="directory-tools">
+            <span class="directory-count" id="projectDirectoryCount" aria-live="polite">Showing <?php echo $totalProjects; ?> projects</span>
+        </div>
+        <div class="directory-tools">
                 <label class="project-search" for="projectDirectorySearch">
                     <i class="fas fa-search" aria-hidden="true"></i>
                     <input type="search" id="projectDirectorySearch" placeholder="Search project, client, or status" autocomplete="off">
@@ -938,8 +976,6 @@ include '../../includes/navbar.php';
                         <option value="">All statuses</option>
                     </select>
                 </label>
-                <span class="directory-count" id="projectDirectoryCount" aria-live="polite">Showing <?php echo $totalProjects; ?> projects</span>
-            </div>
         </div>
         
         <!-- Projects Table -->
@@ -982,6 +1018,8 @@ include '../../includes/navbar.php';
                             </span>
                         </td>
                         <td>
+                            <button type="button" class="project-actions-toggle" popovertarget="projectActions<?php echo (int) $project['id']; ?>" aria-label="Actions for <?php echo htmlspecialchars($project['name']); ?>"><i class="fas fa-ellipsis-v" aria-hidden="true"></i></button>
+                            <div class="project-actions-content" id="projectActions<?php echo (int) $project['id']; ?>" popover>
                             <div class="project-action-buttons">
                             <?php $nextStep = architectProjectNextStep($project); ?>
                             <a href="<?php echo htmlspecialchars($nextStep['url']); ?>" class="btn-review">
@@ -997,6 +1035,7 @@ include '../../includes/navbar.php';
                                 <span>Devs <strong><?php echo (int) $project['allocation_count']; ?></strong></span>
                                 <span>Docs <strong><?php echo (int) $project['document_count']; ?></strong></span>
                                 <span class="progress-step"><?php echo htmlspecialchars($nextStep['step']); ?></span>
+                            </div>
                             </div>
                         </td>
                     </tr>
@@ -1017,6 +1056,22 @@ include '../../includes/navbar.php';
             </div>
             <?php endif; ?>
         </div>
+        <div class="project-pagination" aria-label="Project directory pagination">
+            <div class="project-pagination-meta">
+                <span id="projectPageRange" aria-live="polite"></span>
+                <label class="visually-hidden" for="projectPageSize">Projects per page</label>
+                <select id="projectPageSize">
+                    <option value="10">10 items</option>
+                    <option value="25">25 items</option>
+                    <option value="50">50 items</option>
+                </select>
+            </div>
+            <nav class="project-pagination-controls" aria-label="Project pages">
+                <button type="button" id="projectPreviousPage">Previous</button>
+                <span id="projectPageButtons"></span>
+                <button type="button" id="projectNextPage">Next</button>
+            </nav>
+        </div>
     </div>
 </div>
 
@@ -1028,7 +1083,7 @@ include '../../includes/navbar.php';
     const emptyRow = document.getElementById('projectDirectoryEmpty');
     const projectRows = Array.from(document.querySelectorAll('#projectDirectoryBody .project-directory-row'));
 
-    if (!searchInput || !statusFilter || !countLabel || projectRows.length === 0) {
+    if (!searchInput || !statusFilter || !countLabel) {
         return;
     }
 
@@ -1050,33 +1105,66 @@ include '../../includes/navbar.php';
             statusFilter.appendChild(option);
         });
 
+    const pageSize = document.getElementById('projectPageSize');
+    const pageRange = document.getElementById('projectPageRange');
+    const pageButtons = document.getElementById('projectPageButtons');
+    const previous = document.getElementById('projectPreviousPage');
+    const next = document.getElementById('projectNextPage');
+    let currentPage = 1;
+
     const updateDirectory = () => {
         const query = searchInput.value.trim().toLocaleLowerCase();
         const selectedStatus = statusFilter.value;
-        let visibleCount = 0;
-
-        projectRows.forEach((row) => {
-            const matchesSearch = query === '' || row.textContent.toLocaleLowerCase().includes(query);
-            const matchesStatus = selectedStatus === '' || row.dataset.status === selectedStatus;
-            const matches = matchesSearch && matchesStatus;
-            row.hidden = !matches;
-            if (matches) {
-                visibleCount += 1;
-            }
+        const matches = projectRows.filter(row =>
+            (!query || row.textContent.toLocaleLowerCase().includes(query)) &&
+            (!selectedStatus || row.dataset.status === selectedStatus));
+        const size = Number(pageSize.value);
+        const totalPages = Math.max(1, Math.ceil(matches.length / size));
+        currentPage = Math.max(1, Math.min(currentPage, totalPages));
+        const offset = (currentPage - 1) * size;
+        const visible = new Set(matches.slice(offset, offset + size));
+        projectRows.forEach(row => {
+            row.hidden = !visible.has(row);
+            if (row.hidden) row.querySelector('[popover]')?.hidePopover();
         });
-
-        const projectWord = visibleCount === 1 ? 'project' : 'projects';
-        countLabel.textContent = query === '' && selectedStatus === ''
-            ? `Showing ${visibleCount} ${projectWord}`
-            : `${visibleCount} of ${projectRows.length} projects`;
-
-        if (emptyRow) {
-            emptyRow.hidden = visibleCount !== 0;
+        const start = matches.length ? offset + 1 : 0;
+        const end = Math.min(offset + size, matches.length);
+        const range = `${start}?${end} of ${matches.length}`;
+        countLabel.textContent = `Showing ${range} projects`;
+        pageRange.textContent = range;
+        if (emptyRow) emptyRow.hidden = matches.length !== 0;
+        previous.disabled = currentPage <= 1;
+        next.disabled = currentPage >= totalPages;
+        pageButtons.replaceChildren();
+        const firstPage = Math.max(1, Math.min(currentPage - 2, totalPages - 4));
+        for (let page = firstPage; page <= Math.min(totalPages, firstPage + 4); page++) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.textContent = String(page);
+            button.setAttribute('aria-label', `Page ${page}`);
+            if (page === currentPage) button.setAttribute('aria-current', 'page');
+            button.addEventListener('click', () => { currentPage = page; updateDirectory(); });
+            pageButtons.appendChild(button);
         }
     };
-
-    searchInput.addEventListener('input', updateDirectory);
-    statusFilter.addEventListener('change', updateDirectory);
+    const resetPage = () => { currentPage = 1; updateDirectory(); };
+    searchInput.addEventListener('input', resetPage);
+    statusFilter.addEventListener('change', resetPage);
+    pageSize.addEventListener('change', resetPage);
+    previous.addEventListener('click', () => { currentPage--; updateDirectory(); });
+    next.addEventListener('click', () => { currentPage++; updateDirectory(); });
+    document.querySelectorAll('.project-actions-toggle').forEach(button => {
+        const menu = document.getElementById(button.getAttribute('popovertarget'));
+        menu.addEventListener('toggle', event => {
+            if (event.newState !== 'open') return;
+            const rect = button.getBoundingClientRect();
+            const left = Math.max(12, Math.min(rect.right - menu.offsetWidth, window.innerWidth - menu.offsetWidth - 12));
+            const top = rect.bottom + menu.offsetHeight + 12 <= window.innerHeight
+                ? rect.bottom + 6 : Math.max(12, rect.top - menu.offsetHeight - 6);
+            menu.style.left = `${left}px`;
+            menu.style.top = `${top}px`;
+        });
+    });
     updateDirectory();
 })();
 </script>

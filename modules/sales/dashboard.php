@@ -8,7 +8,7 @@ requireRole('sales');
 $conn = getConnection();
 $user = getCurrentUser();
 $currentUserId = (int) $user['id'];
-$showEvortixLoginWelcome = true;
+$showEvortixLoginWelcome = false;
 unset($_SESSION['evortix_sales_dashboard_welcome_pending']);
 $hasProjectStartTime = dbColumnExists($conn, 'projects', 'timeline_start_time');
 $hasProjectEndTime = dbColumnExists($conn, 'projects', 'timeline_end_time');
@@ -305,10 +305,20 @@ $monthlySales = $conn->query("
     WHERE created_at >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
     ORDER BY created_at ASC
 ");
+$monthlyRevenue = $conn->query("
+    SELECT COALESCE(r.payment_verified_at, r.updated_at, r.created_at) AS revenue_date,
+           COALESCE(NULLIF(r.amount_paid, 0), r.amount_due, sr.total_cost, 0) AS revenue_amount
+    FROM receipts r
+    LEFT JOIN sales_reports sr ON sr.id = r.report_id
+    WHERE r.status = 'paid'
+      AND COALESCE(r.payment_verified_at, r.updated_at, r.created_at) >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
+    ORDER BY revenue_date ASC
+");
 
 $trendMonths = [];
 $trendCounts = [];
 $trendCompleted = [];
+$trendRevenue = [];
 $trendMonthIndexes = [];
 $trendMonthCursor = new DateTimeImmutable('first day of this month');
 
@@ -319,6 +329,7 @@ for ($monthOffset = 5; $monthOffset >= 0; $monthOffset--) {
     $trendMonths[] = $trendMonth->format('M Y');
     $trendCounts[] = 0;
     $trendCompleted[] = 0;
+    $trendRevenue[] = 0.0;
 }
 
 if (is_object($monthlySales) && method_exists($monthlySales, 'fetch_assoc')) {
@@ -343,6 +354,27 @@ if (is_object($monthlySales) && method_exists($monthlySales, 'fetch_assoc')) {
         if (strtolower((string) ($trendRow['status'] ?? '')) === 'completed') {
             $trendCompleted[$trendMonthIndex]++;
         }
+    }
+}
+
+if (is_object($monthlyRevenue) && method_exists($monthlyRevenue, 'fetch_assoc')) {
+    while ($revenueRow = $monthlyRevenue->fetch_assoc()) {
+        $revenueDate = trim((string) ($revenueRow['revenue_date'] ?? ''));
+        if ($revenueDate === '') {
+            continue;
+        }
+
+        try {
+            $trendMonthKey = (new DateTimeImmutable($revenueDate))->format('Y-m');
+        } catch (Throwable) {
+            continue;
+        }
+
+        if (!isset($trendMonthIndexes[$trendMonthKey])) {
+            continue;
+        }
+
+        $trendRevenue[$trendMonthIndexes[$trendMonthKey]] += (float) ($revenueRow['revenue_amount'] ?? 0);
     }
 }
 
@@ -3187,10 +3219,14 @@ const trendsData = <?php
         'months' => $trendMonths,
         'counts' => $trendCounts,
         'completed' => $trendCompleted,
+        'revenue' => $trendRevenue,
     ], JSON_UNESCAPED_SLASHES);
 ?>;
 
 const trendsCtx = document.getElementById('projectTrendsChart').getContext('2d');
+const formatTrendRevenue = value => 'PHP ' + Number(value || 0).toLocaleString('en-US', {
+    maximumFractionDigits: 0
+});
 new Chart(trendsCtx, {
     type: 'line',
     data: {
@@ -3219,6 +3255,21 @@ new Chart(trendsCtx, {
                 borderWidth: 3,
                 tension: 0.4,
                 pointBackgroundColor: '#10b981',
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2,
+                pointRadius: 3,
+                pointHoverRadius: 5
+            },
+            {
+                label: 'Earned Revenue',
+                data: trendsData.revenue,
+                yAxisID: 'yRevenue',
+                borderColor: '#d97706',
+                backgroundColor: 'rgba(217, 119, 6, 0.12)',
+                fill: false,
+                borderWidth: 3,
+                tension: 0.35,
+                pointBackgroundColor: '#d97706',
                 pointBorderColor: '#fff',
                 pointBorderWidth: 2,
                 pointRadius: 3,
@@ -3255,7 +3306,16 @@ new Chart(trendsCtx, {
                 titleColor: '#212529',
                 bodyColor: '#495057',
                 padding: 12,
-                displayColors: true
+                displayColors: true,
+                callbacks: {
+                    label: function(context) {
+                        const label = context.dataset.label || '';
+                        if (context.dataset.yAxisID === 'yRevenue') {
+                            return `${label}: ${formatTrendRevenue(context.raw)}`;
+                        }
+                        return `${label}: ${context.raw}`;
+                    }
+                }
             }
         },
         scales: {
@@ -3272,6 +3332,34 @@ new Chart(trendsCtx, {
                     color: '#6c757d',
                     font: {
                         size: 11
+                    }
+                }
+            },
+            yRevenue: {
+                beginAtZero: true,
+                position: 'right',
+                border: {
+                    display: false
+                },
+                grid: {
+                    drawOnChartArea: false
+                },
+                ticks: {
+                    color: '#9a5a08',
+                    font: {
+                        size: 11
+                    },
+                    callback: function(value) {
+                        return formatTrendRevenue(value);
+                    }
+                },
+                title: {
+                    display: true,
+                    text: 'Earned Revenue',
+                    color: '#9a5a08',
+                    font: {
+                        size: 12,
+                        weight: '500'
                     }
                 }
             },

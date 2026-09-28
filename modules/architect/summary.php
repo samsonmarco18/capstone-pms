@@ -71,8 +71,19 @@ $documents = $conn->query("
 $techRecommendationCount = (int) $techRecommendations->num_rows;
 $allocationCount = (int) $allocations->num_rows;
 $documentCount = (int) $documents->num_rows;
-$totalDevelopersNeededRow = $conn->query("SELECT COALESCE(SUM(required_count), 0) AS total FROM developer_allocations WHERE project_id = $projectId")->fetch_assoc();
-$totalDevelopersNeeded = (int) ($totalDevelopersNeededRow['total'] ?? 0);
+$developersUsed = 0;
+if (dbTableExists($conn, 'developer_allocation_assignments')) {
+    $developersUsedRow = $conn->query("
+        SELECT COUNT(DISTINCT daa.developer_id) AS total
+        FROM developer_allocations da
+        INNER JOIN developer_allocation_assignments daa ON daa.allocation_id = da.id
+        WHERE da.project_id = $projectId
+          AND daa.developer_id IS NOT NULL
+          AND daa.developer_id > 0
+          AND daa.status IN ('assigned', 'accepted', 'completed')
+    ")->fetch_assoc();
+    $developersUsed = (int) ($developersUsedRow['total'] ?? 0);
+}
 $documentTypesResult = $conn->query("SELECT DISTINCT document_type FROM architecture_documents WHERE project_id = $projectId");
 $documentTypes = [];
 while ($documentTypeRow = $documentTypesResult->fetch_assoc()) {
@@ -1921,7 +1932,7 @@ a.progress-step:hover {
                 <div class="summary-review-row"><span class="summary-review-label">Total Features</span><span class="summary-review-value"><?php echo $featureCount; ?></span></div>
                 <div class="summary-review-row"><span class="summary-review-label">Scheduled in Roadmap</span><span class="summary-review-value"><?php echo (int) ($methodologyCompletion['scheduled_feature_count'] ?? 0); ?> of <?php echo (int) ($methodologyCompletion['feature_count'] ?? 0); ?></span></div>
                 <div class="summary-review-row"><span class="summary-review-label">Technologies Recommended</span><span class="summary-review-value"><?php echo $techRecommendationCount; ?></span></div>
-                <div class="summary-review-row"><span class="summary-review-label">Developers Needed</span><span class="summary-review-value"><?php echo $totalDevelopersNeeded; ?></span></div>
+                <div class="summary-review-row"><span class="summary-review-label">Developers Used</span><span class="summary-review-value"><?php echo $developersUsed; ?></span></div>
                 <div class="summary-review-row"><span class="summary-review-label">Documents Uploaded</span><span class="summary-review-value"><?php echo $documentCount; ?></span></div>
             </div>
             <div class="summary-submission-panel">
