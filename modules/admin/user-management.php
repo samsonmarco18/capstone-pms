@@ -553,11 +553,12 @@ include '../../includes/navbar.php';
 /* Table Styles */
 .table-container {
     padding: 0;
-    overflow-x: auto;
+    overflow: visible;
 }
 
 .user-table {
     width: 100%;
+    table-layout: fixed;
     border-collapse: collapse;
 }
 
@@ -566,7 +567,7 @@ include '../../includes/navbar.php';
 }
 
 .user-table th {
-    padding: 1rem 1.5rem;
+    padding: 0.9rem 0.65rem;
     text-align: left;
     font-size: 0.75rem;
     font-weight: 600;
@@ -577,7 +578,8 @@ include '../../includes/navbar.php';
 }
 
 .user-table td {
-    padding: 1rem 1.5rem;
+    padding: 0.9rem 0.65rem;
+    overflow-wrap: anywhere;
     vertical-align: middle;
     border-bottom: 1px solid var(--panel-border);
 }
@@ -733,6 +735,33 @@ include '../../includes/navbar.php';
 
 .user-directory-copy {
     min-width: 0;
+}
+.user-table th:nth-child(1) { width: 26%; }
+.user-table th:nth-child(2) { width: 13%; }
+.user-table th:nth-child(3) { width: 11%; }
+.user-table th:nth-child(4) { width: 15%; }
+.user-table th:nth-child(5) { width: 10%; }
+.user-table th:nth-child(6) { width: 12%; }
+.user-table th:nth-child(7) { width: 13%; }
+.user-table .user-name, .user-table .user-email { white-space: normal; overflow-wrap: anywhere; }
+.user-table .badge-role, .user-table .badge-status { max-width: 100%; white-space: normal; padding-inline: 7px; }
+.user-table .action-buttons { flex-wrap: wrap; gap: 4px; }
+.user-table .btn-icon { flex: 0 0 28px; width: 28px; height: 30px; }
+.user-table .user-directory-profile { gap: 8px; }
+@media (max-width: 650px) {
+    .user-table thead { display: none; }
+    .user-table, .user-table tbody { display: block; }
+    .user-table tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 12px; border-bottom: 1px solid var(--panel-border); }
+    .user-table td { display: block; border: 0; padding: 6px !important; min-width: 0; }
+    .user-table td:first-child { grid-column: 1 / -1; }
+    .user-table td::before { display: block; font-size: 10px; color: var(--panel-muted); text-transform: uppercase; margin-bottom: 3px; }
+    .user-table td:nth-child(2)::before { content: 'Department'; }
+    .user-table td:nth-child(3)::before { content: 'Role'; }
+    .user-table td:nth-child(4)::before { content: 'Classification'; }
+    .user-table td:nth-child(5)::before { content: 'Status'; }
+    .user-table td:nth-child(6)::before { content: 'Created'; }
+    .user-table td:nth-child(7)::before { content: 'Actions'; }
+    .user-table .action-buttons { flex-direction: row; }
 }
 
 /* Badges */

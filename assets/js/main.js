@@ -938,9 +938,23 @@ function initAppActionHelpers() {
         }
 
         const form = this;
-        const title = form.getAttribute('data-loading-title') || 'Saving changes';
-        const text = form.getAttribute('data-loading-text') || 'Please wait while the system finishes this action.';
+        if (form.dataset.loadingSubmitted === '1') {
+            event.preventDefault();
+            return;
+        }
+        form.dataset.loadingSubmitted = '1';
+        form.setAttribute('aria-busy', 'true');
+        const submitter = event.originalEvent?.submitter;
+        const title = submitter?.getAttribute('data-loading-title') || form.getAttribute('data-loading-title') || 'Saving changes';
+        const text = submitter?.getAttribute('data-loading-text') || form.getAttribute('data-loading-text') || 'Please wait while the system finishes this action.';
         showAppLoading(title, text);
+    });
+    window.addEventListener('pageshow', () => {
+        document.querySelectorAll('form[data-app-loading]').forEach(form => {
+            delete form.dataset.loadingSubmitted;
+            form.removeAttribute('aria-busy');
+        });
+        hideAppLoading();
     });
 }
 

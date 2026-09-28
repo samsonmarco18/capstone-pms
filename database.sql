@@ -657,6 +657,8 @@ CREATE TABLE sales_reports (
     other_fees JSON,
     total_cost DECIMAL(12, 2) DEFAULT 0,
     currency VARCHAR(10) DEFAULT 'PHP',
+    billing_snapshot TEXT NULL,
+    billing_request_key VARCHAR(64) NULL,
     status ENUM('draft', 'submitted', 'approved', 'invoiced') DEFAULT 'draft',
     notes TEXT,
     created_by INT NOT NULL,

@@ -1281,7 +1281,13 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
         estimationForm?.addEventListener('change', queueProjectEstimationDraftSave);
         window.addEventListener('pagehide', saveProjectEstimationDraft);
 
+        const sectionReviewKey = 'erni.estimation.reviewed.v1.' + <?php echo json_encode((int) ($_SESSION['user_id'] ?? 0) . '.' . (int) ($project['id'] ?? 0)); ?>;
+        let reviewedSections = {};
+        try { reviewedSections = JSON.parse(localStorage.getItem(sectionReviewKey) || '{}') || {}; } catch (_) {}
         estimationModule?.querySelectorAll('.estimation-section-toggle').forEach((toggle) => {
+            const sectionId = toggle.getAttribute('aria-controls') || '';
+            const marker = toggle.querySelector('.estimation-section-complete');
+            if (marker && reviewedSections[sectionId]) marker.hidden = false;
             toggle.addEventListener('click', () => {
                 const shouldOpen = toggle.getAttribute('aria-expanded') !== 'true';
 
@@ -1297,6 +1303,8 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                 if (shouldOpen && details) {
                     const reviewedMarker = toggle.querySelector('.estimation-section-complete');
                     if (reviewedMarker) reviewedMarker.hidden = false;
+                    reviewedSections[sectionId] = true;
+                    try { localStorage.setItem(sectionReviewKey, JSON.stringify(reviewedSections)); } catch (_) {}
                 }
             });
         });

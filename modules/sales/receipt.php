@@ -325,9 +325,10 @@ if ($receiptTotalPages <= 5) {
 
 // Get client name for header
 $clientName = '';
+$contextProjectId = 0;
 if ($contextClientId === 0 && ($receiptId || $reportId)) {
     $contextQuery = $conn->query("
-        SELECT sr.client_id, c.name
+        SELECT sr.client_id, sr.project_id, c.name
         FROM sales_reports sr
         JOIN clients c ON sr.client_id = c.id
         " . ($receiptId
@@ -336,6 +337,7 @@ if ($contextClientId === 0 && ($receiptId || $reportId)) {
         LIMIT 1
     ");
     $contextRow = $contextQuery ? $contextQuery->fetch_assoc() : null;
+    $contextProjectId = (int) ($contextRow['project_id'] ?? 0);
     $contextClientId = (int) ($contextRow['client_id'] ?? 0);
     $clientName = $contextRow['name'] ?? '';
 }
@@ -344,6 +346,7 @@ if ($contextClientId) {
     $clientName = $client['name'] ?? 'All Clients';
 }
 $reportCreateUrl = 'report.php' . ($contextClientId > 0 ? '?client_id=' . $contextClientId : '');
+if ($contextClientId > 0 && $contextProjectId > 0) $reportCreateUrl .= '&project_id=' . $contextProjectId;
 $clientReceiptsUrl = 'receipt.php' . ($contextClientId > 0 ? '?client_id=' . $contextClientId : '');
 
 // Get statistics
@@ -1500,7 +1503,7 @@ include '../../includes/navbar.php';
                                     <?php if ($receiptStatus !== 'paid' && ($receipt['payment_proof_status'] ?? '') !== 'pending'): ?>
                                         <li><hr class="dropdown-divider"></li>
                                         <li>
-                                            <form method="POST" data-generic-draft-disabled="true">
+                                            <form method="POST" data-generic-draft-disabled="true" data-app-loading data-loading-title="Sending billing receipt" data-loading-text="Preparing the Excel receipt and sending the client email. Please wait.">
                 <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(paymentProofCsrfToken(), ENT_QUOTES, 'UTF-8'); ?>">
                                                 <input type="hidden" name="receipt_id" value="<?php echo (int) $receipt['id']; ?>">
                                                 <button type="submit" name="finalize_receipt" class="dropdown-item">
@@ -1632,7 +1635,7 @@ include '../../includes/navbar.php';
 
 <div class="modal fade" id="verifyPaymentModal" tabindex="-1" aria-hidden="true" aria-labelledby="verifyPaymentTitle">
     <div class="modal-dialog modal-dialog-centered">
-        <form method="POST" enctype="multipart/form-data" class="modal-content">
+        <form method="POST" enctype="multipart/form-data" class="modal-content" data-app-loading data-loading-title="Verifying payment" data-loading-text="Saving your review and preparing the client confirmation. Please wait.">
                 <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(paymentProofCsrfToken(), ENT_QUOTES, 'UTF-8'); ?>">
             <div class="modal-header receipt-payment-modal__header">
                 <h5 class="modal-title" id="verifyPaymentTitle"><i class="fas fa-file-circle-check me-2"></i>Verify Payment</h5>
@@ -1682,7 +1685,7 @@ include '../../includes/navbar.php';
             </div>
             <div class="modal-footer receipt-payment-modal__footer">
                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="submit" name="reject_payment" id="rejectPaymentButton" class="btn btn-outline-danger" formnovalidate hidden>Reject proof</button>
+                <button type="submit" name="reject_payment" id="rejectPaymentButton" class="btn btn-outline-danger" data-loading-title="Saving payment review" data-loading-text="Recording the rejection and notifying the client. Please wait." formnovalidate hidden>Reject proof</button>
                 <button type="submit" name="verify_payment" class="btn btn-primary">
                     <i class="fas fa-check me-1"></i> Verify and Mark Paid
                 </button>

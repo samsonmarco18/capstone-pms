@@ -32,7 +32,7 @@ try:
     for name in ['config/.env.php', 'config/database.php', 'config/database-compat.php',
                  'includes/auth.php', 'includes/file-storage.php', 'includes/app-settings.php',
                  'includes/mailer.php', 'includes/receipt-excel.php', 'includes/payment-proof.php',
-                 'tools/test-payment-proof.php', 'payment-proof.php']:
+                 'tools/test-payment-proof.php', 'payment-proof.php', 'includes/sales-billing.php', 'tools/test-sales-billing.php']:
         target = app / name
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(root / name, target)
@@ -65,6 +65,9 @@ try:
     print(result.stdout.decode().strip())
     if b'PASS:' not in result.stdout:
         raise RuntimeError('Integration test did not complete')
+    billing = run([php, '-d', f'session.save_path={work}', app / 'tools/test-sales-billing.php', '--database'], env=env)
+    print(billing.stdout.decode().strip())
+    if b'PASS:' not in billing.stdout: raise RuntimeError('Billing integration test did not complete')
     token = 'a' * 64
     schema = """
     CREATE TABLE receipts (id INT PRIMARY KEY, receipt_number VARCHAR(50), client_email VARCHAR(100),

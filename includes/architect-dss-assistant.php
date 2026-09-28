@@ -265,6 +265,20 @@ document.addEventListener('DOMContentLoaded', () => {
         if (countField) delete countField.dataset.evortixDecision;
     };
 
+    const showCompletion = () => {
+        const heading = config.completedTitle || 'Review complete';
+        const message = `${acceptedCount} accepted and ${skippedCount} skipped. Your selections have been applied. Save the form to keep your changes.`;
+        const speech = document.querySelector('#chat-bot-float .chat-bot-speech');
+        if (speech) {
+            speech.hidden = false;
+            speech.setAttribute('aria-hidden', 'false');
+            speech.setAttribute('role', 'status');
+            speech.innerHTML = `<strong class="evortix-dss-heading"><i class="fas fa-circle-check me-1"></i>${escapeDss(heading)}</strong><span class="evortix-dss-copy">${escapeDss(message)}</span>`;
+        }
+        window.appToast?.(heading, message, 'success');
+        document.dispatchEvent(new CustomEvent('evortix:dss-completed', { detail: { accepted: acceptedCount, skipped: skippedCount } }));
+    };
+
     document.addEventListener('click', (event) => {
         const replay = event.target.closest('[data-evortix-dss-replay]');
         if (replay) {
@@ -300,7 +314,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const speech = document.querySelector('#chat-bot-float .chat-bot-speech');
             if (speech) { speech.hidden = true; speech.setAttribute('aria-hidden', 'true'); }
             window.chatBotFloatRobot?.setEmotion?.('happy', 900);
-            window.evortixAnnounceNotification?.(config.completedTitle || 'DSS review complete', `${acceptedCount} suggestions accepted. Review your selections before continuing.`, '');
+            showCompletion();
             return;
         }
         const accepted = choice.dataset.evortixDssChoice === 'accept';
@@ -323,11 +337,9 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         reviewCompleted = true;
-        const heading = config.completedTitle || 'DSS review complete';
-        const message = `I reviewed ${items.length} suggestion${items.length === 1 ? '' : 's'} with you: ${acceptedCount} accepted and ${skippedCount} skipped. Review your selections before continuing.`;
         hideSourceControls();
         if (replayTrigger) replayTrigger.hidden = false;
-        window.evortixAnnounceNotification?.(heading, message, '');
+        showCompletion();
     }, true);
 
     if (autoStart && config.title && config.message && items.length > 0) {
