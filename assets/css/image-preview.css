@@ -1,0 +1,25 @@
+.app-image-preview {
+    box-sizing: border-box;
+    width: min(1100px, 96vw);
+    max-width: 96vw;
+    height: 92vh;
+    height: 92dvh;
+    max-height: 96vh;
+    padding: 0;
+    border: 1px solid #40536a;
+    border-radius: 14px;
+    background: #101c2c;
+    color: #fff;
+    box-shadow: 0 24px 80px #0008;
+    overflow: hidden;
+}
+.app-image-preview::backdrop { background: #000b; }
+.app-image-preview[open] { display: flex; flex-direction: column; }
+.app-image-preview__bar { display: flex; align-items: center; gap: 16px; padding: 14px 18px; border-bottom: 1px solid #40536a; }
+.app-image-preview__bar button { flex: none; border: 1px solid #8295ac; border-radius: 8px; padding: 8px 16px; background: #20364f; color: #fff; font: inherit; cursor: pointer; }
+.app-image-preview__bar button:focus-visible { outline: 3px solid #80caff; outline-offset: 3px; }
+.app-image-preview__bar span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-image-preview__body { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 16px; }
+.app-image-preview__body img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.app-image-preview__body [hidden] { display: none; }
+.app-image-preview__body p { color: #fff; text-align: center; }

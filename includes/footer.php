@@ -88,6 +88,8 @@
     </div>
 
     <div class="sidebar-overlay"></div>
+    <link rel="stylesheet" href="<?php echo BASE_URL; ?>assets/css/image-preview.css?v=<?php echo filemtime(__DIR__ . '/../assets/css/image-preview.css'); ?>">
+    <script src="<?php echo BASE_URL; ?>assets/js/image-preview.js?v=<?php echo filemtime(__DIR__ . '/../assets/js/image-preview.js'); ?>" defer></script>
 
     <?php if (empty($chatScriptLoaded)): ?>
         <script src="<?php echo BASE_URL; ?>assets/js/chat.js?v=<?php echo filemtime(__DIR__ . '/../assets/js/chat.js'); ?>" defer></script>
