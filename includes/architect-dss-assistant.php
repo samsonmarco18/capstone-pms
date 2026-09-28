@@ -275,7 +275,6 @@ document.addEventListener('DOMContentLoaded', () => {
             speech.setAttribute('role', 'status');
             speech.innerHTML = `<strong class="evortix-dss-heading"><i class="fas fa-circle-check me-1"></i>${escapeDss(heading)}</strong><span class="evortix-dss-copy">${escapeDss(message)}</span>`;
         }
-        window.appToast?.(heading, message, 'success');
         document.dispatchEvent(new CustomEvent('evortix:dss-completed', { detail: { accepted: acceptedCount, skipped: skippedCount } }));
     };
 
