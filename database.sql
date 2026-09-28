@@ -1279,15 +1279,15 @@ Role-Based Clinical Dashboard', '["Expert Department","Frontend Developer","Back
 -- Six-month project history for the Sales dashboard trend chart.
 -- Relative dates keep every chart bucket populated whenever the database is imported.
 INSERT INTO clients (
-    name, contact_person, email, phone, address, company_type, industry,
+    name, contact_person, email, phone, address,
     status, deadline, created_by, created_at
 ) VALUES
-('Northstar Retail Group', 'Ava Reyes', 'ava.reyes@northstar.example', '+63 917 555 0101', 'Makati, Philippines', 'Corporation', 'Retail', 'active', DATE_ADD(CURDATE(), INTERVAL 4 MONTH), 1, DATE_SUB(NOW(), INTERVAL 5 MONTH)),
-('BrightCare Clinics', 'Miguel Santos', 'miguel.santos@brightcare.example', '+63 917 555 0102', 'Quezon City, Philippines', 'Company', 'Healthcare', 'active', DATE_ADD(CURDATE(), INTERVAL 4 MONTH), 1, DATE_SUB(NOW(), INTERVAL 4 MONTH)),
-('Summit Logistics', 'Leah Cruz', 'leah.cruz@summitlogistics.example', '+63 917 555 0103', 'Taguig, Philippines', 'Corporation', 'Logistics', 'active', DATE_ADD(CURDATE(), INTERVAL 5 MONTH), 1, DATE_SUB(NOW(), INTERVAL 3 MONTH)),
-('Harbor Hospitality', 'Noah Garcia', 'noah.garcia@harborhospitality.example', '+63 917 555 0104', 'Pasay, Philippines', 'Corporation', 'Hospitality', 'active', DATE_ADD(CURDATE(), INTERVAL 5 MONTH), 1, DATE_SUB(NOW(), INTERVAL 2 MONTH)),
-('Verde Services', 'Isla Mendoza', 'isla.mendoza@verdeservices.example', '+63 917 555 0105', 'Cebu City, Philippines', 'Company', 'Professional Services', 'active', DATE_ADD(CURDATE(), INTERVAL 6 MONTH), 1, DATE_SUB(NOW(), INTERVAL 1 MONTH)),
-('Atlas Field Operations', 'Ethan Lim', 'ethan.lim@atlasfield.example', '+63 917 555 0106', 'Davao City, Philippines', 'Corporation', 'Field Services', 'active', DATE_ADD(CURDATE(), INTERVAL 6 MONTH), 1, DATE_SUB(NOW(), INTERVAL 12 DAY));
+('Northstar Retail Group', 'Ava Reyes', 'ava.reyes@northstar.example', '+63 917 555 0101', 'Makati, Philippines', 'active', DATE_ADD(CURDATE(), INTERVAL 4 MONTH), 1, DATE_SUB(NOW(), INTERVAL 5 MONTH)),
+('BrightCare Clinics', 'Miguel Santos', 'miguel.santos@brightcare.example', '+63 917 555 0102', 'Quezon City, Philippines', 'active', DATE_ADD(CURDATE(), INTERVAL 4 MONTH), 1, DATE_SUB(NOW(), INTERVAL 4 MONTH)),
+('Summit Logistics', 'Leah Cruz', 'leah.cruz@summitlogistics.example', '+63 917 555 0103', 'Taguig, Philippines', 'active', DATE_ADD(CURDATE(), INTERVAL 5 MONTH), 1, DATE_SUB(NOW(), INTERVAL 3 MONTH)),
+('Harbor Hospitality', 'Noah Garcia', 'noah.garcia@harborhospitality.example', '+63 917 555 0104', 'Pasay, Philippines', 'active', DATE_ADD(CURDATE(), INTERVAL 5 MONTH), 1, DATE_SUB(NOW(), INTERVAL 2 MONTH)),
+('Verde Services', 'Isla Mendoza', 'isla.mendoza@verdeservices.example', '+63 917 555 0105', 'Cebu City, Philippines', 'active', DATE_ADD(CURDATE(), INTERVAL 6 MONTH), 1, DATE_SUB(NOW(), INTERVAL 1 MONTH)),
+('Atlas Field Operations', 'Ethan Lim', 'ethan.lim@atlasfield.example', '+63 917 555 0106', 'Davao City, Philippines', 'active', DATE_ADD(CURDATE(), INTERVAL 6 MONTH), 1, DATE_SUB(NOW(), INTERVAL 12 DAY));
 
 INSERT INTO projects (
     client_id, name, description, status, timeline_start, timeline_end,
