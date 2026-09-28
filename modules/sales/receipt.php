@@ -541,7 +541,7 @@ include '../../includes/navbar.php';
 }
 
 .receipt-table th {
-    padding: 1rem 1.5rem;
+    padding: 0.9rem 0.85rem;
     text-align: left;
     font-size: 0.75rem;
     font-weight: 600;
@@ -552,7 +552,8 @@ include '../../includes/navbar.php';
 }
 
 .receipt-table td {
-    padding: 1rem 1.5rem;
+    height: 72px;
+    padding: 0.85rem;
     vertical-align: middle;
     border-bottom: 1px solid var(--gray-200);
 }
@@ -887,9 +888,12 @@ include '../../includes/navbar.php';
 }
 .proof-link span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .proof-link i { flex: none; }
-.receipt-status-stack { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 .receipt-proof-status { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 7px; font-size: 11px; font-weight: 600; line-height: 1.4; background: #fff5da; color: #865b06; }
 .receipt-proof-status.is-rejected { background: #fff0ef; color: #ac3934; }
+.receipt-proof-status.is-verified { background: #e0f6eb; color: #176742; }
+.receipt-review-empty { color: #748397; font-size: 12px; }
+.receipt-table .receipt-status-cell, .receipt-table .receipt-proof-cell { white-space: nowrap; }
+.receipt-table .receipt-proof-cell .proof-link { display: inline-flex; padding: 6px 9px; border: 1px solid #cbdde9; border-radius: 7px; font-size: 12px; white-space: nowrap; }
 .receipt-table td:nth-child(3), .receipt-table td:nth-child(4) { white-space: nowrap; }
 .receipt-table .proof-link { margin-top: 0; font-weight: 500; }
 
@@ -1255,6 +1259,9 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #verifyPaymentModal .form-control::placeholder { color: #8aa3ba; opacity: 1; }
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .receipt-proof-status { background: #382e19; color: #f2cc7a; }
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .receipt-proof-status.is-rejected { background: #39232c; color: #ffb3b3; }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .receipt-proof-status.is-verified { background: #143a30; color: #8de0bb; }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .receipt-review-empty { color: #9db0c6; }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .receipt-table .receipt-proof-cell .proof-link { border-color: #294359; background: #0c2032; }
 
 /* Responsive */
 @media (max-width: 768px) {
@@ -1405,6 +1412,8 @@ include '../../includes/navbar.php';
                         <th>Date</th>
                         <th>Amount</th>
                         <th>Status</th>
+                        <th>Payment review</th>
+                        <th>Proof</th>
                         <th>Actions</th>
                     </thead>
                 <tbody>
@@ -1432,23 +1441,30 @@ include '../../includes/navbar.php';
                         </td>
                         <td><?php echo !empty($receipt['created_at']) ? date('M d, Y', strtotime((string) $receipt['created_at'])) : 'No date'; ?></td>
                         <td class="fw-semibold">₱<?php echo number_format($receipt['amount_due'], 2); ?></td>
-                        <td>
-                          <div class="receipt-status-stack">
+                        <td class="receipt-status-cell">
                             <span class="badge-status <?php echo htmlspecialchars($receiptStatus); ?>">
                                 <?php echo htmlspecialchars(salesReceiptStatusLabel($receiptStatus)); ?>
                             </span>
-                            <?php if (($receipt['payment_proof_status'] ?? '') === 'pending'): ?>
-                                <span class="receipt-proof-status"><i class="fas fa-clock" aria-hidden="true"></i>Awaiting verification</span>
+                        </td>
+                        <td class="receipt-status-cell">
+                            <?php if ($receiptStatus === 'paid'): ?>
+                                <span class="receipt-proof-status is-verified"><i class="fas fa-check" aria-hidden="true"></i>Verified</span>
+                            <?php elseif (($receipt['payment_proof_status'] ?? '') === 'pending'): ?>
+                                <span class="receipt-proof-status"><i class="fas fa-clock" aria-hidden="true"></i>Awaiting review</span>
                             <?php elseif (($receipt['payment_proof_status'] ?? '') === 'rejected'): ?>
                                 <span class="receipt-proof-status is-rejected">Correction requested</span>
+                            <?php else: ?>
+                                <span class="receipt-review-empty">Not submitted</span>
                             <?php endif; ?>
+                        </td>
+                        <td class="receipt-proof-cell">
                             <?php if ($proofPath !== ''): ?>
-                                <a class="proof-link" href="<?php echo htmlspecialchars(storagePublicUrl($proofPath)); ?>" target="_blank" rel="noopener">
-                                    <i class="fas fa-paperclip"></i>
-                                    <span title="<?php echo htmlspecialchars($proofName, ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($proofName !== '' ? $proofName : 'Payment proof'); ?></span>
+                                <a class="proof-link" href="<?php echo htmlspecialchars(storagePublicUrl($proofPath)); ?>" target="_blank" rel="noopener" title="<?php echo htmlspecialchars($proofName, ENT_QUOTES, 'UTF-8'); ?>" data-image-title="<?php echo htmlspecialchars($proofName ?: 'Payment proof', ENT_QUOTES, 'UTF-8'); ?>">
+                                    <i class="fas fa-eye" aria-hidden="true"></i><span>View proof</span>
                                 </a>
+                            <?php else: ?>
+                                <span class="receipt-review-empty" aria-label="No proof attached">—</span>
                             <?php endif; ?>
-                          </div>
                         </td>
                         <td>
                             <div class="dropdown receipt-action-menu">
