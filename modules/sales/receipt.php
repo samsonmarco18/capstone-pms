@@ -503,6 +503,8 @@ include '../../includes/navbar.php';
 
 .card-header-modern .btn-group {
     display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
     gap: 0.5rem;
 }
 
@@ -518,11 +520,12 @@ include '../../includes/navbar.php';
 
 .receipt-list-card .table-container {
     overflow: visible;
-    min-height: 16rem;
+    min-height: 0;
     background: #fff;
 }
 
 .receipt-list-card .table-container.is-empty {
+    min-height: 16rem;
     display: grid;
     place-items: center;
     overflow: hidden;
@@ -880,7 +883,15 @@ include '../../includes/navbar.php';
     font-weight: 700;
     color: var(--theme-primary);
     text-decoration: none;
+    max-width: 230px;
 }
+.proof-link span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.proof-link i { flex: none; }
+.receipt-status-stack { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.receipt-proof-status { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 7px; font-size: 11px; font-weight: 600; line-height: 1.4; background: #fff5da; color: #865b06; }
+.receipt-proof-status.is-rejected { background: #fff0ef; color: #ac3934; }
+.receipt-table td:nth-child(3), .receipt-table td:nth-child(4) { white-space: nowrap; }
+.receipt-table .proof-link { margin-top: 0; font-weight: 500; }
 
 /* Button Styles */
 .btn-secondary-modern {
@@ -924,7 +935,10 @@ include '../../includes/navbar.php';
 
 /* Verify Payment Modal */
 #verifyPaymentModal .modal-dialog {
-    max-width: 560px;
+    width: calc(100% - 40px);
+    max-width: 980px;
+    margin: 20px auto;
+    min-height: calc(100% - 40px);
 }
 
 #verifyPaymentModal .modal-content {
@@ -952,14 +966,47 @@ include '../../includes/navbar.php';
 }
 
 #verifyPaymentModal .modal-body {
-    padding: 1.25rem;
+    padding: 20px;
+    max-height: none;
+    overflow: visible;
 }
 
 #verifyPaymentModal .receipt-payment-modal__intro {
     color: var(--gray-600);
     font-size: 0.88rem;
     line-height: 1.55;
-    margin: 0 0 1.15rem;
+    margin: 0 0 14px;
+}
+
+#verifyPaymentModal .payment-review-layout { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 24px; align-items: start; }
+#verifyPaymentModal .payment-proof-panel { min-width: 0; padding: 14px; border: 1px solid #dce7ef; border-radius: 12px; background: #f5f9fc; }
+#verifyPaymentModal .payment-proof-panel__heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; font-size: 13px; font-weight: 700; }
+#verifyPaymentModal .payment-proof-panel__heading small { color: #63778b; font-size: 11px; font-weight: 500; }
+#verifyPaymentModal .payment-proof-preview { display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); place-items: center; height: clamp(150px, 27vh, 220px); overflow: hidden; border: 1px solid #d7e3ed; border-radius: 8px; background: #e9f0f6; color: #42627b; text-decoration: none; }
+#verifyPaymentModal .payment-proof-preview img { width: 100%; height: 100%; min-height: 0; object-fit: contain; }
+#verifyPaymentModal .payment-proof-placeholder { padding: 16px; text-align: center; font-size: 12px; }
+#verifyPaymentModal .payment-proof-placeholder i { display: block; font-size: 28px; margin-bottom: 8px; }
+#verifyPaymentModal .payment-proof-preview [hidden], #verifyPaymentModal [hidden] { display: none !important; }
+#verifyPaymentModal #submittedProofLink { display: block; margin-top: 8px; color: #1f6392; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#verifyPaymentModal .payment-proof-meta { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 12px; margin: 12px 0 0; font-size: 12px; }
+#verifyPaymentModal .payment-proof-meta dt { color: #63778b; font-weight: 500; }
+#verifyPaymentModal .payment-proof-meta dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+#verifyPaymentModal .payment-review-fields { min-width: 0; display: grid; gap: 12px; }
+#verifyPaymentModal .payment-review-fields__pair { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 12px; }
+#verifyPaymentModal .form-label { display: block; color: #334c62; font-size: 12px; font-weight: 600; margin-bottom: 5px; }
+#verifyPaymentModal .form-control { min-height: 38px; padding: 8px 10px; font-size: 13px; border-radius: 8px; }
+#verifyPaymentModal textarea.form-control { height: 64px; min-height: 64px; resize: none; }
+#verifyPaymentModal .payment-bank-confirmation { display: flex; align-items: flex-start; gap: 9px; padding: 10px 12px; background: #edf5fb; border: 1px solid #d7e6f1; border-radius: 8px; }
+#verifyPaymentModal .payment-bank-confirmation input { flex: none; margin: 3px 0 0; }
+#verifyPaymentModal .payment-bank-confirmation label { color: #35546d; font-size: 12px; line-height: 1.5; }
+#verifyPaymentModal #manualPaymentProof { margin-top: 12px; }
+#verifyPaymentModal .form-text { font-size: 11px; margin-top: 5px; }
+@media (max-width: 700px) {
+    #verifyPaymentModal .modal-dialog { width: calc(100% - 24px); margin: 12px auto; min-height: calc(100% - 24px); }
+    #verifyPaymentModal .payment-review-layout { grid-template-columns: 1fr; gap: 16px; }
+    #verifyPaymentModal .payment-proof-preview { height: 150px; }
+    #verifyPaymentModal .modal-body { padding: 16px; }
+    #verifyPaymentModal .receipt-payment-modal__footer { flex-wrap: wrap; }
 }
 
 #verifyPaymentModal .receipt-payment-upload {
@@ -1198,6 +1245,17 @@ include '../../includes/navbar.php';
     border-color: rgba(138, 210, 255, 0.16);
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #verifyPaymentModal :is(.form-label, .payment-proof-panel__heading) { color: #d7e4f2 !important; }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #verifyPaymentModal :is(.payment-proof-panel, .payment-bank-confirmation) { background: #0c2032; border-color: #294359; }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #verifyPaymentModal .payment-proof-preview { background: #071321; border-color: #294359; color: #9db6cf; }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #verifyPaymentModal :is(.payment-proof-meta dt, .payment-proof-panel__heading small) { color: #9db6cf; }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #verifyPaymentModal :is(.payment-bank-confirmation label, .payment-proof-meta dd) { color: #d7e4f2; }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #verifyPaymentModal #submittedProofLink { color: #83cefa; }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #verifyPaymentModal .form-control { background: #0c2032 !important; border-color: #294359 !important; color: #e3edf7 !important; }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #verifyPaymentModal .form-control::placeholder { color: #8aa3ba; opacity: 1; }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .receipt-proof-status { background: #382e19; color: #f2cc7a; }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .receipt-proof-status.is-rejected { background: #39232c; color: #ffb3b3; }
+
 /* Responsive */
 @media (max-width: 768px) {
     .page-header-modern {
@@ -1375,20 +1433,22 @@ include '../../includes/navbar.php';
                         <td><?php echo !empty($receipt['created_at']) ? date('M d, Y', strtotime((string) $receipt['created_at'])) : 'No date'; ?></td>
                         <td class="fw-semibold">₱<?php echo number_format($receipt['amount_due'], 2); ?></td>
                         <td>
+                          <div class="receipt-status-stack">
                             <span class="badge-status <?php echo htmlspecialchars($receiptStatus); ?>">
                                 <?php echo htmlspecialchars(salesReceiptStatusLabel($receiptStatus)); ?>
                             </span>
                             <?php if (($receipt['payment_proof_status'] ?? '') === 'pending'): ?>
-                                <span class="badge bg-warning text-dark d-block mt-1">Awaiting payment verification</span>
+                                <span class="receipt-proof-status"><i class="fas fa-clock" aria-hidden="true"></i>Awaiting verification</span>
                             <?php elseif (($receipt['payment_proof_status'] ?? '') === 'rejected'): ?>
-                                <span class="badge bg-danger d-block mt-1">Proof rejected — correction requested</span>
+                                <span class="receipt-proof-status is-rejected">Correction requested</span>
                             <?php endif; ?>
                             <?php if ($proofPath !== ''): ?>
                                 <a class="proof-link" href="<?php echo htmlspecialchars(storagePublicUrl($proofPath)); ?>" target="_blank" rel="noopener">
                                     <i class="fas fa-paperclip"></i>
-                                    <?php echo htmlspecialchars($proofName !== '' ? $proofName : 'Payment proof'); ?>
+                                    <span title="<?php echo htmlspecialchars($proofName, ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($proofName !== '' ? $proofName : 'Payment proof'); ?></span>
                                 </a>
                             <?php endif; ?>
+                          </div>
                         </td>
                         <td>
                             <div class="dropdown receipt-action-menu">
@@ -1554,41 +1614,55 @@ include '../../includes/navbar.php';
     </div>
 </div>
 
-<div class="modal fade" id="verifyPaymentModal" tabindex="-1" aria-hidden="true">
+<div class="modal fade" id="verifyPaymentModal" tabindex="-1" aria-hidden="true" aria-labelledby="verifyPaymentTitle">
     <div class="modal-dialog modal-dialog-centered">
         <form method="POST" enctype="multipart/form-data" class="modal-content">
                 <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(paymentProofCsrfToken(), ENT_QUOTES, 'UTF-8'); ?>">
             <div class="modal-header receipt-payment-modal__header">
-                <h5 class="modal-title"><i class="fas fa-file-circle-check me-2"></i>Verify Payment</h5>
+                <h5 class="modal-title" id="verifyPaymentTitle"><i class="fas fa-file-circle-check me-2"></i>Verify Payment</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <input type="hidden" name="receipt_id" id="verify_receipt_id">
                 <input type="hidden" name="review_proof_path" id="review_proof_path">
-                <div id="submittedProofDetails" class="alert alert-info" hidden><a id="submittedProofLink" target="_blank" rel="noopener">View submitted proof</a><p id="submittedProofSummary" class="mb-0 mt-2"></p></div>
-                <p class="receipt-payment-modal__intro">
-                    Review the submitted proof and compare its amount and transaction reference with the actual bank or payment provider record.
-                </p>
-                <div class="mb-3">
-                    <label class="form-label">Receipt #</label>
-                    <input type="text" id="verify_receipt_number" class="form-control" readonly>
-                </div>
-                <div id="manualPaymentProof">
-                    <label class="form-label" for="verifyPaymentProof">Payment Proof</label>
-                    <div class="receipt-payment-upload">
-                        <label class="receipt-payment-upload__button" for="verifyPaymentProof">
-                            <i class="fas fa-paperclip" aria-hidden="true"></i>
-                            <span>Choose File</span>
-                        </label>
-                        <span class="receipt-payment-upload__summary" id="verifyPaymentProofSummary">No file chosen</span>
-                        <input id="verifyPaymentProof" type="file" name="payment_proof" class="receipt-payment-upload__input" accept=".pdf,.png,.jpg,.jpeg,.webp" required>
+                <div class="payment-review-layout">
+                    <section class="payment-proof-panel" aria-label="Payment proof preview">
+                        <div class="payment-proof-panel__heading"><span>Payment proof</span><small id="proofPreviewHint">Click image to enlarge</small></div>
+                        <a id="paymentProofPreview" class="payment-proof-preview" aria-label="Enlarge payment proof">
+                            <img id="paymentProofThumbnail" alt="Payment proof" hidden>
+                            <span id="paymentProofPlaceholder" class="payment-proof-placeholder"><i class="fas fa-image" aria-hidden="true"></i><span id="paymentProofPlaceholderText">Choose a file to preview</span></span>
+                        </a>
+                        <div id="submittedProofDetails" hidden>
+                            <a id="submittedProofLink" target="_blank" rel="noopener">View submitted proof</a>
+                            <dl class="payment-proof-meta">
+                                <dt>Status</dt><dd id="submittedProofStatus"></dd>
+                                <dt>Submitted amount</dt><dd id="submittedProofAmount"></dd>
+                                <dt>Reference</dt><dd id="submittedProofReference"></dd>
+                            </dl>
+                        </div>
+                        <div id="manualPaymentProof">
+                            <label class="form-label" for="verifyPaymentProof">Attach payment proof</label>
+                            <div class="receipt-payment-upload">
+                                <label class="receipt-payment-upload__button" for="verifyPaymentProof"><i class="fas fa-paperclip" aria-hidden="true"></i><span>Choose File</span></label>
+                                <span class="receipt-payment-upload__summary" id="verifyPaymentProofSummary">No file chosen</span>
+                                <input id="verifyPaymentProof" type="file" name="payment_proof" class="receipt-payment-upload__input" accept=".pdf,.png,.jpg,.jpeg,.webp" required>
+                            </div>
+                            <div class="form-text">PDF, PNG, JPG or WEBP · Up to 5 MB</div>
+                        </div>
+                    </section>
+                    <div>
+                        <p class="receipt-payment-modal__intro">Match the proof with the actual bank or payment provider record before confirming payment.</p>
+                        <div class="payment-review-fields">
+                            <div><label class="form-label" for="verify_receipt_number">Receipt number</label><input type="text" id="verify_receipt_number" class="form-control" readonly></div>
+                            <div class="payment-review-fields__pair">
+                                <div><label for="verifiedAmount" class="form-label">Amount received (PHP)</label><input class="form-control" type="number" id="verifiedAmount" name="verified_amount" min="0.01" step="0.01" placeholder="0.00" required></div>
+                                <div><label for="verifiedReference" class="form-label">Verified transaction reference</label><input class="form-control" id="verifiedReference" name="verified_reference" maxlength="150" placeholder="Reference from payment record" required></div>
+                            </div>
+                            <div><label for="paymentReviewNotes" class="form-label">Review notes / reason for rejection</label><textarea class="form-control" id="paymentReviewNotes" name="review_notes" maxlength="2000" rows="2" placeholder="Add your findings; required when rejecting"></textarea></div>
+                            <div class="payment-bank-confirmation"><input class="form-check-input" type="checkbox" id="bankConfirmed" name="bank_confirmed" value="1" required><label for="bankConfirmed">I checked the actual payment record and confirmed this payment was received.</label></div>
+                        </div>
                     </div>
-                    <div class="form-text">Accepted files: PDF, PNG, JPG, JPEG, WEBP. Maximum 5 MB.</div>
                 </div>
-                <div class="mt-3"><label for="verifiedAmount" class="form-label">Amount received in payment record (PHP)</label><input class="form-control" type="number" id="verifiedAmount" name="verified_amount" min="0.01" step="0.01" required></div>
-                <div class="mt-3"><label for="verifiedReference" class="form-label">Verified transaction reference</label><input class="form-control" id="verifiedReference" name="verified_reference" maxlength="150" required></div>
-                <div class="mt-3"><label for="paymentReviewNotes" class="form-label">Review notes / reason for rejection</label><textarea class="form-control" id="paymentReviewNotes" name="review_notes" maxlength="2000" rows="3"></textarea></div>
-                <div class="form-check mt-3"><input class="form-check-input" type="checkbox" id="bankConfirmed" name="bank_confirmed" value="1" required><label class="form-check-label" for="bankConfirmed">I checked the actual bank or payment provider record and confirmed that this payment was received.</label></div>
             </div>
             <div class="modal-footer receipt-payment-modal__footer">
                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -1629,7 +1703,55 @@ function editReceipt(receipt) {
     showReceiptModal('editReceiptModal');
 }
 
+let paymentProofObjectUrl = null;
+let currentPaymentProof = {};
+
+function updatePaymentProofPreview(url, name, isImage) {
+    const preview = document.getElementById('paymentProofPreview');
+    const thumbnail = document.getElementById('paymentProofThumbnail');
+    const placeholder = document.getElementById('paymentProofPlaceholder');
+    const placeholderText = document.getElementById('paymentProofPlaceholderText');
+    const hint = document.getElementById('proofPreviewHint');
+    thumbnail.onload = null;
+    thumbnail.onerror = null;
+    thumbnail.hidden = true;
+    thumbnail.removeAttribute('src');
+    placeholder.hidden = false;
+    preview.removeAttribute('href');
+    preview.removeAttribute('data-image-preview');
+    preview.removeAttribute('target');
+    preview.dataset.imageTitle = name || 'Payment proof';
+    if (!url) {
+        placeholderText.textContent = 'Choose a file to preview';
+        hint.textContent = 'No file selected';
+        return;
+    }
+    preview.href = url;
+    preview.setAttribute('aria-label', isImage ? 'Enlarge payment proof' : 'Open payment proof PDF');
+    if (isImage) {
+        preview.setAttribute('data-image-preview', '');
+        placeholderText.textContent = 'Loading preview…';
+        hint.textContent = 'Click image to enlarge';
+        thumbnail.onload = () => { thumbnail.hidden = false; placeholder.hidden = true; };
+        thumbnail.onerror = () => { placeholderText.textContent = 'Preview unavailable. Click to open.'; };
+        thumbnail.alt = name || 'Payment proof';
+        thumbnail.src = url;
+    } else {
+        preview.target = '_blank';
+        preview.rel = 'noopener';
+        placeholderText.textContent = 'PDF document · Click to open';
+        hint.textContent = 'PDF attachment';
+    }
+}
+
+function receiptProofIsImage(proof) {
+    return /\.(png|jpe?g|webp|gif|avif)$/i.test(proof.name || proof.path || '');
+}
+
 function verifyPayment(id, receiptNumber, proof = {}) {
+    if (paymentProofObjectUrl) URL.revokeObjectURL(paymentProofObjectUrl);
+    paymentProofObjectUrl = null;
+    currentPaymentProof = proof;
     document.getElementById('verify_receipt_id').value = id || '';
     document.getElementById('verify_receipt_number').value = receiptNumber || '';
     const proofInput = document.getElementById('verifyPaymentProof');
@@ -1642,7 +1764,11 @@ function verifyPayment(id, receiptNumber, proof = {}) {
     const link = document.getElementById('submittedProofLink');
     link.href = proof.url || '#';
     link.textContent = proof.name || 'View submitted proof';
-    document.getElementById('submittedProofSummary').textContent = `${proof.status || 'No proof'} · PHP ${proof.amount || '0.00'} · Reference: ${proof.reference || 'Not supplied'}`;
+    link.title = proof.name || 'View submitted proof';
+    document.getElementById('submittedProofStatus').textContent = { pending: 'Awaiting verification', rejected: 'Correction requested', verified: 'Verified' }[proof.status] || 'Attached by Sales';
+    document.getElementById('submittedProofAmount').textContent = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(Number(proof.amount || 0));
+    document.getElementById('submittedProofReference').textContent = proof.reference || 'Not supplied';
+    updatePaymentProofPreview(proof.url, proof.name, receiptProofIsImage(proof));
     document.getElementById('manualPaymentProof').hidden = pending;
     proofInput.required = !pending;
     document.getElementById('verifiedAmount').value = '';
@@ -1657,6 +1783,21 @@ document.getElementById('verifyPaymentProof')?.addEventListener('change', functi
     const summary = document.getElementById('verifyPaymentProofSummary');
     if (!summary) return;
     summary.textContent = this.files?.[0]?.name || 'No file chosen';
+    if (paymentProofObjectUrl) URL.revokeObjectURL(paymentProofObjectUrl);
+    paymentProofObjectUrl = null;
+    const file = this.files?.[0];
+    if (file) {
+        paymentProofObjectUrl = URL.createObjectURL(file);
+        updatePaymentProofPreview(paymentProofObjectUrl, file.name, file.type.startsWith('image/'));
+    } else {
+        updatePaymentProofPreview(currentPaymentProof.url, currentPaymentProof.name, receiptProofIsImage(currentPaymentProof));
+    }
+});
+
+document.getElementById('verifyPaymentModal')?.addEventListener('hidden.bs.modal', () => {
+    if (paymentProofObjectUrl) URL.revokeObjectURL(paymentProofObjectUrl);
+    paymentProofObjectUrl = null;
+    updatePaymentProofPreview('', '', false);
 });
 
 document.getElementById('receiptPageSize')?.addEventListener('change', function () {
