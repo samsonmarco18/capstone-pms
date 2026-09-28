@@ -297,6 +297,7 @@ CREATE TABLE methodology_phases (
     end_date DATE NOT NULL,
     developer_count INT DEFAULT 0,
     sequence_no INT DEFAULT 0,
+    is_final_phase TINYINT(1) NOT NULL DEFAULT 0,
     status ENUM('planned', 'in_progress', 'completed', 'on_hold') DEFAULT 'planned',
     created_by INT NULL,
     updated_by INT NULL,
@@ -794,6 +795,20 @@ CREATE TABLE files (
     FOREIGN KEY (uploaded_by) REFERENCES users(id) ON DELETE RESTRICT,
     INDEX idx_folder_id (folder_id),
     INDEX idx_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
+-- UPLOAD BLOBS TABLE (FILE CONTENT STORAGE)
+-- =====================================================
+CREATE TABLE upload_blobs (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    relative_path VARCHAR(500) NOT NULL UNIQUE,
+    original_name VARCHAR(255),
+    mime_type VARCHAR(100),
+    file_size BIGINT NOT NULL DEFAULT 0,
+    content_base64 LONGTEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =====================================================

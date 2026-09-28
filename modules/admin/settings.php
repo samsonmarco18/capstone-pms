@@ -212,7 +212,9 @@ function backupBuildDataDump(mysqli|PgsqlMysqliCompatConnection $conn, string $t
         $lines[] = '-- Table: ' . $table;
         $targetTable = backupSqlIdentifier($table, $targetDriver);
         if ($targetDriver === 'mysql' && $truncateTables) {
-            $lines[] = 'truncate table ' . $targetTable . ';';
+            // DELETE works with related InnoDB tables while foreign-key checks
+            // are disabled; TRUNCATE can still be rejected for referenced tables.
+            $lines[] = 'DELETE FROM ' . $targetTable . ';';
         }
 
         if ($rows === []) {
@@ -229,10 +231,32 @@ function backupBuildDataDump(mysqli|PgsqlMysqliCompatConnection $conn, string $t
         foreach ($rows as $row) {
             $values = [];
             foreach ($columnNames as $columnName) {
-                $values[] = backupSqlValue($row[$columnName] ?? null, $columnTypes[$columnName] ?? '', $targetDriver);
+                // File contents can exceed MariaDB's default max_allowed_packet.
+                // Insert the row first, then append the base64 content in safe chunks.
+                $isChunkedUploadContent = $targetDriver === 'mysql'
+                    && $table === 'upload_blobs'
+                    && $columnName === 'content_base64'
+                    && isset($row['id'])
+                    && strlen((string) ($row[$columnName] ?? '')) > 1024 * 1024;
+                $values[] = $isChunkedUploadContent
+                    ? "''"
+                    : backupSqlValue($row[$columnName] ?? null, $columnTypes[$columnName] ?? '', $targetDriver);
             }
 
             $lines[] = 'INSERT INTO ' . $targetTable . ' (' . $targetColumns . ') VALUES (' . implode(', ', $values) . ');';
+
+            if ($targetDriver === 'mysql'
+                && $table === 'upload_blobs'
+                && isset($row['id'])
+                && strlen((string) ($row['content_base64'] ?? '')) > 1024 * 1024
+            ) {
+                $id = (int) $row['id'];
+                foreach (str_split((string) $row['content_base64'], 1024 * 1024) as $chunk) {
+                    $lines[] = 'UPDATE ' . $targetTable
+                        . ' SET `content_base64` = CONCAT(`content_base64`, ' . backupSqlValue($chunk, 'text', 'mysql') . ')'
+                        . ' WHERE `id` = ' . $id . ';';
+                }
+            }
         }
         $lines[] = '';
     }
