@@ -309,7 +309,10 @@ function backupSendDualFormatDownload(mysqli|PgsqlMysqliCompatConnection $conn, 
     $baseName = 'erni_pms_backup_' . $timestamp;
     $entries = DB_DRIVER === 'mysql'
         ? [$baseName . '_mysql_complete.sql' => backupBuildMySqlCompleteDump($conn)]
-        : [$baseName . '_postgresql_data.sql' => backupBuildDataDump($conn, 'pgsql')];
+        : [
+            $baseName . '_mysql_data.sql' => backupBuildDataDump($conn, 'mysql'),
+            $baseName . '_postgresql_data.sql' => backupBuildDataDump($conn, 'pgsql'),
+        ];
 
     $mysqlSchema = realpath(__DIR__ . '/../../database.sql');
     if (DB_DRIVER !== 'mysql' && $mysqlSchema !== false && is_file($mysqlSchema)) {
@@ -323,11 +326,11 @@ function backupSendDualFormatDownload(mysqli|PgsqlMysqliCompatConnection $conn, 
 
     $entries['README.txt'] = DB_DRIVER === 'mysql'
         ? "Import the *_mysql_complete.sql file into MySQL or MariaDB. It recreates every table using the live schema, then restores its data.\nGenerated at {$timestamp}.\n"
-        : "This archive contains live ERNI PMS PostgreSQL data and the project schema files when available.\nGenerated at {$timestamp} from source driver " . DB_DRIVER . ".\n";
+        : "This archive contains both MySQL and PostgreSQL data exports. Import schema_mysql_database.sql before *_mysql_data.sql, or schema_postgresql_database.sql before *_postgresql_data.sql.\nGenerated at {$timestamp} from source driver " . DB_DRIVER . ".\n";
     $archive = backupBuildZipArchive($entries);
 
     logActivity((int) $user['id'], 'database_backup_download', 'system', 0, null, [
-        'formats' => DB_DRIVER === 'mysql' ? ['mysql_complete'] : ['postgresql_data'],
+        'formats' => DB_DRIVER === 'mysql' ? ['mysql_complete'] : ['mysql_data', 'postgresql_data'],
         'source_driver' => DB_DRIVER,
     ]);
 
