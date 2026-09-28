@@ -88,6 +88,11 @@ function backupSqlStringLiteral(string $value, string $driver): string
 function backupFetchRows(mysqli|PgsqlMysqliCompatConnection $conn, string $sql): array
 {
     $result = $conn->query($sql);
+    if ($result === false) {
+        $error = trim((string) ($conn->error ?? ''));
+        throw new RuntimeException('Backup query failed' . ($error !== '' ? ': ' . $error : '.'));
+    }
+
     if ($result instanceof mysqli_result || $result instanceof PgsqlMysqliCompatResult) {
         return $result->fetch_all(MYSQLI_ASSOC);
     }
@@ -212,9 +217,7 @@ function backupBuildDataDump(mysqli|PgsqlMysqliCompatConnection $conn, string $t
         $lines[] = '-- Table: ' . $table;
         $targetTable = backupSqlIdentifier($table, $targetDriver);
         if ($targetDriver === 'mysql' && $truncateTables) {
-            // DELETE works with related InnoDB tables while foreign-key checks
-            // are disabled; TRUNCATE can still be rejected for referenced tables.
-            $lines[] = 'DELETE FROM ' . $targetTable . ';';
+            $lines[] = 'TRUNCATE TABLE ' . $targetTable . ';';
         }
 
         if ($rows === []) {
