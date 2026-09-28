@@ -103,7 +103,7 @@ function normalizeMailSettingValue(string $name, mixed $value): ?string
 
 function getMailConfig(): array
 {
-    $companyName = getAppSetting('company_name', 'ERNI Development Center Philippines Inc.') ?? 'ERNI Development Center Philippines Inc.';
+    $companyName = getAppSetting('company_name', 'ERNI Development Center Philippines, Inc.') ?? 'ERNI Development Center Philippines, Inc.';
     $notificationEmail = getAppSetting('notification_email', '') ?? '';
     $envEnabled = getMailSetting('MAIL_ENABLED', '');
     $envHost = getMailSetting('MAIL_HOST', '');
@@ -129,6 +129,9 @@ function getMailConfig(): array
             ? $configuredFromEmail
             : (filter_var($username, FILTER_VALIDATE_EMAIL) ? $username : $notificationEmail));
     $fromName = $envFromName !== '' ? $envFromName : trim((string) getAppSetting('mail_from_name', $companyName));
+    if ($fromName === '' || preg_match('/evortix|erni development center philippines/i', $fromName)) {
+        $fromName = 'ERNI Development Center Philippines, Inc.';
+    }
     $enabledRaw = strtolower($envEnabled !== '' ? $envEnabled : trim((string) getAppSetting('mail_enabled', '0')));
 
     if ($port <= 0) {
@@ -169,7 +172,7 @@ function getMailConfig(): array
         'username' => $username,
         'password' => normalizeMailPassword($host, $password),
         'from_email' => $fromEmail,
-        'from_name' => $fromName !== '' ? $fromName : 'ERNI Development Center Philippines Inc.',
+        'from_name' => $fromName !== '' ? $fromName : 'ERNI Development Center Philippines, Inc.',
         'verify_peer' => !in_array($verifyPeerRaw, ['0', 'false', 'no', 'off'], true),
         'timeout' => $timeout,
         'delivery_method' => $deliveryMethod,
@@ -330,7 +333,7 @@ function sendSystemEmail(string|array $to, string $subject, string $htmlBody, ?s
         'MIME-Version: 1.0',
         'Content-Type: ' . ($attachments !== [] ? 'multipart/mixed; boundary="' . $mixedBoundary . '"' : 'multipart/alternative; boundary="' . $boundary . '"'),
         'Message-ID: <' . bin2hex(random_bytes(10)) . '@' . $messageIdHost . '>',
-        'X-Mailer: ERNI Development Center Philippines Inc. SMTP Mailer',
+        'X-Mailer: ERNI Development Center Philippines, Inc. SMTP Mailer',
     ];
 
     $message = implode("\r\n", $headers) . "\r\n\r\n";
@@ -793,7 +796,7 @@ function sendNotificationEmailToUser(int $userId, string $title, string $message
 
         $fullName = trim((string) ($user['full_name'] ?? 'Team Member'));
         $url = buildNotificationUrl($actionUrl);
-        $subject = '[ERNI Development Center Philippines Inc.] ' . $title;
+        $subject = '[ERNI Development Center Philippines, Inc.] ' . $title;
         $safeTitle = htmlspecialchars($title, ENT_QUOTES, 'UTF-8');
         $safeName = htmlspecialchars($fullName, ENT_QUOTES, 'UTF-8');
         $safeMessage = nl2br(htmlspecialchars($message, ENT_QUOTES, 'UTF-8'));
@@ -806,15 +809,15 @@ function sendNotificationEmailToUser(int $userId, string $title, string $message
 
         if ($url !== null) {
             $htmlBody .= '<p style="margin:0 0 16px;"><a href="' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . '" '
-                . 'style="display:inline-block;background:#1f6392;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:10px;">Open in ERNI Development Center Philippines Inc.</a></p>';
+                . 'style="display:inline-block;background:#1f6392;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:10px;">Open in ERNI Development Center Philippines, Inc.</a></p>';
         }
 
-        $htmlBody .= '<p style="margin:16px 0 0;color:#64748b;font-size:13px;">This email was sent automatically by ERNI Development Center Philippines Inc.</p>'
+        $htmlBody .= '<p style="margin:16px 0 0;color:#64748b;font-size:13px;">This email was sent automatically by ERNI Development Center Philippines, Inc.</p>'
             . '</div></div>';
 
         $textBody = "Hello {$fullName},\n\n{$title}\n\n{$message}";
         if ($url !== null) {
-            $textBody .= "\n\nOpen in ERNI Development Center Philippines Inc.: {$url}";
+            $textBody .= "\n\nOpen in ERNI Development Center Philippines, Inc.: {$url}";
         }
 
         $result = sendSystemEmail($email, $subject, $htmlBody, $textBody);

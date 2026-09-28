@@ -219,23 +219,23 @@ function salesClientsSendProjectStartingEmail(
             . '</tr>';
     }
 
-    $subject = 'Your EVORTIX project is starting: ' . $projectLabel;
+    $subject = 'ERNI Development Center Philippines, Inc. project is starting: ' . $projectLabel;
     $htmlBody = '<div style="font-family:Arial,sans-serif;max-width:660px;margin:0 auto;padding:24px;background:#f5f7fb;color:#1f2937;">'
         . '<div style="background:#ffffff;border:1px solid #dbe3ef;border-radius:16px;padding:24px;">'
         . '<h2 style="margin:0 0 12px;color:#1f6392;">Your project is starting</h2>'
         . '<p style="margin:0 0 12px;line-height:1.6;">Good day ' . $safeRecipientName . ',</p>'
-        . '<p style="margin:0 0 16px;line-height:1.6;">Thank you for trusting EVORTIX. We have created your project record for <strong>' . $safeProjectLabel . '</strong>, and our team is starting the planning and review process.</p>'
+        . '<p style="margin:0 0 16px;line-height:1.6;">Thank you for trusting ERNI Development Center Philippines, Inc. We have created your project record for <strong>' . $safeProjectLabel . '</strong>, and our team is starting the planning and review process.</p>'
         . '<table role="presentation" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;margin:16px 0;background:#f8fafc;border:1px solid #e5edf5;border-radius:12px;overflow:hidden;">'
         . $detailRows
         . '</table>'
         . '<p style="margin:16px 0 0;line-height:1.6;">We will contact you if we need additional details before the next project step.</p>'
-        . '<p style="margin:16px 0 0;color:#64748b;font-size:13px;">This email was sent automatically by EVORTIX PMS.</p>'
+        . '<p style="margin:16px 0 0;color:#64748b;font-size:13px;">This email was sent automatically by ERNI Development Center Philippines, Inc..</p>'
         . '</div></div>';
 
     $textLines = [
         'Good day ' . $recipientName . ',',
         '',
-        'Thank you for trusting EVORTIX. We have created your project record for ' . $projectLabel . ', and our team is starting the planning and review process.',
+        'Thank you for trusting ERNI Development Center Philippines, Inc. We have created your project record for ' . $projectLabel . ', and our team is starting the planning and review process.',
         '',
         'Project details:',
     ];

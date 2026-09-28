@@ -1,6 +1,7 @@
 <?php
 require_once '../../includes/auth.php';
 require_once '../../includes/file-storage.php';
+require_once '../../includes/receipt-excel.php';
 requireRole('sales');
 
 $conn = getConnection();
@@ -75,33 +76,6 @@ function salesReceiptFetchForDelivery(mysqli|PgsqlMysqliCompatConnection $conn, 
     return $receipt ?: null;
 }
 
-function salesReceiptRenderHtml(array $receipt, bool $official = false): string
-{
-    $clientName = (string) (($receipt['client_name'] ?? '') ?: ($receipt['fallback_client_name'] ?? 'Client'));
-    $clientEmail = (string) (($receipt['client_email'] ?? '') ?: ($receipt['fallback_client_email'] ?? ''));
-    $amountDue = (float) (($receipt['amount_due'] ?? null) ?: ($receipt['total_cost'] ?? 0));
-    $dueDate = !empty($receipt['due_date']) ? date('M d, Y', strtotime((string) $receipt['due_date'])) : 'Not set';
-    $title = $official ? 'Official Paid Receipt' : 'Billing Receipt for Payment Review';
-
-    $html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Receipt #' . htmlspecialchars((string) $receipt['receipt_number']) . '</title>';
-    $html .= '<style>body{font-family:Arial,sans-serif;color:#1f2937;padding:40px}.wrap{max-width:760px;margin:auto}.head{border-bottom:3px solid #1f6392;padding-bottom:20px;margin-bottom:28px}.brand{font-size:24px;font-weight:700;color:#1f6392}.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px}.box{border:1px solid #d1d5db;border-radius:8px;padding:16px}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{border:1px solid #d1d5db;padding:12px;text-align:left}th{background:#f3f4f6}.total{font-size:20px;font-weight:700;color:#1f6392}.notice{padding:12px 14px;background:#eef6ff;border:1px solid #bfdbfe;border-radius:8px;margin:18px 0}</style>';
-    $html .= '</head><body><div class="wrap"><div class="head"><div class="brand">EVORTIX</div><h1>' . htmlspecialchars($title) . '</h1><p>Receipt # ' . htmlspecialchars((string) $receipt['receipt_number']) . '</p><p>Status: ' . htmlspecialchars(salesReceiptStatusLabel((string) $receipt['status'])) . '</p></div>';
-    if (!$official) {
-        $html .= '<div class="notice">Please review this billing receipt and send your payment confirmation or proof of payment to Sales. The official paid receipt will be issued after Sales verifies the payment.</div>';
-    }
-    $html .= '<div class="grid"><div class="box"><strong>Bill To</strong><br>' . htmlspecialchars($clientName) . '<br>' . htmlspecialchars($clientEmail) . '</div><div class="box"><strong>Project</strong><br>' . htmlspecialchars((string) $receipt['project_name']) . '<br>Due: ' . htmlspecialchars($dueDate) . '</div></div>';
-    $html .= '<table><thead><tr><th>Description</th><th>Amount</th></tr></thead><tbody><tr><td>Final project delivery</td><td>$' . number_format($amountDue, 2) . '</td></tr><tr><td class="total">Total Amount Due</td><td class="total">$' . number_format($amountDue, 2) . '</td></tr></tbody></table>';
-    if (!empty($receipt['notes'])) {
-        $html .= '<p><strong>Notes:</strong> ' . htmlspecialchars((string) $receipt['notes']) . '</p>';
-    }
-    if ($official && !empty($receipt['payment_verified_at'])) {
-        $html .= '<p><strong>Payment verified:</strong> ' . htmlspecialchars(date('M d, Y h:i A', strtotime((string) $receipt['payment_verified_at']))) . '</p>';
-    }
-    $html .= '</div></body></html>';
-
-    return $html;
-}
-
 function salesReceiptDownload(mysqli|PgsqlMysqliCompatConnection $conn, int $receiptId): void
 {
     $receipt = salesReceiptFetchForDelivery($conn, $receiptId);
@@ -111,10 +85,10 @@ function salesReceiptDownload(mysqli|PgsqlMysqliCompatConnection $conn, int $rec
     }
 
     $receiptNumber = preg_replace('/[^A-Za-z0-9_-]/', '_', (string) ($receipt['receipt_number'] ?? 'receipt'));
-    header('Content-Type: text/html; charset=utf-8');
-    header('Content-Disposition: attachment; filename="receipt_' . $receiptNumber . '.html"');
+    header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    header('Content-Disposition: attachment; filename="receipt_' . $receiptNumber . '.xlsx"');
     header('Cache-Control: no-store, no-cache, must-revalidate');
-    echo salesReceiptRenderHtml($receipt, (string) ($receipt['status'] ?? '') === 'paid');
+    echo salesReceiptRenderExcel($receipt, (string) ($receipt['status'] ?? '') === 'paid');
     exit;
 }
 
@@ -130,17 +104,17 @@ function salesReceiptSendToClient(mysqli|PgsqlMysqliCompatConnection $conn, int 
         return ['success' => false, 'error' => 'Client email is missing or invalid.'];
     }
 
-    $receiptHtml = salesReceiptRenderHtml($receipt, false);
+    $receiptExcel = salesReceiptRenderExcel($receipt, false);
     $receiptNumber = preg_replace('/[^A-Za-z0-9_-]/', '_', (string) ($receipt['receipt_number'] ?? 'receipt'));
-    $subject = 'EVORTIX PMS Billing Receipt #' . (string) ($receipt['receipt_number'] ?? '');
+    $subject = 'ERNI Development Center Philippines, Inc. Billing Receipt #' . (string) ($receipt['receipt_number'] ?? '');
     $body = '<div style="font-family:Arial,sans-serif;line-height:1.6;color:#1f2937;">'
         . '<h2 style="color:#1f6392;">Billing receipt for review</h2>'
         . '<p>Good day,</p>'
         . '<p>Please review the attached billing receipt. Kindly reply to this email with your payment confirmation or proof of payment.</p>'
         . '<p>Sales will verify the payment first before issuing the official paid receipt.</p>'
-        . '<p>Thank you.</p>'
+        . '<p>Thank you.<br>ERNI Development Center Philippines, Inc.</p>'
         . '</div>';
-    $text = "Please review the attached billing receipt and reply with your payment confirmation or proof of payment. Sales will verify payment before issuing the official paid receipt.";
+    $text = "Please review the attached billing receipt and reply with your payment confirmation or proof of payment. Sales will verify payment before issuing the official paid receipt.\n\nERNI Development Center Philippines, Inc.";
 
     return sendSystemEmail(
         $clientEmail,
@@ -148,9 +122,9 @@ function salesReceiptSendToClient(mysqli|PgsqlMysqliCompatConnection $conn, int 
         $body,
         $text,
         [[
-            'name' => 'billing_receipt_' . $receiptNumber . '.html',
-            'mime' => 'text/html',
-            'content' => $receiptHtml,
+            'name' => 'billing_receipt_' . $receiptNumber . '.xlsx',
+            'mime' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'content' => $receiptExcel,
         ]]
     );
 }
@@ -239,7 +213,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['save_receipt_review'
                 throw new RuntimeException('Receipt not found.');
             }
 
-            $amountPaid = (float) (($receiptData['amount_due'] ?? null) ?: ($receiptData['total_cost'] ?? 0));
+            $amountPaid = (float) ($receiptData['amount_due'] ?? $receiptData['total_cost'] ?? 0);
             $proofName = (string) $proof['name'];
             $proofPath = (string) $proof['path'];
             $verifiedBy = (int) ($user['id'] ?? 0);
@@ -1356,9 +1330,9 @@ include '../../includes/navbar.php';
             <div class="stat-number"><?php echo $totalReceipts; ?></div>
         </div>
         <div class="stat-card-modern">
-            <i class="fas fa-dollar-sign stat-icon"></i>
+            <i class="fas fa-peso-sign stat-icon"></i>
             <div class="stat-label">Total Amount</div>
-            <div class="stat-number">$<?php echo number_format($totalAmount ?? 0, 0); ?></div>
+            <div class="stat-number">₱<?php echo number_format($totalAmount ?? 0, 0); ?></div>
         </div>
         <div class="stat-card-modern">
             <i class="fas fa-check-circle stat-icon"></i>
@@ -1427,7 +1401,7 @@ include '../../includes/navbar.php';
                             <div class="client-name"><?php echo htmlspecialchars((string) ($receipt['display_client_name'] ?? $receipt['client_name'] ?? '')); ?></div>
                         </td>
                         <td><?php echo !empty($receipt['created_at']) ? date('M d, Y', strtotime((string) $receipt['created_at'])) : 'No date'; ?></td>
-                        <td class="fw-semibold">$<?php echo number_format($receipt['amount_due'], 2); ?></td>
+                        <td class="fw-semibold">₱<?php echo number_format($receipt['amount_due'], 2); ?></td>
                         <td>
                             <span class="badge-status <?php echo htmlspecialchars($receiptStatus); ?>">
                                 <?php echo htmlspecialchars(salesReceiptStatusLabel($receiptStatus)); ?>
@@ -1465,7 +1439,7 @@ include '../../includes/navbar.php';
                                     <li>
                                         <a href="?download=1&receipt_id=<?php echo (int) $receipt['id']; ?>" class="dropdown-item" target="_blank">
                                             <i class="fas fa-download" aria-hidden="true"></i>
-                                            Download Receipt
+                                            Download Excel Receipt
                                         </a>
                                     </li>
                                     <?php if ($receiptStatus === 'draft'): ?>
@@ -1570,7 +1544,7 @@ include '../../includes/navbar.php';
                 </div>
                 <div class="row g-3">
                     <div class="col-md-6">
-                        <label class="form-label">Amount Due</label>
+                        <label class="form-label">Amount Due (PHP)</label>
                         <input type="number" name="amount_due" id="edit_receipt_amount_due" class="form-control" min="0" step="0.01" required>
                     </div>
                     <div class="col-md-6">

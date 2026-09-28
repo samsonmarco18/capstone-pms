@@ -1,5 +1,5 @@
 <?php
-header('Content-Type: text/html');
+header('Content-Type: text/html; charset=utf-8');
 require_once '../includes/auth.php';
 requireRole('sales');
 
@@ -42,8 +42,8 @@ while ($tech = $techQuery->fetch_assoc()) {
         <tr>
             <td>' . htmlspecialchars($tech['name']) . ' (' . htmlspecialchars($tech['service_type']) . ')</td>
             <td>' . ($tech['quantity'] ?: 1) . '</td>
-            <td>$' . number_format($tech['estimated_cost'], 2) . '</td>
-            <td>$' . number_format($amount, 2) . '</td>
+            <td>₱' . number_format($tech['estimated_cost'], 2) . '</td>
+            <td>₱' . number_format($amount, 2) . '</td>
         </tr>';
 }
 
@@ -61,8 +61,8 @@ while ($alloc = $allocQuery->fetch_assoc()) {
         <tr>
             <td>' . htmlspecialchars($alloc['role']) . '</td>
             <td>' . $alloc['required_count'] . '</td>
-            <td>$' . number_format($dailyRate * 22, 2) . '/month</td>
-            <td>$' . number_format($monthlyCost, 2) . '</td>
+            <td>₱' . number_format($dailyRate * 22, 2) . '/month</td>
+            <td>₱' . number_format($monthlyCost, 2) . '</td>
         </tr>';
 }
 
@@ -102,7 +102,7 @@ echo '
 <body>
     <div class="receipt-container">
         <div class="header">
-            <div class="company">ERNI Development Center Philippines Inc.</div>
+            <div class="company">ERNI Development Center Philippines, Inc.</div>
             <div style="font-size: 18px; margin: 10px 0;">' . htmlspecialchars($receiptTitle) . '</div>
             <div style="font-size: 16px; margin-bottom: 10px;">Receipt # ' . htmlspecialchars($receipt['receipt_number']) . '</div>
             <div>Date: ' . date('F d, Y') . ' | Time: ' . date('h:i A') . '</div>
@@ -138,36 +138,25 @@ echo '
                 ' . $devRows . '
                 <tr class="total-row">
                     <td colspan="3"><strong>TOTAL AMOUNT DUE</strong></td>
-                    <td class="total-amount">$' . number_format($totalAmount, 2) . '</td>
+                    <td class="total-amount">₱' . number_format($totalAmount, 2) . '</td>
                 </tr>
             </tbody>
         </table>
 
         <div class="footer">
-            <p>Thank you for choosing ERNI Development Center Philippines Inc.</p>
+            <p>Thank you for choosing ERNI Development Center Philippines, Inc.</p>
             <p>Payment Terms: Net 30 days | VAT inclusive</p>
             <p>Questions? Contact billing@erni-pms.com</p>
             <button onclick="printReceipt()" class="no-print btn btn-primary">Print Receipt</button>
-            <button onclick="downloadPDF()" class="no-print btn btn-success ml-2">Download PDF</button>
+            <a href="../modules/sales/receipt.php?download=1&amp;receipt_id=' . (int) $receipt['id'] . '" class="no-print btn btn-success ml-2">Download Excel Receipt</a>
         </div>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script>
         function printReceipt() {
             window.print();
         }
 
-        function downloadPDF() {
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF();
-            doc.html(document.querySelector(".receipt-container"), {
-                callback: function (doc) {
-                    doc.save("receipt_' . $receipt['receipt_number'] . '.pdf");
-                },
-                x: 10, y: 10, width: 190, windowWidth: 800
-            });
-        }
     </script>
 </body>
 </html>';
