@@ -126,7 +126,8 @@ try {
         $archiveRef,
         (string) ($repository['external_remote_url'] ?? ''),
         (string) ($repository['webhook_token'] ?? ''),
-        $user
+        $user,
+        (string) ($repository['default_branch_name'] ?: 'main')
     );
 
     $archivePath = (string) $archive['archive_path'];

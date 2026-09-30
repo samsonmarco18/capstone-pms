@@ -219,8 +219,9 @@ function paymentProofReview(mysqli|PgsqlMysqliCompatConnection $conn, int $id, i
             if (!$stmt) throw new RuntimeException('Unable to reject payment proof.');
             $stmt->bind_param('si', $notes, $id);
         } else {
-            $amount = paymentProofAmount($input['verified_amount'] ?? '');
-            $reference = paymentProofReference($input['verified_reference'] ?? '');
+            // Submitted proof is already the source of truth; Sales confirms it once.
+            $amount = paymentProofAmount($pending ? $receipt['payment_proof_amount'] : ($input['verified_amount'] ?? ''));
+            $reference = paymentProofReference($pending ? $receipt['payment_proof_reference'] : ($input['verified_reference'] ?? ''));
             paymentProofValidateApproval($receipt, $amount, $reference, ($input['bank_confirmed'] ?? '') === '1');
             if (!$pending) {
                 $newProof = salesReceiptSavePaymentProof($file);

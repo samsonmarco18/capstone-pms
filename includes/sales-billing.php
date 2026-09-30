@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/project-estimation.php';
 
 function salesBillingEnsureSchema(mysqli|PgsqlMysqliCompatConnection $conn): void
 {
@@ -16,14 +17,13 @@ function salesBillingCents(mixed $value): int
     if (!is_scalar($value) || !is_numeric($value) || !is_finite((float) $value) || (float) $value < 0 || (float) $value > 9999999999.99) {
         throw new RuntimeException('Costs must be valid, non-negative peso amounts.');
     }
-    return (int) round((float) $value * 100);
+    return projectPricingScaled((string) $value, 2);
 }
 
 function salesBillingCurrentCosts(mysqli|PgsqlMysqliCompatConnection $conn, int $projectId): array
 {
-    $tech = $conn->query("SELECT COALESCE(SUM(estimated_cost), 0) AS total FROM tech_recommendations WHERE project_id = {$projectId}")->fetch_assoc();
-    $team = $conn->query("SELECT MAX(COALESCE(developer_count, 0)) AS total FROM methodology_phases WHERE project_id = {$projectId}")->fetch_assoc();
-    return ['technology_cost' => salesBillingCents($tech['total']), 'developer_cost' => max(0, (int) ($team['total'] ?? 0)) * 1500000, 'resource_cost' => salesBillingCents($tech['total'])];
+    $pricing = projectEstimationProjectPricing($conn, $projectId);
+    return ['technology_cost' => salesBillingCents($pricing['technology_cost']), 'developer_cost' => salesBillingCents($pricing['development_cost']), 'resource_cost' => 0];
 }
 
 /** Snapshots are cumulative high-water marks; reductions never rebill old costs. */
@@ -64,6 +64,11 @@ function salesBillingDelta(array $current, array $baseline, array $fees): array
         $delta['total'] += $new;
         $snapshot['base'][$key] = max($alreadyBilled, (int) ($current[$key] ?? 0));
     }
+    // Apply overhead and profit to the project costs, preserving cumulative billing.
+    $priorDirect = $baseline['base']['technology_cost'] + $baseline['base']['developer_cost'];
+    $nextDirect = $snapshot['base']['technology_cost'] + $snapshot['base']['developer_cost'];
+    $delta['total'] = intdiv($nextDirect * 132 + 50, 100) - intdiv($priorDirect * 132 + 50, 100)
+        + $delta['base']['resource_cost'];
     $seen = [];
     foreach ($fees as $fee) {
         if (!is_array($fee)) throw new RuntimeException('Invalid billable addition.');
@@ -109,10 +114,10 @@ function salesBillingCreateReport(mysqli|PgsqlMysqliCompatConnection $conn, int 
         if ($expectedBase !== null && $expectedBase !== $current) throw new RuntimeException('The project costs changed while this form was open. Review the refreshed amounts before saving.');
         $delta = salesBillingDelta($current, $baseline, $fees);
         if ($delta['total'] <= 0) throw new RuntimeException('These project costs have already been billed. Add a new billable item or increase the project scope before creating another report.');
-        $technology = $delta['base']['technology_cost'] / 100;
-        $developers = $delta['base']['developer_cost'] / 100;
-        $resources = $delta['base']['resource_cost'] / 100;
-        $total = $delta['total'] / 100;
+        $technology = projectPricingMoney($delta['base']['technology_cost']);
+        $developers = projectPricingMoney($delta['base']['developer_cost']);
+        $resources = projectPricingMoney($delta['base']['resource_cost']);
+        $total = projectPricingMoney($delta['total']);
         $other = json_encode($delta['additions'], JSON_THROW_ON_ERROR);
         $snapshot = json_encode($delta['snapshot'], JSON_THROW_ON_ERROR);
         $prior = array_sum($baseline['base']) + array_sum(array_column($baseline['additions'], 'cents'));
@@ -120,7 +125,7 @@ function salesBillingCreateReport(mysqli|PgsqlMysqliCompatConnection $conn, int 
         foreach ($delta['additions'] as $item) $notes .= "\n" . $item['name'] . ': PHP ' . number_format($item['cost'], 2);
         $stmt = $conn->prepare('INSERT INTO sales_reports (project_id, client_id, technology_cost, developer_cost, resource_cost, other_fees, total_cost, notes, created_by, billing_snapshot, billing_request_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
         if (!$stmt) throw new RuntimeException('Unable to prepare report.');
-        $stmt->bind_param('iidddsdsiss', $projectId, $clientId, $technology, $developers, $resources, $other, $total, $notes, $actorId, $snapshot, $requestKey);
+        $stmt->bind_param('iissssssiss', $projectId, $clientId, $technology, $developers, $resources, $other, $total, $notes, $actorId, $snapshot, $requestKey);
         if (!$stmt->execute()) throw new RuntimeException('Unable to save report.');
         $reportId = (int) $stmt->insert_id;
         $stmt->close();
@@ -134,7 +139,7 @@ function salesBillingCreateReport(mysqli|PgsqlMysqliCompatConnection $conn, int 
         $due = date('Y-m-d', strtotime('+30 days'));
         $stmt = $conn->prepare("INSERT INTO receipts (report_id, receipt_number, client_name, client_email, amount_due, due_date, status, generated_by) VALUES (?, ?, ?, ?, ?, ?, 'draft', ?)");
         if (!$stmt) throw new RuntimeException('Unable to prepare receipt.');
-        $stmt->bind_param('isssdsi', $reportId, $number, $client['name'], $client['email'], $total, $due, $actorId);
+        $stmt->bind_param('isssssi', $reportId, $number, $client['name'], $client['email'], $total, $due, $actorId);
         if (!$stmt->execute()) throw new RuntimeException('Unable to save receipt.');
         $receiptId = (int) $stmt->insert_id;
         $stmt->close();

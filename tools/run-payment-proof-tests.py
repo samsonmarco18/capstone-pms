@@ -32,7 +32,8 @@ try:
     for name in ['config/.env.php', 'config/database.php', 'config/database-compat.php',
                  'includes/auth.php', 'includes/file-storage.php', 'includes/app-settings.php',
                  'includes/mailer.php', 'includes/receipt-excel.php', 'includes/payment-proof.php',
-                 'tools/test-payment-proof.php', 'payment-proof.php', 'includes/sales-billing.php', 'tools/test-sales-billing.php']:
+                 'tools/test-payment-proof.php', 'payment-proof.php', 'includes/sales-billing.php', 'tools/test-sales-billing.php',
+                 'includes/project-pricing.php', 'includes/project-estimation.php']:
         target = app / name
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(root / name, target)
@@ -65,6 +66,9 @@ try:
     print(result.stdout.decode().strip())
     if b'PASS:' not in result.stdout:
         raise RuntimeError('Integration test did not complete')
+    # Table-existence checks use information_schema; temporary fixtures shadow these markers.
+    run([mysql_bin / 'mysql.exe', '--protocol=TCP', '--host=127.0.0.1', f'--port={port}', '--user=root', 'payment_proof_tests',
+         '--execute=CREATE TABLE methodology_tasks (id INT); CREATE TABLE methodology_task_departments (id INT); CREATE TABLE methodology_phases (id INT); CREATE TABLE expert_project_estimations (id INT);'])
     billing = run([php, '-d', f'session.save_path={work}', app / 'tools/test-sales-billing.php', '--database'], env=env)
     print(billing.stdout.decode().strip())
     if b'PASS:' not in billing.stdout: raise RuntimeError('Billing integration test did not complete')

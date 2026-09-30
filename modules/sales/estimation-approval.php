@@ -2309,10 +2309,12 @@ include '../../includes/navbar.php';
                 $projectTitle = (string) ($estimate['project_name'] ?? ($projectTasks[0]['project_name'] ?? 'Project'));
                 $featureCount = count($projectTasks);
                 $projectBaseCost = $estimate
-                    ? (float) $estimate['total_developer_cost'] + (float) $estimate['total_technology_stack_cost'] + (float) $estimate['additional_costs']
+                    ? (float) $estimate['total_developer_cost'] + (float) $estimate['total_technology_stack_cost']
                     : 0.0;
                 $projectPriorityMarkup = projectEstimationPriorityMarkup((string) ($estimate['priority'] ?? 'medium'));
-                $projectPriorityMarkupAmount = $projectBaseCost * (float) $projectPriorityMarkup['rate'];
+                $projectPriorityMarkupAmount = $estimate
+                    ? (float) $estimate['overall_estimated_project_cost'] - $projectBaseCost
+                    : 0.0;
             ?>
             <section class="project-approval-group" data-project-group data-project-id="<?php echo (int) $pid; ?>">
                 <div class="project-approval-header">

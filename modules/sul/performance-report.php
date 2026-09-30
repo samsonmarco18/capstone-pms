@@ -33,6 +33,17 @@ function sulPerformanceInitials(string $name): string
 $dateFrom = isset($_GET['date_from']) ? (string) $_GET['date_from'] : date('Y-m-d', strtotime('-30 days'));
 $dateTo = isset($_GET['date_to']) ? (string) $_GET['date_to'] : date('Y-m-d');
 $reportType = isset($_GET['report_type']) ? (string) $_GET['report_type'] : 'team';
+$reportProjects = $conn->query("SELECT p.id, p.name FROM projects p WHERE {$reportProjectDepartmentClause} ORDER BY p.name ASC")->fetch_all(MYSQLI_ASSOC);
+$selectedReportProject = max(0, (int) ($_GET['project_id'] ?? 0));
+if ($selectedReportProject > 0 && !in_array($selectedReportProject, array_map('intval', array_column($reportProjects, 'id')), true)) {
+    http_response_code(403);
+    exit('You do not have access to this project report.');
+}
+if ($selectedReportProject > 0) {
+    $reportTaskDepartmentClause = "({$reportTaskDepartmentClause}) AND t.project_id = {$selectedReportProject}";
+    $reportProjectDepartmentClause = "({$reportProjectDepartmentClause}) AND p.id = {$selectedReportProject}";
+    $reportUserDepartmentClause = "({$reportUserDepartmentClause}) AND t.id IS NOT NULL";
+}
 
 if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateFrom) || !strtotime($dateFrom)) {
     $dateFrom = date('Y-m-d', strtotime('-30 days'));
@@ -53,6 +64,14 @@ $reportLabels = [
     'project' => 'Project Performance',
 ];
 $reportTitle = $reportLabels[$reportType] ?? $reportLabels['team'];
+if ($selectedReportProject > 0) {
+    foreach ($reportProjects as $reportProject) {
+        if ((int) $reportProject['id'] === $selectedReportProject) {
+            $reportTitle .= ' - ' . $reportProject['name'];
+            break;
+        }
+    }
+}
 $reportContextMessage = [
     'team' => 'Quick view of overall workload, completion pace, and overdue items for the selected period.',
     'individual' => 'Compare each team member by task load, completion rate, and overdue work for the selected period.',
@@ -1282,6 +1301,15 @@ $chatScriptLoaded = true;
         <div class="card-body">
             <form method="GET" action="performance-report.php" class="row g-3">
                 <div class="col-md-3">
+                    <label class="form-label" for="reportProject">Project</label>
+                    <select name="project_id" id="reportProject" class="form-select" onchange="this.form.requestSubmit()">
+                        <option value="0">All projects</option>
+                        <?php foreach ($reportProjects as $reportProject): ?>
+                        <option value="<?php echo (int) $reportProject['id']; ?>" <?php echo $selectedReportProject === (int) $reportProject['id'] ? 'selected' : ''; ?>><?php echo htmlspecialchars($reportProject['name']); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-md-3">
                     <label class="form-label">Date From</label>
                     <input type="date" name="date_from" class="form-control" value="<?php echo $dateFrom; ?>">
                 </div>
@@ -1731,7 +1759,8 @@ function printReport(tableId) {
     }
     const printContent = table.outerHTML;
     const originalContents = document.body.innerHTML;
-    document.body.innerHTML = `<div class="container mt-4"><h2><?php echo htmlspecialchars($reportTitle, ENT_QUOTES, 'UTF-8'); ?> Report</h2><p>Generated on: ${new Date().toLocaleString()}</p><p>Period: ${document.querySelector('input[name="date_from"]').value} to ${document.querySelector('input[name="date_to"]').value}</p>${printContent}</div>`;
+    const reportHeading = <?php echo json_encode(htmlspecialchars($reportTitle, ENT_QUOTES, 'UTF-8'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    document.body.innerHTML = `<div class="container mt-4"><h2>${reportHeading} Report</h2><p>Generated on: ${new Date().toLocaleString()}</p><p>Period: ${document.querySelector('input[name="date_from"]').value} to ${document.querySelector('input[name="date_to"]').value}</p>${printContent}</div>`;
     window.print();
     document.body.innerHTML = originalContents;
     location.reload();

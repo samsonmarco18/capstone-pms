@@ -7,3 +7,5 @@
 [user]
 	name = ERNI PMS
 	email = noreply@erni-pms.local
+[receive]
+	advertisePushOptions = true

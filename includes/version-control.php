@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/version-control-policy.php';
 
 function vcIsExecAvailable(): bool
 {
@@ -314,7 +315,7 @@ function vcCanManagedRepositoryPushFromPortableClient(): bool
 function vcGetManagedRepositoryPortablePushHint(): string
 {
     if (vcIsRenderEnvironment()) {
-        return 'Downloaded repositories can push back to the PMS-managed repository on Render by using the repository token as the HTTP password.';
+        return 'Downloaded repositories include a personal push credential. Only Architects can update main; developers push feature branches and submit pull requests.';
     }
 
     return 'Downloaded repositories can push back to the PMS-managed bare repository on this same machine.';
@@ -323,7 +324,7 @@ function vcGetManagedRepositoryPortablePushHint(): string
 function vcGetManagedRepositoryCreateHint(): string
 {
     if (vcIsRenderEnvironment()) {
-        return 'ERNI PMS will create the managed repository and a ready-to-use working folder. On Render, use the repository token as the HTTP password when pushing from your Git client.';
+        return 'ERNI PMS will create the managed repository and a ready-to-use working folder. Use your PMS account password or the personal credential in a fresh repository download to push.';
     }
 
     return 'ERNI PMS will create the managed repository and a ready-to-use working folder. Local downloads can push back to this PMS instance on the same machine.';
@@ -337,7 +338,7 @@ function vcGetRepositoryManagedCloneLabel(): string
 function vcGetRepositoryManagedRemoteDescription(): string
 {
     if (vcIsRenderEnvironment()) {
-        return 'Use this PMS-managed HTTPS remote for clone, fetch, and push. Use your repository token as the HTTP password when Git prompts.';
+        return 'Use this PMS-managed HTTPS remote for clone, fetch, and push. Authenticate with your PMS password or personal download credential.';
     }
 
     return 'Use this PMS-managed repository when your app and Git client are on the same machine.';
@@ -356,7 +357,7 @@ function vcGetRepositoryExternalRemotePlaceholder(): string
 function vcGetRepositoryExternalRemoteHelp(): string
 {
     if (vcIsRenderEnvironment()) {
-        return 'Leave this blank to use the PMS-managed Render remote with the repository token, or set a GitHub/GitLab remote if you prefer.';
+        return 'Leave this blank to use the PMS-managed remote. External Git hosts need their own branch protection settings.';
     }
 
     return 'Leave this blank to use the PMS-managed repository locally, or set a GitHub/GitLab remote if you prefer.';
@@ -783,7 +784,12 @@ function vcMergeManagedBranches(
         }
 
         $mergeHash = trim((string) vcRunGitCommand(['rev-parse', 'HEAD'], $workingPath)['stdout']);
-        vcRunGitCommand(['push', 'origin', 'HEAD:refs/heads/' . $targetBranch], $workingPath);
+        $mergeUser = getCurrentUser();
+        if (!$mergeUser || $mergeUser['role'] !== 'architect') {
+            throw new RuntimeException('Only an Architect can merge branches.');
+        }
+        vcInstallServerRepositoryHooks($bareRepositoryPath, rtrim(BASE_URL, '/') . '/api/version-control/sync.php?token=' . urlencode((string) $repository['webhook_token']));
+        vcRunGitCommand(['push', '-o', 'erni-pms-token=' . vcPersonalPushToken($repository, $mergeUser), 'origin', 'HEAD:refs/heads/' . $targetBranch], $workingPath);
         vcRunGitCommand(['--git-dir=' . $bareRepositoryPath, 'update-server-info'], APP_ROOT_PATH);
         vcSaveRepositorySnapshot($conn, (int) ($repository['id'] ?? 0), $repositorySlug);
 
@@ -860,13 +866,34 @@ function vcGenerateLocalSyncHookScript(string $syncEndpointUrl, ?string $pmsUser
         "FILE_CHANGES_B64=\$(git show --pretty=\"\" --name-status \"\$COMMIT_HASH\" | base64 | tr -d '\\n')\n" .
         "FILE_STATS_B64=\$(git show --pretty=\"\" --numstat \"\$COMMIT_HASH\" | base64 | tr -d '\\n')\n" .
         "PAYLOAD=\$(printf '{\"event_type\":\"commit\",\"branch_name\":\"%s\",\"commit_hash\":\"%s\",\"commit_title\":\"%s\",\"commit_message\":\"%s\",\"author_name\":\"%s\",\"author_email\":\"%s\",\"pms_username\":\"%s\",\"remote_url\":\"%s\",\"platform\":\"git-client\",\"file_changes_b64\":\"%s\",\"file_stats_b64\":\"%s\"}' \"\$(json_escape \"\$BRANCH\")\" \"\$(json_escape \"\$COMMIT_HASH\")\" \"\$(json_escape \"\$TITLE\")\" \"\$(json_escape \"\$BODY\")\" \"\$(json_escape \"\$AUTHOR_NAME\")\" \"\$(json_escape \"\$AUTHOR_EMAIL\")\" \"\$(json_escape \"\$PMS_USERNAME\")\" \"\$(json_escape \"\$REMOTE_URL\")\" \"\$(json_escape \"\$FILE_CHANGES_B64\")\" \"\$(json_escape \"\$FILE_STATS_B64\")\")\n" .
-        "curl -s -X POST \"\$PMS_URL\" -H \"Content-Type: application/json\" -d \"\$PAYLOAD\" >/dev/null 2>&1\n";
+        "curl --connect-timeout 3 --max-time 10 -s -X POST \"\$PMS_URL\" -H \"Content-Type: application/json\" -d \"\$PAYLOAD\" >/dev/null 2>&1\n";
+}
+
+function vcInstallServerRepositoryPolicy(string $bareRepositoryPath): void
+{
+    $hooksPath = $bareRepositoryPath . DIRECTORY_SEPARATOR . 'hooks';
+    vcEnsureDirectory($hooksPath);
+    $shellQuote = static fn(string $value): string => "'" . str_replace("'", "'\\''", str_replace('\\', '/', $value)) . "'";
+    $phpName = PHP_OS_FAMILY === 'Windows' ? 'php.exe' : 'php';
+    $php = 'php';
+    foreach ([getenv('PHP_CLI_BINARY') ?: '', PHP_SAPI === 'cli' || PHP_SAPI === 'cli-server' ? PHP_BINARY : '',
+        dirname(php_ini_loaded_file() ?: __FILE__) . DIRECTORY_SEPARATOR . $phpName,
+        PHP_BINDIR . DIRECTORY_SEPARATOR . $phpName] as $candidate) {
+        if ($candidate !== '' && is_file($candidate)) { $php = $candidate; break; }
+    }
+    $preReceive = "#!/bin/sh\nRESULT=$(" . $shellQuote($php) . ' '
+        . $shellQuote(dirname(__DIR__) . '/bin/git-pre-receive.php') . ' '
+        . $shellQuote(basename($bareRepositoryPath, '.git')) . ") || exit 1\n"
+        . '[ "$RESULT" = "ERNI_PMS_PUSH_OK" ] || { echo "ERNI PMS could not authorize this push." >&2; exit 1; }' . "\n";
+    vcWriteTextFile($hooksPath . DIRECTORY_SEPARATOR . 'pre-receive', $preReceive);
+    @chmod($hooksPath . DIRECTORY_SEPARATOR . 'pre-receive', 0755);
+    vcRunGitCommand(['--git-dir=' . $bareRepositoryPath, 'config', 'receive.advertisePushOptions', 'true'], APP_ROOT_PATH);
 }
 
 function vcInstallServerRepositoryHooks(string $bareRepositoryPath, string $syncEndpointUrl): void
 {
+    vcInstallServerRepositoryPolicy($bareRepositoryPath);
     $hooksPath = $bareRepositoryPath . DIRECTORY_SEPARATOR . 'hooks';
-    vcEnsureDirectory($hooksPath);
 
     $postUpdate = "#!/bin/sh\n" .
         "git update-server-info\n";
@@ -889,7 +916,7 @@ function vcInstallServerRepositoryHooks(string $bareRepositoryPath, string $sync
         "  FILE_STATS_B64=\$(git show --pretty=\"\" --numstat \"\$NEW_REV\" | base64 | tr -d '\\n')\n" .
         "  PUSH_USERNAME=\${REMOTE_USER:-}\n" .
         "  PAYLOAD=\$(printf '{\"event_type\":\"push\",\"branch_name\":\"%s\",\"commit_hash\":\"%s\",\"commit_title\":\"%s\",\"commit_message\":\"%s\",\"author_name\":\"%s\",\"author_email\":\"%s\",\"pms_username\":\"%s\",\"remote_url\":\"%s\",\"platform\":\"server-git\",\"file_changes_b64\":\"%s\",\"file_stats_b64\":\"%s\"}' \"\$(json_escape \"\$BRANCH\")\" \"\$(json_escape \"\$NEW_REV\")\" \"\$(json_escape \"\$TITLE\")\" \"\$(json_escape \"\$BODY\")\" \"\$(json_escape \"\$AUTHOR_NAME\")\" \"\$(json_escape \"\$AUTHOR_EMAIL\")\" \"\$(json_escape \"\$PUSH_USERNAME\")\" \"\$(json_escape \"\$REMOTE_URL\")\" \"\$(json_escape \"\$FILE_CHANGES_B64\")\" \"\$(json_escape \"\$FILE_STATS_B64\")\")\n" .
-        "  curl -s -X POST \"\$PMS_URL\" -H \"Content-Type: application/json\" -d \"\$PAYLOAD\" >/dev/null 2>&1\n" .
+        "  curl --connect-timeout 3 --max-time 10 -s -X POST \"\$PMS_URL\" -H \"Content-Type: application/json\" -d \"\$PAYLOAD\" >/dev/null 2>&1\n" .
         "done\n";
 
     vcWriteTextFile($hooksPath . DIRECTORY_SEPARATOR . 'post-update', $postUpdate);
@@ -1022,7 +1049,7 @@ function vcBuildRepositoryReadme(
         "git clone \"" . str_replace('\\', '/', $localClonePath) . "\"\n" .
         "```\n\n" .
         "## Push Authentication\n\n" .
-        "Use the repository token shown in ERNI PMS as the HTTP password when pushing to the managed remote.\n\n" .
+        "Use your PMS account password or the personal credential from a fresh repository download to push. Only an Architect may update main.\n\n" .
         "## PMS Sync\n\n" .
         "A sample hook is included in `.erni-pms/post-commit.example.sh`.\n" .
         "Copy it into `.git/hooks/post-commit` inside your cloned repository to sync commits back to ERNI PMS automatically.\n";
@@ -1128,13 +1155,16 @@ function vcCreateRepositoryArchive(
     string $refName,
     ?string $externalRemoteUrl = null,
     ?string $webhookToken = null,
-    ?array $downloadUser = null
+    ?array $downloadUser = null,
+    string $defaultBranch = 'main'
 ): array
 {
     $bareRepositoryPath = vcGetRepositoryBarePath($slug);
     if (!is_dir($bareRepositoryPath)) {
         throw new RuntimeException('Repository storage was not found on the server at: ' . $bareRepositoryPath);
     }
+    $personalToken = vcPersonalPushToken(['slug' => $slug, 'webhook_token' => $webhookToken], $downloadUser ?? []);
+    vcInstallServerRepositoryHooks($bareRepositoryPath, rtrim(BASE_URL, '/') . '/api/version-control/sync.php?token=' . urlencode((string) $webhookToken));
 
     error_log('Starting archive creation for: ' . $slug . ' at ' . $bareRepositoryPath);
 
@@ -1217,9 +1247,15 @@ function vcCreateRepositoryArchive(
                 $refName,
                 $externalRemoteUrl,
                 true,
-                $webhookToken,
+                $personalToken,
                 $downloadUsername
             );
+            // Push to the PMS-managed remote so its server-side policy applies.
+            $managedPushUrl = vcIsRenderEnvironment()
+                ? vcGenerateRepositoryAuthenticatedHttpCloneUrl($slug, $personalToken, $downloadUsername)
+                : vcGenerateRepositoryFileCloneUrl($slug);
+            vcRunGitCommand(['remote', 'set-url', '--push', 'origin', $managedPushUrl], $cloneTempDir);
+            vcRunGitCommand(['config', '--add', 'push.pushOption', 'erni-pms-token=' . $personalToken], $cloneTempDir);
             error_log('Checkout completed successfully');
         } catch (Throwable $checkoutError) {
             error_log('Checkout failed: ' . $checkoutError->getMessage());
@@ -1237,12 +1273,27 @@ function vcCreateRepositoryArchive(
         $postCommitPath = $hooksDir . DIRECTORY_SEPARATOR . 'post-commit';
         vcWriteTextFile($postCommitPath, $postCommitHook);
         @chmod($postCommitPath, 0755);
+        foreach (['post-merge', 'post-rewrite'] as $hookName) {
+            vcWriteTextFile($hooksDir . DIRECTORY_SEPARATOR . $hookName, $postCommitHook);
+            @chmod($hooksDir . DIRECTORY_SEPARATOR . $hookName, 0755);
+        }
+        foreach (['pre-merge-commit' => false, 'pre-push' => true] as $hookName => $prePush) {
+            vcWriteTextFile($hooksDir . DIRECTORY_SEPARATOR . $hookName, vcClientProtectionHook((string) ($downloadUser['role'] ?? ''), $defaultBranch, $prePush));
+            @chmod($hooksDir . DIRECTORY_SEPARATOR . $hookName, 0755);
+        }
         
         error_log('Post-commit hook installed');
 
         // Create .erni-pms directory with example hook documentation
         $erniPmsDir = $cloneTempDir . DIRECTORY_SEPARATOR . '.erni-pms';
         vcEnsureDirectory($erniPmsDir);
+        vcWriteTextFile($erniPmsDir . DIRECTORY_SEPARATOR . 'BRANCH_POLICY.md',
+            "# Branch and merge policy\n\nOnly an Architect may update main, the default branch, or protected branches.\n\n"
+            . "Developers: create a feature branch (`git switch -c feature/your-change`), commit and push it, then submit a pull request from the task in ERNI PMS. The Architect performs the final merge.\n\n"
+            . "This download includes pre-merge and pre-push checks, plus post-commit, post-merge and post-rewrite reporting. Local hooks provide guidance; the PMS-managed server enforces role and project access.\n\n"
+            . "The push remote points to ERNI PMS. Your personal Git credential is stored in .git/config; do not share this download. Download again after a password or role change.\n\n"
+            . "Unpushed local merges can be reported to the Architect but do not change the shared main branch. Push authorized changes to publish them.\n\n"
+            . "External Git providers require their own branch protection rules if you push to them directly. Local administrators with direct write access to server Git storage must be restricted through operating-system permissions.\n");
 
         $hookExample = vcGenerateLocalSyncHookScript($syncUrl, $downloadUsername ?? '');
         $hookExamplePath = $erniPmsDir . DIRECTORY_SEPARATOR . 'post-commit.example.sh';
@@ -2158,6 +2209,49 @@ function vcResolveExternalCommitUserId(
     return max(1, $fallbackUserId);
 }
 
+function vcNotifyMainUpdate(mysqli|PgsqlMysqliCompatConnection $conn, array $repository, string $branch, string $hash, bool $published): void
+{
+    $projectId = (int) $repository['project_id'];
+    $repositoryId = (int) $repository['id'];
+    $message = ($published ? 'Shared branch updated: ' : 'Local or external branch change reported; not published to PMS: ')
+        . $repository['name'] . ' / ' . $branch . ' at ' . $hash . '. Review the repository activity.';
+    $title = $published ? 'Main branch updated' : 'Main branch change reported';
+    $url = rtrim(BASE_URL, '/') . '/modules/version-control/repositories.php?project_id=' . $projectId . '&repository_id=' . $repositoryId;
+    $stmt = $conn->prepare("SELECT u.id FROM users u JOIN projects p ON p.id = ? WHERE u.role = 'architect' AND u.status = 'active' AND (p.architect_id = u.id OR p.architect_id IS NULL)");
+    $stmt->bind_param('i', $projectId);
+    $stmt->execute();
+    foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $architect) {
+        $notification = $conn->prepare("INSERT INTO notifications (user_id, title, message, notification_type, related_table, related_id, action_url)
+            SELECT ?, ?, ?, 'system', 'project_repositories', ?, ?
+            WHERE NOT EXISTS (SELECT 1 FROM notifications WHERE user_id = ? AND related_table = 'project_repositories' AND related_id = ? AND message = ?)");
+        $notification->bind_param('issisiis', $architect['id'], $title, $message, $repositoryId, $url, $architect['id'], $repositoryId, $message);
+        $notification->execute();
+        $notification->close();
+    }
+    $stmt->close();
+}
+
+function vcReconcileManagedMain(mysqli|PgsqlMysqliCompatConnection $conn, array $repository): void
+{
+    $barePath = vcGetRepositoryBarePath((string) $repository['slug']);
+    if (!is_dir($barePath)) return;
+    vcInstallServerRepositoryHooks($barePath, rtrim(BASE_URL, '/') . '/api/version-control/sync.php?token=' . urlencode((string) $repository['webhook_token']));
+    foreach (array_unique(['main', (string) ($repository['default_branch_name'] ?: 'main')]) as $branch) {
+        $head = vcRunProcess([vcGetGitBinary(), '--git-dir=' . $barePath, 'rev-parse', '--verify', 'refs/heads/' . $branch], APP_ROOT_PATH);
+        if ($head['exit_code'] !== 0) continue;
+        $hash = trim($head['stdout']);
+        $stmt = $conn->prepare('SELECT last_commit_hash FROM repository_branches WHERE repository_id = ? AND name = ?');
+        $stmt->bind_param('is', $repository['id'], $branch);
+        $stmt->execute();
+        $stored = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (($stored['last_commit_hash'] ?? '') === $hash) continue;
+        $title = trim(vcRunGitCommand(['--git-dir=' . $barePath, 'log', '-1', '--pretty=%s', $hash], APP_ROOT_PATH)['stdout']);
+        vcSyncExternalCommit($conn, $repository, ['branch_name' => $branch, 'commit_hash' => $hash,
+            'commit_title' => $title, 'operation_type' => 'push', 'platform' => 'managed-git-reconciliation']);
+    }
+}
+
 function vcSyncExternalCommit(mysqli|PgsqlMysqliCompatConnection $conn, array $repository, array $payload): array
 {
     $repositoryId = (int) $repository['id'];
@@ -2193,6 +2287,27 @@ function vcSyncExternalCommit(mysqli|PgsqlMysqliCompatConnection $conn, array $r
 
     if ($commitTitle === '') {
         $commitTitle = ucfirst($operationType) . ' sync';
+    }
+
+    $mainChanged = false;
+    if (in_array($branchName, ['main', (string) ($repository['default_branch_name'] ?: 'main')], true)) {
+        // A client-supplied username or commit message is not authority to update shared main.
+        $barePath = vcGetRepositoryBarePath((string) $repository['slug']);
+        $head = is_dir($barePath)
+            ? vcRunProcess([vcGetGitBinary(), '--git-dir=' . $barePath, 'rev-parse', '--verify', 'refs/heads/' . $branchName], APP_ROOT_PATH)
+            : ['exit_code' => 1, 'stdout' => ''];
+        $published = $head['exit_code'] === 0 && hash_equals(trim($head['stdout']), $commitHash);
+        if (!$published) {
+            vcNotifyMainUpdate($conn, $repository, $branchName, $commitHash, false);
+            return ['repository_id' => $repositoryId, 'branch_id' => 0, 'commit_id' => null, 'commit_hash' => $commitHash, 'observed_only' => true];
+        }
+        $previous = $conn->prepare('SELECT last_commit_hash FROM repository_branches WHERE repository_id = ? AND name = ?');
+        $previous->bind_param('is', $repositoryId, $branchName);
+        $previous->execute();
+        $mainChanged = ($previous->get_result()->fetch_assoc()['last_commit_hash'] ?? '') !== $commitHash;
+        $previous->close();
+        $parents = trim(vcRunGitCommand(['--git-dir=' . $barePath, 'rev-list', '--parents', '-n', '1', $commitHash], APP_ROOT_PATH)['stdout']);
+        if (count(explode(' ', $parents)) > 2) $operationType = 'merge';
     }
 
     $conn->begin_transaction();
@@ -2308,6 +2423,7 @@ function vcSyncExternalCommit(mysqli|PgsqlMysqliCompatConnection $conn, array $r
             ]
         );
 
+        if ($mainChanged) vcNotifyMainUpdate($conn, $repository, $branchName, $commitHash, true);
         $conn->commit();
 
         return [

@@ -1673,11 +1673,11 @@ include '../../includes/navbar.php';
                         <p class="receipt-payment-modal__intro">Match the proof with the actual bank or payment provider record before confirming payment.</p>
                         <div class="payment-review-fields">
                             <div><label class="form-label" for="verify_receipt_number">Receipt number</label><input type="text" id="verify_receipt_number" class="form-control" readonly></div>
-                            <div class="payment-review-fields__pair">
+                            <div class="payment-review-fields__pair" id="manualPaymentFields">
                                 <div><label for="verifiedAmount" class="form-label">Amount received (PHP)</label><input class="form-control" type="number" id="verifiedAmount" name="verified_amount" min="0.01" step="0.01" placeholder="0.00" required></div>
                                 <div><label for="verifiedReference" class="form-label">Verified transaction reference</label><input class="form-control" id="verifiedReference" name="verified_reference" maxlength="150" placeholder="Reference from payment record" required></div>
                             </div>
-                            <div><label for="paymentReviewNotes" class="form-label">Review notes / reason for rejection</label><textarea class="form-control" id="paymentReviewNotes" name="review_notes" maxlength="2000" rows="2" placeholder="Add your findings; required when rejecting"></textarea></div>
+                            <div id="paymentRejectionNotes" hidden><label for="paymentReviewNotes" class="form-label">Reason for rejection</label><textarea class="form-control" id="paymentReviewNotes" name="review_notes" maxlength="2000" rows="2" placeholder="Explain why the proof needs correction"></textarea></div>
                             <div class="payment-bank-confirmation"><input class="form-check-input" type="checkbox" id="bankConfirmed" name="bank_confirmed" value="1" required><label for="bankConfirmed">I checked the actual payment record and confirmed this payment was received.</label></div>
                         </div>
                     </div>
@@ -1685,9 +1685,9 @@ include '../../includes/navbar.php';
             </div>
             <div class="modal-footer receipt-payment-modal__footer">
                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="submit" name="reject_payment" id="rejectPaymentButton" class="btn btn-outline-danger" data-loading-title="Saving payment review" data-loading-text="Recording the rejection and notifying the client. Please wait." formnovalidate hidden>Reject proof</button>
+                <button type="submit" name="reject_payment" id="rejectPaymentButton" class="btn btn-outline-danger" data-loading-title="Saving payment review" data-loading-text="Recording the rejection and notifying the client. Please wait." formnovalidate hidden onclick="if (document.getElementById('paymentRejectionNotes').hidden) { document.getElementById('paymentRejectionNotes').hidden = false; document.getElementById('paymentReviewNotes').focus(); return false; }">Reject proof</button>
                 <button type="submit" name="verify_payment" class="btn btn-primary">
-                    <i class="fas fa-check me-1"></i> Verify and Mark Paid
+                    <i class="fas fa-check me-1"></i> Confirm
                 </button>
             </div>
         </form>
@@ -1789,6 +1789,10 @@ function verifyPayment(id, receiptNumber, proof = {}) {
     document.getElementById('submittedProofReference').textContent = proof.reference || 'Not supplied';
     updatePaymentProofPreview(proof.url, proof.name, receiptProofIsImage(proof));
     document.getElementById('manualPaymentProof').hidden = pending;
+    document.getElementById('manualPaymentFields').hidden = pending;
+    document.getElementById('verifiedAmount').required = !pending;
+    document.getElementById('verifiedReference').required = !pending;
+    document.getElementById('paymentRejectionNotes').hidden = true;
     proofInput.required = !pending;
     document.getElementById('verifiedAmount').value = '';
     document.getElementById('verifiedReference').value = '';

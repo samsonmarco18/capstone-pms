@@ -7208,9 +7208,9 @@ include '../../includes/navbar.php';
                         <?php while($estimate = $projectEstimationReviews->fetch_assoc()): ?>
                         <?php
                             $projectReviewPanelId = 'projectEstimationReview' . (int) $estimate['id'];
-                            $projectBaseCost = (float) $estimate['total_developer_cost'] + (float) $estimate['total_technology_stack_cost'] + (float) $estimate['additional_costs'];
+                            $projectBaseCost = (float) $estimate['total_developer_cost'] + (float) $estimate['total_technology_stack_cost'];
                             $projectPriorityMarkup = projectEstimationPriorityMarkup((string) ($estimate['priority'] ?? 'medium'));
-                            $projectPriorityMarkupAmount = $projectBaseCost * (float) $projectPriorityMarkup['rate'];
+                            $projectPriorityMarkupAmount = (float) $estimate['overall_estimated_project_cost'] - $projectBaseCost;
                         ?>
                         <article class="project-review-card" data-project-review-card>
                             <button type="button" class="project-review-toggle" aria-expanded="false" aria-controls="<?php echo $projectReviewPanelId; ?>">

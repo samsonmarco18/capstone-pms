@@ -1,11 +1,37 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__ . '/project-pricing.php';
 
 const PROJECT_ESTIMATION_SALARIES = [
     'Junior Dev' => 25000.0,
     'Professional Dev' => 60000.0,
     'Senior Dev' => 80000.0,
 ];
+
+function projectEstimationDailyRate(string $developerType): string
+{
+    $salaryCents = projectPricingScaled((string) PROJECT_ESTIMATION_SALARIES[projectEstimationDeveloperLevel($developerType)], 2);
+    return projectPricingMoney(intdiv($salaryCents + 13, 26));
+}
+
+function projectEstimationProjectPricing(mysqli|PgsqlMysqliCompatConnection $conn, int $projectId): array
+{
+    $context = projectEstimationFetchContext($conn, $projectId);
+    $saved = json_decode((string) ($context['estimation']['allocation_json'] ?? '[]'), true) ?: [];
+    $posted = [];
+    foreach ($saved as $row) {
+        $posted[$row['department']][$row['position']] = $row;
+    }
+    foreach ($context['allocations'] ?? [] as $allocation) {
+        for ($position = 1; $position <= $allocation['required_count']; $position++) {
+            $posted[$allocation['department']][$position] ??= [
+                'developer_type' => projectEstimationSuggestedDeveloperLevel($context['project'], $allocation['department'], $position)['level'],
+            ];
+        }
+    }
+    $rows = projectEstimationNormalizeRows($posted, $context['allocations'] ?? []);
+    return projectPricingCalculate($rows, array_column($context['technologies'] ?? [], 'estimated_cost')) + ['developers' => $rows];
+}
 
 function projectEstimationDeveloperLevel(string $value): string
 {
@@ -342,8 +368,8 @@ function projectEstimationFetchContext(mysqli|PgsqlMysqliCompatConnection $conn,
         $roadmapHeadcountResult = $conn->query("
             SELECT
                 roadmap_entities.department,
-                SUM(roadmap_entities.required_count) AS required_count,
-                SUM(roadmap_entities.involvement_days) AS involvement_days
+                roadmap_entities.required_count,
+                roadmap_entities.involvement_days
             FROM (
                 SELECT
                     mtd.department,
@@ -359,8 +385,7 @@ function projectEstimationFetchContext(mysqli|PgsqlMysqliCompatConnection $conn,
                     mtd.department,
                     COALESCE(NULLIF(mt.developer_entity_key, ''), CONCAT('task-', mt.id))
             ) roadmap_entities
-            GROUP BY roadmap_entities.department
-            ORDER BY roadmap_entities.department ASC
+            ORDER BY roadmap_entities.department ASC, roadmap_entities.developer_entity_key ASC
         ");
         $rawRows = [];
         if ($roadmapHeadcountResult) {
@@ -371,11 +396,19 @@ function projectEstimationFetchContext(mysqli|PgsqlMysqliCompatConnection $conn,
                 if ($department === '' || $requiredCount <= 0) {
                     continue;
                 }
-                $rawRows[] = [
-                    'department' => $department,
-                    'required_count' => $requiredCount,
-                    'involvement_days' => $involvementDays,
-                ];
+                if (!isset($rawRows[$department])) {
+                    $rawRows[$department] = [
+                        'department' => $department,
+                        'required_count' => 0,
+                        'involvement_days' => 0,
+                        'estimated_days_by_position' => [],
+                    ];
+                }
+                $rawRows[$department]['required_count'] += $requiredCount;
+                $rawRows[$department]['involvement_days'] += $involvementDays;
+                for ($position = 0; $position < $requiredCount; $position++) {
+                    $rawRows[$department]['estimated_days_by_position'][] = intdiv($involvementDays, $requiredCount);
+                }
             }
         }
 
@@ -393,17 +426,18 @@ function projectEstimationFetchContext(mysqli|PgsqlMysqliCompatConnection $conn,
                 'required_count' => $requiredCount,
                 'complexity_level' => 'medium',
                 'source' => 'roadmap_department_headcount',
+                'estimated_days_by_position' => $row['estimated_days_by_position'],
                 'contribution_percent' => min(100, max(1, (int) round(($averageDeveloperInvolvementDays / $executionWindowDays) * 100))),
             ];
         }
     }
 
-    $estimation = $conn->query("
+    $estimation = dbTableExists($conn, 'expert_project_estimations') ? ($conn->query("
         SELECT *
         FROM expert_project_estimations
         WHERE project_id = {$projectId}
         LIMIT 1
-    ")->fetch_assoc() ?: null;
+    ")->fetch_assoc() ?: null) : null;
 
     return [
         'project' => $project,
@@ -418,9 +452,11 @@ function projectEstimationNormalizeRows(array $postedAllocations, array $allocat
     $normalized = [];
     $allocationLookup = [];
     $contributionLookup = [];
+    $daysLookup = [];
     foreach ($allocationRows as $allocation) {
         $allocationLookup[(string) $allocation['department']] = max(0, (int) $allocation['required_count']);
         $contributionLookup[(string) $allocation['department']] = max(0.0, min(100.0, (float) ($allocation['contribution_percent'] ?? 100)));
+        $daysLookup[(string) $allocation['department']] = $allocation['estimated_days_by_position'] ?? [];
     }
 
     foreach ($postedAllocations as $department => $positions) {
@@ -438,16 +474,22 @@ function projectEstimationNormalizeRows(array $postedAllocations, array $allocat
             $contribution = $contributionLookup[$departmentLabel] ?? 100.0;
             $monthlySalary = PROJECT_ESTIMATION_SALARIES[$developerType];
             $salaryContribution = $monthlySalary * ($contribution / 100);
+            $dailyRate = projectEstimationDailyRate($developerType);
+            $estimatedDays = $daysLookup[$departmentLabel][$i - 1] ?? 0;
 
             $normalized[] = [
                 'department' => $departmentLabel,
                 'position' => $i,
                 'developer_type' => $developerType,
+                'daily_rate' => $dailyRate,
+                'estimated_days' => $estimatedDays,
                 'monthly_salary' => $monthlySalary,
                 'contribution_percent' => $contribution,
                 'salary_based_on_contribution' => $salaryContribution,
                 'developers_needed' => 1,
-                'total_cost_based_on_developers' => $salaryContribution,
+                'total_cost_based_on_developers' => projectPricingCalculate([
+                    ['daily_rate' => $dailyRate, 'estimated_days' => $estimatedDays],
+                ], [])['development_cost'],
             ];
         }
     }
@@ -467,15 +509,13 @@ function projectEstimationSave(
     array $postedAllocations
 ): bool {
     $rows = projectEstimationNormalizeRows($postedAllocations, $allocationRows);
-    $developerMonthlyCost = array_sum(array_map(static fn(array $row): float => (float) $row['total_cost_based_on_developers'], $rows));
-    $developerCost = $developerMonthlyCost * $durationMonths;
-    $technologyCost = $techMonthlyCost * $durationMonths;
-    $baseCost = $developerCost + $technologyCost + $additionalCosts;
+    $technologyRows = $conn->query("SELECT estimated_cost FROM tech_recommendations WHERE project_id = {$projectId}")->fetch_all(MYSQLI_ASSOC);
+    $pricing = projectPricingCalculate($rows, array_column($technologyRows, 'estimated_cost'));
+    $developerCost = $pricing['development_cost'];
+    $technologyCost = $pricing['technology_cost'];
 
     $project = $conn->query("SELECT sales_budget, priority FROM projects WHERE id = {$projectId} LIMIT 1")->fetch_assoc() ?: [];
-    $priorityMarkup = projectEstimationPriorityMarkup((string) ($project['priority'] ?? 'medium'));
-    $priorityMarkupAmount = $baseCost * (float) $priorityMarkup['rate'];
-    $overallCost = $baseCost + $priorityMarkupAmount;
+    $overallCost = $pricing['final_project_price'];
     $budget = (float) ($project['sales_budget'] ?? 0);
     $remaining = $budget - $overallCost;
     $allocationJson = json_encode($rows, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -492,7 +532,7 @@ function projectEstimationSave(
                 submitted_at = NOW()
             WHERE project_id = ?
         ");
-        $stmt->bind_param('iissdddddi', $expertId, $durationMonths, $complexity, $allocationJson, $additionalCosts, $developerCost, $technologyCost, $overallCost, $remaining, $projectId);
+        $stmt->bind_param('iissdsssdi', $expertId, $durationMonths, $complexity, $allocationJson, $additionalCosts, $developerCost, $technologyCost, $overallCost, $remaining, $projectId);
     } else {
         $stmt = $conn->prepare("
             INSERT INTO expert_project_estimations (
@@ -501,7 +541,7 @@ function projectEstimationSave(
                 overall_estimated_project_cost, remaining_budget, submitted_at
             ) VALUES (?, ?, 'submitted', ?, ?, ?, ?, ?, ?, ?, ?, NOW())
         ");
-        $stmt->bind_param('iiissddddd', $projectId, $expertId, $durationMonths, $complexity, $allocationJson, $additionalCosts, $developerCost, $technologyCost, $overallCost, $remaining);
+        $stmt->bind_param('iiissdsssd', $projectId, $expertId, $durationMonths, $complexity, $allocationJson, $additionalCosts, $developerCost, $technologyCost, $overallCost, $remaining);
     }
 
     $ok = $stmt->execute();
@@ -1220,6 +1260,9 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
     <script>
     (function () {
         const salaries = <?php echo json_encode(PROJECT_ESTIMATION_SALARIES); ?>;
+        const dailyRatesCents = <?php echo json_encode(array_map(static fn($type) => projectPricingScaled(projectEstimationDailyRate($type), 2), array_combine(array_keys(PROJECT_ESTIMATION_SALARIES), array_keys(PROJECT_ESTIMATION_SALARIES)))); ?>;
+        const estimatedDays = <?php echo json_encode(array_column($allocations, 'estimated_days_by_position', 'department')); ?>;
+        const technologyCents = <?php echo array_sum(array_map(static fn($technology) => projectPricingScaled((string) ($technology['estimated_cost'] ?? '0'), 2), $technologies)); ?>;
         const durationMonths = Number(document.getElementById('projectDurationMonths')?.value || 1);
         const techMonthly = Number(document.getElementById('techMonthlyTotal')?.value || 0);
         const clientBudget = <?php echo json_encode((float) ($project['sales_budget'] ?? 0)); ?>;
@@ -1348,18 +1391,23 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
 
         function updateProjectEstimation() {
             const groupedRows = new Map();
-            let developerMonthly = 0;
+            let developerCents = 0;
+            const departmentPositions = {};
             document.querySelectorAll('.allocation-input-row').forEach((row) => {
                 const typeSelect = row.querySelector('.developer-type-input');
                 const contributionInput = row.querySelector('.contribution-input');
                 const type = typeSelect?.value || 'Professional Dev';
                 const salary = Number(salaries[type] || 0);
+                const department = row.dataset.department;
+                const position = departmentPositions[department] || 0;
+                departmentPositions[department] = position + 1;
+                const costCents = dailyRatesCents[type] * (estimatedDays[department]?.[position] || 0);
+                developerCents += costCents;
                 const contribution = Math.max(0, Math.min(100, Number(contributionInput?.value || 0)));
                 if (contributionInput && Number(contributionInput.value || 0) !== contribution) {
                     contributionInput.value = contribution;
                 }
                 const contributionSalary = salary * (contribution / 100);
-                developerMonthly += contributionSalary;
                 const salaryCell = row.querySelector('.monthly-salary-cell');
                 if (salaryCell) salaryCell.textContent = peso.format(salary);
                 const current = groupedRows.get(type) || {
@@ -1367,21 +1415,24 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                     salary,
                     contributionTotal: 0,
                     contributionSalary: 0,
+                    costCents: 0,
                     count: 0
                 };
                 current.contributionTotal += contribution;
                 current.contributionSalary += contributionSalary;
+                current.costCents += costCents;
                 current.count += 1;
                 groupedRows.set(type, current);
             });
 
-            const developerTotal = developerMonthly * durationMonths;
-            const techTotal = techMonthly * durationMonths;
+            const developerTotal = developerCents / 100;
+            const techTotal = technologyCents / 100;
             const additional = Math.max(0, Number(document.getElementById('additionalCostsInput')?.value || 0));
-            const baseCost = developerTotal + techTotal + additional;
-            const priorityRate = Math.max(0, Number(priorityMarkup.rate || 0));
-            const priorityMarkupAmount = baseCost * priorityRate;
-            const overall = baseCost + priorityMarkupAmount;
+            const directCents = developerCents + technologyCents;
+            const baseCost = directCents / 100;
+            const overallCents = Math.floor((directCents * 132 + 50) / 100);
+            const priorityMarkupAmount = (overallCents - directCents) / 100;
+            const overall = overallCents / 100;
             const remaining = clientBudget - overall;
 
             const tbody = document.getElementById('developerCostRows');
@@ -1397,7 +1448,7 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                         <td>${row.averageContribution.toFixed(0)}% avg</td>
                         <td>${peso.format(row.contributionSalary)}</td>
                         <td>${row.count}</td>
-                        <td>${peso.format(row.contributionSalary * durationMonths)}</td>
+                        <td>${peso.format(row.costCents / 100)}</td>
                         <td>${peso.format(techMonthly)}</td>
                         <td>${durationMonths} month${durationMonths === 1 ? '' : 's'}</td>
                         <td>${peso.format(techTotal)}</td>

@@ -42,39 +42,22 @@ if ($selectedClient) {
             WHERE tr.project_id = {$project['id']}
         ");
         
-        // Calculate developer cost from the Architect Roadmap planned headcount.
+        // Use the same daily-rate pricing inputs as Expert Estimation.
+        $pricing = projectEstimationProjectPricing($conn, (int) $project['id']);
         $roadmapDeveloperRows = [];
-        $roadmapHeadcountResult = $conn->query("
-            SELECT MAX(COALESCE(developer_count, 0)) AS required_count
-            FROM methodology_phases
-            WHERE project_id = {$project['id']}
-        ");
-        $roadmapHeadcount = $roadmapHeadcountResult
-            ? max(0, (int) ($roadmapHeadcountResult->fetch_assoc()['required_count'] ?? 0))
-            : 0;
-        if ($roadmapHeadcount > 0) {
+        foreach ($pricing['developers'] as $developer) {
             $roadmapDeveloperRows[] = [
-                'role' => 'Roadmap Architect Headcount',
-                'required_count' => $roadmapHeadcount,
+                'role' => $developer['department'] . ' - ' . $developer['developer_type'],
+                'required_count' => 1,
+                'cost' => projectPricingCalculate([$developer], [])['development_cost'],
             ];
         }
-
-        // Estimated PHP 500 per day per developer.
-        $developerCost = 0;
-        foreach ($roadmapDeveloperRows as $alloc) {
-            $developerCost += $alloc['required_count'] * 500 * 30; // Monthly cost
-        }
-        
-        // Get resource costs from tech recommendations
+        $developerCost = $pricing['development_cost'];
         $resourceCost = 0;
-        $technologies->data_seek(0);
-        while($tech = $technologies->fetch_assoc()) {
-            $resourceCost += $tech['estimated_cost'];
-        }
         
         $reportData = [
             'project' => $project,
-            'technology_cost' => $resourceCost,
+            'technology_cost' => $pricing['technology_cost'],
             'developer_cost' => $developerCost,
             'resource_cost' => $resourceCost,
             'developer_rows' => $roadmapDeveloperRows,
@@ -1548,10 +1531,9 @@ include '../../includes/navbar.php';
                                     </thead>
                                 <tbody>
                                     <?php 
-                                    $techTotal = 0;
+                                    $techTotal = $reportData['technology_cost'];
                                     $technologies->data_seek(0);
                                     while($tech = $technologies->fetch_assoc()): 
-                                        $techTotal += $tech['estimated_cost'];
                                     ?>
                                     <tr>
                                         <td><?php echo htmlspecialchars($tech['tech_name']); ?></td>
@@ -1591,7 +1573,7 @@ include '../../includes/navbar.php';
                                 <tbody>
                                     <?php
                                     $roadmapDeveloperRows = $reportData['developer_rows'] ?? [];
-                                    $devTotal = 0;
+                                    $devTotal = $reportData['developer_cost'];
                                     if (empty($roadmapDeveloperRows)):
                                     ?>
                                     <tr>
@@ -1600,8 +1582,7 @@ include '../../includes/navbar.php';
                                     <?php
                                     else:
                                     foreach($roadmapDeveloperRows as $alloc):
-                                        $cost = $alloc['required_count'] * 500 * 30;
-                                        $devTotal += $cost;
+                                        $cost = (float) $alloc['cost'];
                                     ?>
                                     <tr>
                                         <td><?php echo htmlspecialchars($alloc['role']); ?></td>
@@ -1622,8 +1603,8 @@ include '../../includes/navbar.php';
                 </div>
                 <div class="report-breakdown__resource">
                     <span><i class="fas fa-server" aria-hidden="true"></i>Resource Costs</span>
-                    <strong>&#8369;<?php echo number_format($techTotal, 2); ?>/month</strong>
-                    <input type="hidden" name="resource_cost" value="<?php echo $techTotal; ?>">
+                    <strong>&#8369;<?php echo number_format($reportData['resource_cost'], 2); ?>/month</strong>
+                    <input type="hidden" name="resource_cost" value="<?php echo $reportData['resource_cost']; ?>">
                 </div>
                 </details>
 
@@ -1758,18 +1739,29 @@ function removeFee(button) {
 }
 
 function updateSummary() {
-    const tech = Math.max(0, Math.round((Number(document.querySelector('input[name="technology_cost"]')?.value) || 0) * 100) - billingBaseline.base.technology_cost) / 100;
-    const dev = Math.max(0, Math.round((Number(document.querySelector('input[name="developer_cost"]')?.value) || 0) * 100) - billingBaseline.base.developer_cost) / 100;
-    const resource = Math.max(0, Math.round((Number(document.querySelector('input[name="resource_cost"]')?.value) || 0) * 100) - billingBaseline.base.resource_cost) / 100;
+    const cents = value => {
+        const parts = String(value || '0').trim().match(/^(\d+)(?:\.(\d{0,2}))?$/);
+        return parts ? Number(parts[1]) * 100 + Number((parts[2] || '').padEnd(2, '0')) : 0;
+    };
+    const techCents = Math.max(0, cents(document.querySelector('input[name="technology_cost"]')?.value) - billingBaseline.base.technology_cost);
+    const devCents = Math.max(0, cents(document.querySelector('input[name="developer_cost"]')?.value) - billingBaseline.base.developer_cost);
+    const resourceCents = Math.max(0, cents(document.querySelector('input[name="resource_cost"]')?.value) - billingBaseline.base.resource_cost);
+    const tech = techCents / 100;
+    const dev = devCents / 100;
+    const resource = resourceCents / 100;
     
-    let otherTotal = 0;
+    let otherCents = 0;
     document.querySelectorAll('.fee-cost').forEach(input => {
         const name = input.closest('.other-fee-item')?.querySelector('input[type="text"]')?.value.trim().replace(/\s+/g, ' ').toLowerCase() || '';
         const prior = Number(billingBaseline.additions[name]?.cents || 0);
-        otherTotal += Math.max(0, Math.round((Number(input.value) || 0) * 100) - prior) / 100;
+        otherCents += Math.max(0, cents(input.value) - prior);
     });
     
-    const total = tech + dev + resource + otherTotal;
+    const priorDirectCents = billingBaseline.base.technology_cost + billingBaseline.base.developer_cost;
+    const nextDirectCents = priorDirectCents + techCents + devCents;
+    const total = (Math.floor((nextDirectCents * 132 + 50) / 100) - Math.floor((priorDirectCents * 132 + 50) / 100)
+        + resourceCents + otherCents) / 100;
+    const otherTotal = otherCents / 100;
     
     const saveButton = document.getElementById('saveReportButton');
     if (saveButton) saveButton.disabled = total <= 0;

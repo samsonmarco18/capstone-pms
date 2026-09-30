@@ -2,7 +2,7 @@
 <?php
 declare(strict_types=1);
 
-require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../includes/version-control.php';
 
 function gitHttpNormalizeSlug(string $value): string
 {
@@ -56,7 +56,7 @@ if ($slug === '' || $credentials === null) {
 try {
     $conn = getConnection();
     $stmt = $conn->prepare(
-        'SELECT webhook_token, repository_status
+        'SELECT *
          FROM project_repositories
          WHERE slug = ?
          LIMIT 1'
@@ -72,15 +72,13 @@ try {
 
     $repositoryStatus = (string) ($repository['repository_status'] ?? '');
     $webhookToken = trim((string) ($repository['webhook_token'] ?? ''));
-    if ($repositoryStatus !== 'active' || $webhookToken === '' || !hash_equals($webhookToken, $password)) {
+    if ($repositoryStatus !== 'active' || $webhookToken === '') {
         exit(1);
     }
 
-    // The HTTP username must be a real, active PMS account. The repository
-    // token remains the per-repository password, while the username identifies
-    // the person performing the push for the post-receive audit record.
+    // Credentials are bound to a user; a shared repository token cannot impersonate an Architect.
     $userStmt = $conn->prepare(
-        "SELECT username
+        "SELECT *
          FROM users
          WHERE LOWER(username) = LOWER(?) AND status = 'active'
          LIMIT 1"
@@ -89,11 +87,13 @@ try {
     $userStmt->execute();
     $pushUser = $userStmt->get_result()->fetch_assoc() ?: null;
     $userStmt->close();
-    if (!$pushUser) {
+    if (!$pushUser || !in_array($pushUser['role'], ['architect', 'developer', 'admin'], true)
+        || !vcCanAccessProject($conn, $pushUser, (int) $repository['project_id'])
+        || !(vcValidPersonalPushToken($repository, $pushUser, $password) || password_verify($password, $pushUser['password']))) {
         exit(1);
     }
-
-    fwrite(STDOUT, (string) $pushUser['username']);
+    vcInstallServerRepositoryHooks(vcGetRepositoryBarePath($slug), rtrim(BASE_URL, '/') . '/api/version-control/sync.php?token=' . urlencode($webhookToken));
+    fwrite(STDOUT, (string) $pushUser['username'] . "\n" . vcPersonalPushToken($repository, $pushUser));
     exit(0);
 } catch (Throwable $e) {
     error_log('Git HTTP auth failed: ' . $e->getMessage());

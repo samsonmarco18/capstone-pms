@@ -181,7 +181,12 @@ $todoTasks = developerTaskQuery(
     $taskBaseQuery . "
         WHERE {$developerTaskAccessSql}
           AND p.status != 'cancelled'
-          AND t.status = 'todo'
+          AND t.status IN ('todo', 'sul_revision', 'qa_failed')
+          AND (
+              t.status <> 'sul_revision'
+              OR NOT EXISTS (SELECT 1 FROM task_reopen_requests rr WHERE rr.task_id = t.id AND rr.status = 'architect_approved')
+              OR EXISTS (SELECT 1 FROM task_reopen_requests rr WHERE rr.task_id = t.id AND rr.status = 'architect_approved' AND rr.requested_by = {$user['id']})
+          )
           AND {$developerCurrentTaskOwnershipSql}
         ORDER BY t.deadline ASC
     ",
@@ -191,27 +196,7 @@ $inProgressTasks = developerTaskQuery($conn, $taskBaseQuery . "
     WHERE {$developerTaskAccessSql}
       AND p.status != 'cancelled'
       AND {$developerCurrentTaskOwnershipSql}
-      AND (
-          t.status IN ('in_progress', 'qa_failed')
-          OR (
-              t.status = 'sul_revision'
-              AND (
-                  NOT EXISTS (
-                      SELECT 1
-                      FROM task_reopen_requests rr_any_approved
-                      WHERE rr_any_approved.task_id = t.id
-                        AND rr_any_approved.status = 'architect_approved'
-                  )
-                  OR EXISTS (
-                      SELECT 1
-                      FROM task_reopen_requests rr_mine_approved
-                      WHERE rr_mine_approved.task_id = t.id
-                        AND rr_mine_approved.status = 'architect_approved'
-                        AND rr_mine_approved.requested_by = {$user['id']}
-                  )
-              )
-          )
-      )
+      AND t.status = 'in_progress'
     ORDER BY last_reopened_at DESC, t.updated_at DESC, t.deadline ASC
 ", 'in_progress');
 $reviewTasks = developerTaskQuery($conn, $taskBaseQuery . "
@@ -4173,6 +4158,8 @@ body.artifact-drawer-open {
                 <div class="kanban-body" id="todo-column">
                     <?php while($task = $todoTasks->fetch_assoc()): ?>
                     <?php
+                        $isReopenedTask = !empty($task['last_reopened_at']) && $task['status'] === 'sul_revision';
+                        $isRevisionTask = in_array($task['status'], ['sul_revision', 'qa_failed'], true);
                         $taskProjectName = trim((string) ($task['project_name'] ?? '')) ?: 'Project not specified';
                         $taskDescription = trim((string) ($task['description'] ?? ''));
                         $showTaskDescription = $taskDescription !== ''
@@ -4185,6 +4172,9 @@ body.artifact-drawer-open {
                         data-project-name="<?php echo htmlspecialchars($taskProjectName, ENT_QUOTES, 'UTF-8'); ?>"
                         draggable="true"
                     >
+                        <?php if ($isRevisionTask): ?>
+                            <span class="revision-indicator"><i class="fas fa-screwdriver-wrench"></i> <?php echo $isReopenedTask ? 'Reopened' : 'Revision'; ?></span>
+                        <?php endif; ?>
                         <h6 class="kanban-card-title"><?php echo htmlspecialchars($task['title']); ?></h6>
                         <?php if ($showTaskDescription): ?>
                             <p class="kanban-card-description"><?php echo htmlspecialchars(substr($taskDescription, 0, 100)); ?></p>

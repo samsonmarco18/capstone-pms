@@ -88,7 +88,8 @@ if (in_array('--database', $argv, true)) {
     check($row['status'] === 'sent' && $row['payment_proof_status'] === 'rejected' && (float) $row['amount_paid'] === 0.0, 'rejected stays unpaid');
     check($row['payment_verified_at'] === null, 'rejection is not verification');
     $conn->query("UPDATE receipts SET payment_proof_status = 'pending' WHERE id = 1");
-    paymentProofReview($conn, 1, 7, $input, [], true);
+    rejects(fn () => paymentProofReview($conn, 1, 7, ['review_proof_path' => $input['review_proof_path']], [], true), 'checkbox remains mandatory');
+    paymentProofReview($conn, 1, 7, ['review_proof_path' => $input['review_proof_path'], 'bank_confirmed' => '1'], [], true);
     $row = $conn->query('SELECT * FROM receipts WHERE id = 1')->fetch_assoc();
     check($row['status'] === 'paid' && $row['payment_proof_status'] === 'verified' && (float) $row['amount_paid'] === 500.0, 'approval marks paid');
     check((int) $row['payment_verified_by'] === 7 && $row['payment_verified_at'] !== null, 'reviewer and time recorded');

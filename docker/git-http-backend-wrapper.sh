@@ -59,7 +59,7 @@ if [ "$require_push_auth" = "1" ]; then
         echo 'WWW-Authenticate: Basic realm="ERNI PMS Git Push"'
         echo "Content-Type: text/plain"
         echo
-        echo "Use your repository token as the HTTP password for Git push."
+        echo "Use your PMS account password or personal repository credential for Git push."
         exit 0
     fi
 
@@ -71,7 +71,7 @@ if [ "$require_push_auth" = "1" ]; then
         exit 0
     fi
 
-    if ! remote_user=$(php "$AUTH_HELPER" "$PATH_INFO_VALUE" "$auth_header"); then
+    if ! auth_result=$(php "$AUTH_HELPER" "$PATH_INFO_VALUE" "$auth_header"); then
         echo "Status: 401 Unauthorized"
         echo 'WWW-Authenticate: Basic realm="ERNI PMS Git Push"'
         echo "Content-Type: text/plain"
@@ -80,7 +80,17 @@ if [ "$require_push_auth" = "1" ]; then
         exit 0
     fi
 
+    remote_user=$(printf '%s\n' "$auth_result" | sed -n '1p')
+    push_token=$(printf '%s\n' "$auth_result" | sed -n '2p')
+    if ! printf '%s' "$push_token" | grep -Eq '^v1:[0-9]+:[a-f0-9]{64}$'; then
+        echo "Status: 403 Forbidden"
+        echo "Content-Type: text/plain"
+        echo
+        echo "Git authentication failed."
+        exit 0
+    fi
     export REMOTE_USER="$remote_user"
+    export ERNI_PMS_PUSH_TOKEN="$push_token"
     export AUTH_TYPE="Basic"
 
     git --git-dir="$repo_dir" config http.receivepack true >/dev/null 2>&1 || true
