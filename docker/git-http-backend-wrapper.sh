@@ -86,6 +86,8 @@ if [ "$require_push_auth" = "1" ]; then
     remote_user=$(printf '%s\n' "$auth_result" | sed -n '1p')
     push_token=$(printf '%s\n' "$auth_result" | sed -n '2p')
     if ! printf '%s' "$push_token" | grep -Eq '^v1:[0-9]+:[a-f0-9]{64}$'; then
+        # Never log the helper output: it contains a personal credential.
+        echo "Git HTTP authentication helper returned an invalid credential protocol for ${repo_slug}." >&2
         echo "Status: 403 Forbidden"
         echo "Content-Type: text/plain"
         echo

@@ -121,6 +121,18 @@ try:
     assert auth.returncode == 0, auth.stderr.decode(errors='replace')
     assert auth.stdout.decode() == 'developer\n' + tokens['developer'], repr(auth.stdout)
     (app / 'config/.env.local.php').unlink()
+    # Runtime diagnostics must not contaminate the username/token protocol.
+    policy_path = app / 'includes/version-control-policy.php'
+    policy_source = policy_path.read_text(encoding='utf-8')
+    noisy_policy = policy_source.replace(
+        'function vcPersonalPushToken(array $repository, array $user): string\n{',
+        'function vcPersonalPushToken(array $repository, array $user): string\n{\n    echo "runtime diagnostic\\n";', 1)
+    assert noisy_policy != policy_source
+    policy_path.write_text(noisy_policy, encoding='utf-8')
+    auth = run([php, app / 'bin/git-http-auth.php', '/test-repo.git/git-receive-pack', 'Basic ' + good], env=env)
+    assert auth.returncode == 0, auth.stderr.decode(errors='replace')
+    assert auth.stdout.decode() == 'developer\n' + tokens['developer'], repr(auth.stdout)
+    policy_path.write_text(policy_source, encoding='utf-8')
     archive = json.loads(checked(harness + ['archive'], env=env))
     archive_path = Path(archive['archive_path']).resolve()
     assert archive_path.parent == work and archive_path.suffix == '.zip', (archive_path, work)

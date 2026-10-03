@@ -5,8 +5,15 @@ declare(strict_types=1);
 // stdout is a machine protocol consumed by the CGI wrapper. Included application
 // configuration must never shift the username/token lines with incidental output.
 ob_start();
+// Keep all incidental output out of the CGI protocol, including warnings from
+// database queries and hook installation after application startup.
+$protocolBufferLevel = ob_get_level();
+register_shutdown_function(static function () use ($protocolBufferLevel): void {
+    while (ob_get_level() >= $protocolBufferLevel) {
+        ob_end_clean();
+    }
+});
 require_once __DIR__ . '/../includes/version-control.php';
-ob_end_clean();
 
 function gitHttpNormalizeSlug(string $value): string
 {
@@ -97,7 +104,9 @@ try {
         exit(1);
     }
     vcInstallServerRepositoryHooks(vcGetRepositoryBarePath($slug), rtrim(BASE_URL, '/') . '/api/version-control/sync.php?token=' . urlencode($webhookToken));
-    fwrite(STDOUT, (string) $pushUser['username'] . "\n" . vcPersonalPushToken($repository, $pushUser));
+    $pushToken = vcPersonalPushToken($repository, $pushUser);
+    // STDOUT bypasses PHP's output buffer; emit only the validated protocol.
+    fwrite(STDOUT, (string) $pushUser['username'] . "\n" . $pushToken);
     exit(0);
 } catch (Throwable $e) {
     error_log('Git HTTP auth failed: ' . $e->getMessage());
