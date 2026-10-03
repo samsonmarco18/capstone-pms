@@ -114,8 +114,13 @@ try:
     auth = run([php, app / 'bin/git-http-auth.php', '/test-repo.git/git-receive-pack', 'Basic ' + bad], env=env)
     assert auth.returncode != 0
     good = base64.b64encode(('developer:' + tokens['developer']).encode()).decode()
-    auth = checked([php, app / 'bin/git-http-auth.php', '/test-repo.git/git-receive-pack', 'Basic ' + good], env=env)
-    assert auth.splitlines()[0] == 'developer'
+    # Verify the exact CGI protocol, including startup output that checked() strips.
+    # A configuration include emitting whitespace used to shift both auth lines.
+    (app / 'config/.env.local.php').write_text("<?php echo \"\\r\\n\"; return [];", encoding='utf-8')
+    auth = run([php, app / 'bin/git-http-auth.php', '/test-repo.git/git-receive-pack', 'Basic ' + good], env=env)
+    assert auth.returncode == 0, auth.stderr.decode(errors='replace')
+    assert auth.stdout.decode() == 'developer\n' + tokens['developer'], repr(auth.stdout)
+    (app / 'config/.env.local.php').unlink()
     archive = json.loads(checked(harness + ['archive'], env=env))
     archive_path = Path(archive['archive_path']).resolve()
     assert archive_path.parent == work and archive_path.suffix == '.zip', (archive_path, work)

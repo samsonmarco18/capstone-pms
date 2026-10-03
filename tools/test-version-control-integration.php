@@ -22,7 +22,7 @@ $users = $conn->query('SELECT * FROM users ORDER BY id')->fetch_all(MYSQLI_ASSOC
 if ($mode === 'seed') {
     $tokens = [];
     foreach ($users as $user) $tokens[$user['role']] = vcPersonalPushToken($repository, $user);
-    echo json_encode($tokens);
+    echo json_encode($tokens);  
 } elseif ($mode === 'hooks') {
     vcInstallServerRepositoryHooks(vcGetRepositoryBarePath('test-repo'), 'http://127.0.0.1:9/disabled-test-sync');
     echo 'OK';

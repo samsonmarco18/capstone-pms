@@ -80,6 +80,9 @@ if [ "$require_push_auth" = "1" ]; then
         exit 0
     fi
 
+    # PHP/config files may use Windows line endings. Normalize the protocol before
+    # validating it; never relax the personal credential requirement.
+    auth_result=$(printf '%s\n' "$auth_result" | tr -d '\r' | sed '/^$/d')
     remote_user=$(printf '%s\n' "$auth_result" | sed -n '1p')
     push_token=$(printf '%s\n' "$auth_result" | sed -n '2p')
     if ! printf '%s' "$push_token" | grep -Eq '^v1:[0-9]+:[a-f0-9]{64}$'; then

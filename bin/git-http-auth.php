@@ -2,7 +2,11 @@
 <?php
 declare(strict_types=1);
 
+// stdout is a machine protocol consumed by the CGI wrapper. Included application
+// configuration must never shift the username/token lines with incidental output.
+ob_start();
 require_once __DIR__ . '/../includes/version-control.php';
+ob_end_clean();
 
 function gitHttpNormalizeSlug(string $value): string
 {
