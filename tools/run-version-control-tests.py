@@ -114,6 +114,19 @@ try:
     auth = run([php, app / 'bin/git-http-auth.php', '/test-repo.git/git-receive-pack', 'Basic ' + bad], env=env)
     assert auth.returncode != 0
     good = base64.b64encode(('developer:' + tokens['developer']).encode()).decode()
+    # Personal credentials resolve the PMS account, regardless of cached HTTP labels.
+    for username in ['git', 'architect']:
+        credential = base64.b64encode((username + ':' + tokens['developer']).encode()).decode()
+        auth = run([php, app / 'bin/git-http-auth.php', '/test-repo.git/git-receive-pack', 'Basic ' + credential], env=env)
+        assert auth.returncode == 0, auth.stderr.decode(errors='replace')
+        assert auth.stdout.decode() == 'developer\n' + tokens['developer'], repr(auth.stdout)
+    tampered = base64.b64encode(('architect:' + tokens['developer'].replace('v1:2:', 'v1:1:')).encode()).decode()
+    auth = run([php, app / 'bin/git-http-auth.php', '/test-repo.git/git-receive-pack', 'Basic ' + tampered], env=env)
+    assert auth.returncode != 0
+    account_password = base64.b64encode(b'developer:isolated-test-password').decode()
+    auth = run([php, app / 'bin/git-http-auth.php', '/test-repo.git/git-receive-pack', 'Basic ' + account_password], env=env)
+    assert auth.returncode == 0, auth.stderr.decode(errors='replace')
+    assert auth.stdout.decode() == 'developer\n' + tokens['developer'], repr(auth.stdout)
     # Verify the exact CGI protocol, including startup output that checked() strips.
     # A configuration include emitting whitespace used to shift both auth lines.
     (app / 'config/.env.local.php').write_text("<?php echo \"\\r\\n\"; return [];", encoding='utf-8')

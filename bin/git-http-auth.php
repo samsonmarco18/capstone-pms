@@ -87,20 +87,31 @@ try {
         exit(1);
     }
 
-    // Credentials are bound to a user; a shared repository token cannot impersonate an Architect.
-    $userStmt = $conn->prepare(
-        "SELECT *
-         FROM users
-         WHERE LOWER(username) = LOWER(?) AND status = 'active'
-         LIMIT 1"
-    );
-    $userStmt->bind_param('s', $username);
+    // A personal credential identifies the PMS account that downloaded the
+    // repository. Git clients may supply a cached or generic HTTP username;
+    // never use that label (or commit authorship) as the account's authority.
+    $isPersonalCredential = preg_match('/^v1:([1-9][0-9]*):[a-f0-9]{64}$/D', $password, $tokenParts) === 1;
+    if ($isPersonalCredential) {
+        $userId = (int) $tokenParts[1];
+        $userStmt = $conn->prepare("SELECT * FROM users WHERE id = ? AND status = 'active' LIMIT 1");
+        $userStmt->bind_param('i', $userId);
+    } else {
+        $userStmt = $conn->prepare(
+            "SELECT *
+             FROM users
+             WHERE LOWER(username) = LOWER(?) AND status = 'active'
+             LIMIT 1"
+        );
+        $userStmt->bind_param('s', $username);
+    }
     $userStmt->execute();
     $pushUser = $userStmt->get_result()->fetch_assoc() ?: null;
     $userStmt->close();
     if (!$pushUser || !in_array($pushUser['role'], ['architect', 'developer', 'admin'], true)
         || !vcCanAccessProject($conn, $pushUser, (int) $repository['project_id'])
-        || !(vcValidPersonalPushToken($repository, $pushUser, $password) || password_verify($password, $pushUser['password']))) {
+        || !($isPersonalCredential
+            ? vcValidPersonalPushToken($repository, $pushUser, $password)
+            : password_verify($password, $pushUser['password']))) {
         exit(1);
     }
     vcInstallServerRepositoryHooks(vcGetRepositoryBarePath($slug), rtrim(BASE_URL, '/') . '/api/version-control/sync.php?token=' . urlencode($webhookToken));
