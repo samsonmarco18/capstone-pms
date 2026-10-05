@@ -26,6 +26,17 @@ if ($mode === 'seed') {
 } elseif ($mode === 'hooks') {
     vcInstallServerRepositoryHooks(vcGetRepositoryBarePath('test-repo'), 'http://127.0.0.1:9/disabled-test-sync');
     echo 'OK';
+} elseif ($mode === 'ready') {
+    $conn->query("INSERT INTO tasks (id, project_id, title, assigned_to, status) VALUES (2, 1, 'QA Feature', 2, 'qa_passed')");
+    $stmt = $conn->prepare("INSERT INTO task_git_updates (task_id, user_id, branch_name, commit_hash) VALUES (2, 2, 'feature/test', ?)");
+    $stmt->bind_param('s', $argv[2]);
+    $stmt->execute();
+    echo 'OK';
+} elseif ($mode === 'task-merge') {
+    $task = $conn->query('SELECT status, architect_reviewed_by FROM tasks WHERE id = 2')->fetch_assoc();
+    $task['architect_reviewed_by'] = (int) $task['architect_reviewed_by'];
+    $merge = $conn->query("SELECT COUNT(*) AS merge_count, MAX(commit_hash) AS commit_hash FROM task_git_updates WHERE task_id = 2 AND git_action = 'merged'")->fetch_assoc();
+    echo json_encode(array_merge($task, ['merge_count' => (int) $merge['merge_count'], 'commit_hash' => $merge['commit_hash']]));
 } elseif ($mode === 'sync') {
     $result = vcSyncExternalCommit($conn, $repository, [
         'branch_name' => 'main', 'commit_hash' => $argv[2], 'commit_title' => 'External merge',
@@ -33,7 +44,7 @@ if ($mode === 'seed') {
     ]);
     $branch = $conn->query("SELECT last_commit_hash FROM repository_branches WHERE repository_id = 1 AND name = 'main'")->fetch_assoc();
     $kind = $conn->query('SELECT commit_kind FROM repository_commits ORDER BY id DESC LIMIT 1')->fetch_assoc();
-    $notifications = $conn->query('SELECT user_id, title FROM notifications ORDER BY id')->fetch_all(MYSQLI_ASSOC);
+    $notifications = $conn->query("SELECT user_id, title FROM notifications WHERE related_table = 'project_repositories' ORDER BY id")->fetch_all(MYSQLI_ASSOC);
     echo json_encode(['result' => $result, 'head' => $branch['last_commit_hash'] ?? null, 'kind' => $kind['commit_kind'] ?? null, 'notifications' => $notifications]);
 } elseif ($mode === 'archive') {
     $archive = vcCreateRepositoryArchive('test-repo', 'main', null, $repository['webhook_token'], $users[1], 'main');

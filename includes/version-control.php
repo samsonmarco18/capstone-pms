@@ -894,18 +894,22 @@ function vcInstallServerRepositoryHooks(string $bareRepositoryPath, string $sync
 {
     vcInstallServerRepositoryPolicy($bareRepositoryPath);
     $hooksPath = $bareRepositoryPath . DIRECTORY_SEPARATOR . 'hooks';
+    $quoteHookArg = static fn(string $value): string => "'" . str_replace("'", "'\\''", str_replace('\\', '/', $value)) . "'";
+    $taskSyncCommand = $quoteHookArg(PHP_BINDIR . DIRECTORY_SEPARATOR . (PHP_OS_FAMILY === 'Windows' ? 'php.exe' : 'php'))
+        . ' ' . $quoteHookArg(__DIR__ . '/../bin/git-post-receive.php') . ' ' . $quoteHookArg(basename($bareRepositoryPath, '.git'));
 
     $postUpdate = "#!/bin/sh\n" .
         "git update-server-info\n";
 
     $postReceive = "#!/bin/sh\n" .
         "PMS_URL=\"" . $syncEndpointUrl . "\"\n" .
-        "command -v curl >/dev/null 2>&1 || exit 0\n" .
         "json_escape() {\n" .
         "  printf '%s' \"\$1\" | sed 's/\\\\/\\\\\\\\/g; s/\"/\\\\\"/g' | tr '\\n' ' '\n" .
         "}\n" .
         "while read OLD_REV NEW_REV REF_NAME; do\n" .
         "  [ \"\$NEW_REV\" = \"0000000000000000000000000000000000000000\" ] && continue\n" .
+        '  ' . $taskSyncCommand . ' "$OLD_REV" "$NEW_REV" "$REF_NAME"' . "\n" .
+        "  command -v curl >/dev/null 2>&1 || continue\n" .
         "  BRANCH=\${REF_NAME#refs/heads/}\n" .
         "  TITLE=\$(git log -1 --pretty=%s \"\$NEW_REV\")\n" .
         "  BODY=\$(git log -1 --pretty=%B \"\$NEW_REV\")\n" .

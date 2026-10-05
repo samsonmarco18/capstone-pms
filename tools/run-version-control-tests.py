@@ -35,7 +35,10 @@ try:
     for name in ['config/.env.php', 'config/database.php', 'config/database-compat.php',
                  'includes/auth.php', 'includes/file-storage.php', 'includes/app-settings.php', 'includes/mailer.php',
                  'includes/version-control.php', 'includes/version-control-policy.php', 'bin/git-pre-receive.php',
-                 'bin/git-http-auth.php', 'tools/test-version-control-integration.php']:
+                 'bin/git-http-auth.php', 'bin/git-post-receive.php',
+                 'includes/workflow.php', 'includes/project-workflow.php', 'includes/project-template.php',
+                 'includes/project-estimation.php', 'includes/project-pricing.php',
+                 'tools/test-version-control-integration.php']:
         target = app / name
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(root / name, target)
@@ -60,7 +63,7 @@ try:
     tables = ['users', 'clients', 'projects', 'tasks', 'methodology_tasks', 'methodology_task_departments',
               'developer_allocations', 'developer_allocation_assignments', 'project_repositories',
               'repository_branches', 'repository_commits', 'repository_commit_files', 'repository_operations',
-              'notifications', 'audit_logs']
+              'notifications', 'audit_logs', 'task_git_updates', 'task_comments']
     schema = []
     for table in tables:
         sql = re.search(r'CREATE TABLE ' + table + r' \([\s\S]*?\) ENGINE=[^;]+;', source).group(0)
@@ -96,11 +99,20 @@ try:
     (clone / 'test.txt').write_text('feature\n')
     checked(['git', 'commit', '-am', 'Feature'], cwd=clone, env=env)
     push('developer', 'HEAD:feature/test')
+    feature_hash = checked(['git', 'rev-parse', 'HEAD'], cwd=clone, env=env)
+    checked(harness + ['ready', feature_hash], env=env)
     push('developer', 'HEAD:main', False)
     checked(['git', 'switch', 'main'], cwd=clone, env=env)
     checked(['git', 'merge', '--no-ff', 'feature/test', '-m', 'Merge feature'], cwd=clone, env=env)
     push('architect', 'HEAD:main')
     head = checked(['git', 'rev-parse', 'HEAD'], cwd=clone, env=env)
+    task_merge = json.loads(checked(harness + ['task-merge'], env=env))
+    assert task_merge['status'] == 'completed' and task_merge['architect_reviewed_by'] == 1, task_merge
+    assert task_merge['commit_hash'] == head and task_merge['merge_count'] == 1, task_merge
+    # Replaying the post-receive event must not duplicate approval or notifications.
+    post_env = dict(env, ERNI_PMS_PUSH_TOKEN=tokens['architect'])
+    checked([php, app / 'bin/git-post-receive.php', 'test-repo', feature_hash, head, 'refs/heads/main'], env=post_env)
+    assert json.loads(checked(harness + ['task-merge'], env=env)) == task_merge
     published = json.loads(checked(harness + ['sync', head], env=env))
     assert published['head'] == head and published['kind'] == 'merge', published
     assert published['notifications'] == [{'user_id': '1', 'title': 'Main branch updated'}] or published['notifications'] == [{'user_id': 1, 'title': 'Main branch updated'}]
