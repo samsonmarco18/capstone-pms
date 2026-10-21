@@ -88,6 +88,11 @@ function backupSqlStringLiteral(string $value, string $driver): string
 function backupFetchRows(mysqli|PgsqlMysqliCompatConnection $conn, string $sql): array
 {
     $result = $conn->query($sql);
+    if ($result === false) {
+        $error = trim((string) ($conn->error ?? ''));
+        throw new RuntimeException('Backup query failed' . ($error !== '' ? ': ' . $error : '.'));
+    }
+
     if ($result instanceof mysqli_result || $result instanceof PgsqlMysqliCompatResult) {
         return $result->fetch_all(MYSQLI_ASSOC);
     }
@@ -117,7 +122,50 @@ function backupGetColumns(mysqli|PgsqlMysqliCompatConnection $conn, string $tabl
     return backupFetchRows($conn, $sql);
 }
 
-function backupBuildDataDump(mysqli|PgsqlMysqliCompatConnection $conn, string $targetDriver): string
+/**
+ * Build a self-contained MySQL/MariaDB dump from the active database.  The
+ * schema is read with SHOW CREATE TABLE, so a backup always has the fields,
+ * indexes, and foreign keys that exist at the time it is downloaded.
+ */
+function backupBuildMySqlCompleteDump(mysqli|PgsqlMysqliCompatConnection $conn): string
+{
+    $timestamp = date('Y-m-d H:i:s P');
+    $tables = backupGetTables($conn);
+    $lines = [
+        '-- ERNI PMS complete MySQL/MariaDB backup',
+        '-- Includes the live schema and data.',
+        '-- Generated at: ' . $timestamp,
+        '',
+        'SET FOREIGN_KEY_CHECKS=0;',
+        '',
+    ];
+
+    foreach ($tables as $table) {
+        if (!preg_match('/^[a-zA-Z0-9_]+$/', $table)) {
+            continue;
+        }
+
+        $quotedTable = backupSqlIdentifier($table, 'mysql');
+        $definitionRows = backupFetchRows($conn, 'SHOW CREATE TABLE ' . $quotedTable);
+        $definition = (string) ($definitionRows[0]['Create Table'] ?? '');
+        if ($definition === '') {
+            throw new RuntimeException('Unable to read the schema for table ' . $table);
+        }
+
+        $lines[] = '-- Table structure: ' . $table;
+        $lines[] = 'DROP TABLE IF EXISTS ' . $quotedTable . ';';
+        $lines[] = $definition . ';';
+        $lines[] = '';
+    }
+
+    // The data builder supplies INSERT statements and preserves current values.
+    $dataDump = backupBuildDataDump($conn, 'mysql', false);
+    $lines[] = $dataDump;
+
+    return implode("\n", $lines) . "\n";
+}
+
+function backupBuildDataDump(mysqli|PgsqlMysqliCompatConnection $conn, string $targetDriver, bool $truncateTables = true): string
 {
     $timestamp = date('Y-m-d H:i:s P');
     $tables = backupGetTables($conn);
@@ -168,8 +216,8 @@ function backupBuildDataDump(mysqli|PgsqlMysqliCompatConnection $conn, string $t
 
         $lines[] = '-- Table: ' . $table;
         $targetTable = backupSqlIdentifier($table, $targetDriver);
-        if ($targetDriver === 'mysql') {
-            $lines[] = 'truncate table ' . $targetTable . ';';
+        if ($targetDriver === 'mysql' && $truncateTables) {
+            $lines[] = 'TRUNCATE TABLE ' . $targetTable . ';';
         }
 
         if ($rows === []) {
@@ -186,10 +234,32 @@ function backupBuildDataDump(mysqli|PgsqlMysqliCompatConnection $conn, string $t
         foreach ($rows as $row) {
             $values = [];
             foreach ($columnNames as $columnName) {
-                $values[] = backupSqlValue($row[$columnName] ?? null, $columnTypes[$columnName] ?? '', $targetDriver);
+                // File contents can exceed MariaDB's default max_allowed_packet.
+                // Insert the row first, then append the base64 content in safe chunks.
+                $isChunkedUploadContent = $targetDriver === 'mysql'
+                    && $table === 'upload_blobs'
+                    && $columnName === 'content_base64'
+                    && isset($row['id'])
+                    && strlen((string) ($row[$columnName] ?? '')) > 1024 * 1024;
+                $values[] = $isChunkedUploadContent
+                    ? "''"
+                    : backupSqlValue($row[$columnName] ?? null, $columnTypes[$columnName] ?? '', $targetDriver);
             }
 
             $lines[] = 'INSERT INTO ' . $targetTable . ' (' . $targetColumns . ') VALUES (' . implode(', ', $values) . ');';
+
+            if ($targetDriver === 'mysql'
+                && $table === 'upload_blobs'
+                && isset($row['id'])
+                && strlen((string) ($row['content_base64'] ?? '')) > 1024 * 1024
+            ) {
+                $id = (int) $row['id'];
+                foreach (str_split((string) $row['content_base64'], 1024 * 1024) as $chunk) {
+                    $lines[] = 'UPDATE ' . $targetTable
+                        . ' SET `content_base64` = CONCAT(`content_base64`, ' . backupSqlValue($chunk, 'text', 'mysql') . ')'
+                        . ' WHERE `id` = ' . $id . ';';
+                }
+            }
         }
         $lines[] = '';
     }
@@ -264,13 +334,15 @@ function backupSendDualFormatDownload(mysqli|PgsqlMysqliCompatConnection $conn, 
 {
     $timestamp = date('Y-m-d_H-i-s');
     $baseName = 'erni_pms_backup_' . $timestamp;
-    $entries = [
-        $baseName . '_mysql_data.sql' => backupBuildDataDump($conn, 'mysql'),
-        $baseName . '_postgresql_data.sql' => backupBuildDataDump($conn, 'pgsql'),
-    ];
+    $entries = DB_DRIVER === 'mysql'
+        ? [$baseName . '_mysql_complete.sql' => backupBuildMySqlCompleteDump($conn)]
+        : [
+            $baseName . '_mysql_data.sql' => backupBuildDataDump($conn, 'mysql'),
+            $baseName . '_postgresql_data.sql' => backupBuildDataDump($conn, 'pgsql'),
+        ];
 
     $mysqlSchema = realpath(__DIR__ . '/../../database.sql');
-    if ($mysqlSchema !== false && is_file($mysqlSchema)) {
+    if (DB_DRIVER !== 'mysql' && $mysqlSchema !== false && is_file($mysqlSchema)) {
         $entries['schema_mysql_database.sql'] = (string) file_get_contents($mysqlSchema);
     }
 
@@ -279,11 +351,13 @@ function backupSendDualFormatDownload(mysqli|PgsqlMysqliCompatConnection $conn, 
         $entries['schema_postgresql_database.sql'] = (string) file_get_contents($postgresSchema);
     }
 
-    $entries['README.txt'] = "This archive contains live ERNI PMS database data in both MySQL and PostgreSQL INSERT formats.\nSchema files are included when available from the project root.\nGenerated at {$timestamp} from source driver " . DB_DRIVER . ".\n";
+    $entries['README.txt'] = DB_DRIVER === 'mysql'
+        ? "Import the *_mysql_complete.sql file into MySQL or MariaDB. It recreates every table using the live schema, then restores its data.\nGenerated at {$timestamp}.\n"
+        : "This archive contains both MySQL and PostgreSQL data exports. Import schema_mysql_database.sql before *_mysql_data.sql, or schema_postgresql_database.sql before *_postgresql_data.sql.\nGenerated at {$timestamp} from source driver " . DB_DRIVER . ".\n";
     $archive = backupBuildZipArchive($entries);
 
     logActivity((int) $user['id'], 'database_backup_download', 'system', 0, null, [
-        'formats' => ['mysql', 'postgresql'],
+        'formats' => DB_DRIVER === 'mysql' ? ['mysql_complete'] : ['mysql_data', 'postgresql_data'],
         'source_driver' => DB_DRIVER,
     ]);
 
@@ -390,7 +464,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $mailUsername = trim((string) ($_POST['mail_username'] ?? ''));
         $mailPassword = trim((string) ($_POST['mail_password'] ?? ''));
         $mailFromEmail = trim((string) ($_POST['mail_from_email'] ?? $mailUsername));
-        $mailFromName = trim((string) ($_POST['mail_from_name'] ?? 'EVORTIX PMS'));
+        $mailFromName = trim((string) ($_POST['mail_from_name'] ?? 'ERNI Development Center Philippines, Inc.'));
         $gmailClientId = trim((string) ($_POST['gmail_client_id'] ?? ''));
         $gmailClientSecret = trim((string) ($_POST['gmail_client_secret'] ?? ''));
         $gmailRefreshToken = trim((string) ($_POST['gmail_refresh_token'] ?? ''));
@@ -458,9 +532,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $testEmail = trim((string) ($_POST['test_email'] ?? (string) ($user['email'] ?? '')));
         $result = sendSystemEmail(
             $testEmail,
-            'EVORTIX PMS Gmail Integration Test',
-            '<div style="font-family:Arial,sans-serif;padding:24px;"><h2 style="color:#1f6392;">EVORTIX PMS Gmail Test</h2><p>Your Gmail SMTP integration is working.</p><p>This message confirms the system can now send email through your configured Google account.</p></div>',
-            "EVORTIX PMS Gmail Test\n\nYour Gmail SMTP integration is working."
+            'ERNI Development Center Philippines, Inc. Gmail Integration Test',
+            '<div style="font-family:Arial,sans-serif;padding:24px;"><h2 style="color:#1f6392;">ERNI Development Center Philippines, Inc. Gmail Test</h2><p>Your Gmail SMTP integration is working.</p><p>This message confirms the system can now send email through your configured Google account.</p></div>',
+            "ERNI Development Center Philippines, Inc. Gmail Test\n\nYour Gmail SMTP integration is working."
         );
         $errorDetail = trim((string) ($result['error'] ?? ''));
         if (!$result['success'] && $errorDetail === '') {
@@ -1514,7 +1588,7 @@ input:checked + .switch-slider:before {
                     </div>
                     <div class="form-group">
                         <label class="form-label">From Name</label>
-                        <input type="text" name="mail_from_name" class="form-control-modern" value="<?php echo htmlspecialchars($activeMailConfig['from_name'] ?? 'EVORTIX PMS'); ?>" required>
+                        <input type="text" name="mail_from_name" class="form-control-modern" value="<?php echo htmlspecialchars($activeMailConfig['from_name'] ?? 'ERNI Development Center Philippines, Inc.'); ?>" required>
                     </div>
                     <div class="form-group full-span">
                         <hr style="margin: 0.25rem 0;">

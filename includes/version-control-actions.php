@@ -139,6 +139,9 @@ function vcHandlePostAction(mysqli|PgsqlMysqliCompatConnection $conn, array $use
     if ($action === '') {
         return ['project_id' => $projectId, 'repository_id' => $repositoryId];
     }
+    if ($action === 'merge_branches' && ($user['role'] ?? '') !== 'architect') {
+        throw new RuntimeException('Only an Architect can merge branches. Developers must submit a pull request.');
+    }
 
     if ($user['role'] === 'sul') {
         throw new RuntimeException('SUL can review Pull Requests only. Final merge is restricted to Architect.');
@@ -468,6 +471,7 @@ function vcHandlePostAction(mysqli|PgsqlMysqliCompatConnection $conn, array $use
         if ($branchName === '') {
             throw new RuntimeException('Branch name is required.');
         }
+        vcAssertPushAllowed($user, 'refs/heads/' . $branchName, (string) ($repository['default_branch_name'] ?: 'main'), (bool) $isProtected);
 
         $sourceBranchValue = $sourceBranchId > 0 ? $sourceBranchId : null;
         $lastCommitHash = null;
@@ -574,6 +578,7 @@ function vcHandlePostAction(mysqli|PgsqlMysqliCompatConnection $conn, array $use
         if (!$branch) {
             throw new RuntimeException('Branch not found.');
         }
+        vcAssertPushAllowed($user, 'refs/heads/' . $branch['name'], (string) ($repository['default_branch_name'] ?: 'main'), (bool) $branch['is_protected']);
 
         $parentCommitId = null;
         if (!empty($branch['last_commit_hash'])) {

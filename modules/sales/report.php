@@ -1,9 +1,12 @@
 <?php
 require_once '../../includes/auth.php';
+require_once '../../includes/sales-billing.php';
+require_once '../../includes/payment-proof.php';
 requireRole('sales');
 
 $conn = getConnection();
 $user = getCurrentUser();
+salesBillingEnsureSchema($conn);
 
 // Get clients with projects
 $clients = $conn->query("
@@ -13,22 +16,19 @@ $clients = $conn->query("
     ORDER BY c.name
 ");
 
-$selectedClient = isset($_GET['client_id']) ? $_GET['client_id'] : 0;
+$selectedClient = (int) ($_GET['client_id'] ?? $_POST['client_id'] ?? 0);
+$selectedProjectId = (int) ($_GET['project_id'] ?? $_POST['project_id'] ?? 0);
 $reportData = null;
 $technologies = null;
 $developerCost = null;
 $resources = null;
 $otherFees = [];
 
-function toMoney($value): float {
-    return is_numeric($value) ? (float) $value : 0.0;
-}
-
 if ($selectedClient) {
     // Get project for this client
     $project = $conn->query("
         SELECT * FROM projects 
-        WHERE client_id = $selectedClient 
+        WHERE client_id = $selectedClient AND ($selectedProjectId = 0 OR id = $selectedProjectId)
         ORDER BY created_at DESC 
         LIMIT 1
     ")->fetch_assoc();
@@ -42,39 +42,22 @@ if ($selectedClient) {
             WHERE tr.project_id = {$project['id']}
         ");
         
-        // Calculate developer cost from the Architect Roadmap planned headcount.
+        // Use the same daily-rate pricing inputs as Expert Estimation.
+        $pricing = projectEstimationProjectPricing($conn, (int) $project['id']);
         $roadmapDeveloperRows = [];
-        $roadmapHeadcountResult = $conn->query("
-            SELECT MAX(COALESCE(developer_count, 0)) AS required_count
-            FROM methodology_phases
-            WHERE project_id = {$project['id']}
-        ");
-        $roadmapHeadcount = $roadmapHeadcountResult
-            ? max(0, (int) ($roadmapHeadcountResult->fetch_assoc()['required_count'] ?? 0))
-            : 0;
-        if ($roadmapHeadcount > 0) {
+        foreach ($pricing['developers'] as $developer) {
             $roadmapDeveloperRows[] = [
-                'role' => 'Roadmap Architect Headcount',
-                'required_count' => $roadmapHeadcount,
+                'role' => $developer['department'] . ' - ' . $developer['developer_type'],
+                'required_count' => 1,
+                'cost' => projectPricingCalculate([$developer], [])['development_cost'],
             ];
         }
-
-        // Estimated PHP 500 per day per developer.
-        $developerCost = 0;
-        foreach ($roadmapDeveloperRows as $alloc) {
-            $developerCost += $alloc['required_count'] * 500 * 30; // Monthly cost
-        }
-        
-        // Get resource costs from tech recommendations
+        $developerCost = $pricing['development_cost'];
         $resourceCost = 0;
-        $technologies->data_seek(0);
-        while($tech = $technologies->fetch_assoc()) {
-            $resourceCost += $tech['estimated_cost'];
-        }
         
         $reportData = [
             'project' => $project,
-            'technology_cost' => $resourceCost,
+            'technology_cost' => $pricing['technology_cost'],
             'developer_cost' => $developerCost,
             'resource_cost' => $resourceCost,
             'developer_rows' => $roadmapDeveloperRows,
@@ -82,76 +65,28 @@ if ($selectedClient) {
     }
 }
 
-// Save report
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_report'])) {
-    $projectId = (int) ($_POST['project_id'] ?? 0);
-    $clientId = (int) ($_POST['client_id'] ?? 0);
-    $technologyCost = toMoney($_POST['technology_cost'] ?? 0);
-    $developerCost = toMoney($_POST['developer_cost'] ?? 0);
-    $resourceCost = toMoney($_POST['resource_cost'] ?? 0);
-    $totalCost = $technologyCost + $developerCost + $resourceCost;
-    $cleanOtherFees = [];
-
-    if (isset($_POST['other_fees_list']) && is_array($_POST['other_fees_list'])) {
-        foreach ($_POST['other_fees_list'] as $fee) {
-            $feeName = trim((string) ($fee['name'] ?? ''));
-            $feeCost = toMoney($fee['cost'] ?? 0);
-
-            if ($feeName === '' && $feeCost <= 0) {
-                continue;
-            }
-
-            $cleanOtherFees[] = [
-                'name' => $feeName,
-                'cost' => $feeCost,
-            ];
-            $totalCost += $feeCost;
-        }
-    }
-
-    $otherFees = json_encode($cleanOtherFees);
-    
-    $stmt = $conn->prepare("
-        INSERT INTO sales_reports (project_id, client_id, technology_cost, developer_cost, resource_cost, other_fees, total_cost, created_by) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    ");
-    $stmt->bind_param("iidddsdi", $projectId, $clientId, $technologyCost, $developerCost, $resourceCost, $otherFees, $totalCost, $user['id']);
-    
-    if ($stmt->execute()) {
-        $reportId = $stmt->insert_id;
-
-        $clientStmt = $conn->prepare("SELECT name, email FROM clients WHERE id = ? LIMIT 1");
-        $clientStmt->bind_param("i", $clientId);
-        $clientStmt->execute();
-        $clientData = $clientStmt->get_result()->fetch_assoc();
-        $clientStmt->close();
-
-        $receiptNumber = 'EVORTIX-' . date('Ymd') . '-' . str_pad((string) $reportId, 5, '0', STR_PAD_LEFT);
-        $amountDue = $technologyCost + $developerCost + $resourceCost;
-        $dueDate = date('Y-m-d', strtotime('+30 days'));
-
-        $receiptStmt = $conn->prepare("
-            INSERT INTO receipts (report_id, receipt_number, client_name, client_email, amount_due, due_date, status, generated_by)
-            VALUES (?, ?, ?, ?, ?, ?, 'draft', ?)
-        ");
-        $clientName = $clientData['name'] ?? '';
-        $clientEmail = $clientData['email'] ?? '';
-        $receiptStmt->bind_param("isssdsi", $reportId, $receiptNumber, $clientName, $clientEmail, $amountDue, $dueDate, $user['id']);
-        $receiptStmt->execute();
-        $receiptId = $receiptStmt->insert_id;
-        $receiptStmt->close();
-
-        logActivity($user['id'], 'create_report', 'sales_reports', $reportId, null, $_POST);
-        logActivity($user['id'], 'create_receipt', 'receipts', $receiptId, null, [
-            'report_id' => $reportId,
-            'receipt_number' => $receiptNumber,
-        ]);
-
-        $_SESSION['success'] = "Report saved and receipt generated successfully";
-        header('Location: receipt.php?receipt_id=' . $receiptId . '&report_id=' . $reportId);
-        exit();
+// Save the report and receipt atomically; only previously unbilled costs are charged.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_report'])) {
+    try {
+        paymentProofCheckCsrf($_POST['csrf_token'] ?? null);
+        $fees = $_POST['other_fees_list'] ?? [];
+        if (!is_array($fees)) throw new RuntimeException('Invalid billable additions.');
+        $expectedBase = [];
+        foreach (['technology_cost', 'developer_cost', 'resource_cost'] as $key) $expectedBase[$key] = salesBillingCents($_POST[$key] ?? 0);
+        $created = salesBillingCreateReport($conn, (int) ($_POST['project_id'] ?? 0), (int) ($_POST['client_id'] ?? 0),
+            (int) $user['id'], (string) ($_POST['billing_request_key'] ?? ''), $fees, $expectedBase);
+        $_SESSION['success'] = 'Report and receipt created for new charges only. Previously billed costs were excluded.';
+        header('Location: receipt.php?receipt_id=' . $created['receipt_id'] . '&report_id=' . $created['report_id']);
+        exit;
+    } catch (Throwable $e) {
+        $reportError = $e instanceof RuntimeException ? $e->getMessage() : 'Unable to create the report. Please try again.';
     }
 }
+$billingBaseline = $reportData ? salesBillingHistory($conn, (int) $reportData['project']['id']) : salesBillingBaseline([]);
+$billingRequestKey = bin2hex(random_bytes(32));
+$previouslyBilled = (array_sum($billingBaseline['base']) + array_sum(array_column($billingBaseline['additions'], 'cents'))) / 100;
+$billingFees = is_array($_POST['other_fees_list'] ?? null) ? array_values(array_filter($_POST['other_fees_list'], 'is_array')) : [];
+if (!$billingFees) $billingFees = [['name' => '', 'cost' => '']];
 
 include '../../includes/header.php';
 include '../../includes/sidebar.php';
@@ -1540,7 +1475,13 @@ include '../../includes/navbar.php';
         <!-- Main Content -->
         <div class="report-content">
             <?php if($reportData && $technologies): ?>
-            <form method="POST" id="reportForm" class="report-form">
+            <form method="POST" id="reportForm" class="report-form" data-generic-draft-disabled="true" data-app-loading data-loading-title="Creating receipt" data-loading-text="Checking billing history and generating your report and receipt. Please wait.">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(paymentProofCsrfToken(), ENT_QUOTES, 'UTF-8'); ?>">
+                <input type="hidden" name="billing_request_key" value="<?php echo htmlspecialchars($billingRequestKey, ENT_QUOTES, 'UTF-8'); ?>">
+                <?php if (!empty($reportError)): ?><div class="alert alert-danger" role="alert"><?php echo htmlspecialchars($reportError); ?></div><?php endif; ?>
+                <div class="alert alert-info">Previously billed project costs: <strong>₱<?php echo number_format($previouslyBilled, 2); ?></strong>. This report charges only new project costs and billable additions. Existing paid or unpaid charges will not be billed again.
+                    <?php if ($billingBaseline['additions']): ?><ul class="mb-0 mt-2"><?php foreach ($billingBaseline['additions'] as $billedAddition): ?><li><?php echo htmlspecialchars($billedAddition['name']); ?>: ₱<?php echo number_format($billedAddition['cents'] / 100, 2); ?> already billed</li><?php endforeach; ?></ul><?php endif; ?>
+                </div>
                 <input type="hidden" name="project_id" value="<?php echo $reportData['project']['id']; ?>">
                 <input type="hidden" name="client_id" value="<?php echo $selectedClient; ?>">
                 
@@ -1590,10 +1531,9 @@ include '../../includes/navbar.php';
                                     </thead>
                                 <tbody>
                                     <?php 
-                                    $techTotal = 0;
+                                    $techTotal = $reportData['technology_cost'];
                                     $technologies->data_seek(0);
                                     while($tech = $technologies->fetch_assoc()): 
-                                        $techTotal += $tech['estimated_cost'];
                                     ?>
                                     <tr>
                                         <td><?php echo htmlspecialchars($tech['tech_name']); ?></td>
@@ -1633,7 +1573,7 @@ include '../../includes/navbar.php';
                                 <tbody>
                                     <?php
                                     $roadmapDeveloperRows = $reportData['developer_rows'] ?? [];
-                                    $devTotal = 0;
+                                    $devTotal = $reportData['developer_cost'];
                                     if (empty($roadmapDeveloperRows)):
                                     ?>
                                     <tr>
@@ -1642,8 +1582,7 @@ include '../../includes/navbar.php';
                                     <?php
                                     else:
                                     foreach($roadmapDeveloperRows as $alloc):
-                                        $cost = $alloc['required_count'] * 500 * 30;
-                                        $devTotal += $cost;
+                                        $cost = (float) $alloc['cost'];
                                     ?>
                                     <tr>
                                         <td><?php echo htmlspecialchars($alloc['role']); ?></td>
@@ -1664,8 +1603,8 @@ include '../../includes/navbar.php';
                 </div>
                 <div class="report-breakdown__resource">
                     <span><i class="fas fa-server" aria-hidden="true"></i>Resource Costs</span>
-                    <strong>&#8369;<?php echo number_format($techTotal, 2); ?>/month</strong>
-                    <input type="hidden" name="resource_cost" value="<?php echo $techTotal; ?>">
+                    <strong>&#8369;<?php echo number_format($reportData['resource_cost'], 2); ?>/month</strong>
+                    <input type="hidden" name="resource_cost" value="<?php echo $reportData['resource_cost']; ?>">
                 </div>
                 </details>
 
@@ -1673,8 +1612,8 @@ include '../../includes/navbar.php';
                     <summary>
                         <span class="report-breakdown__icon" aria-hidden="true"><i class="fas fa-plus"></i></span>
                         <span class="report-breakdown__copy">
-                            <strong>Other Fees</strong>
-                            <small>Optional adjustments that do not appear on the receipt</small>
+                            <strong>Billable additions</strong>
+                            <small>Add new work or services to this receipt</small>
                         </span>
                         <i class="fas fa-chevron-down report-breakdown__chevron" aria-hidden="true"></i>
                     </summary>
@@ -1682,12 +1621,13 @@ include '../../includes/navbar.php';
                     <div class="report-card">
                         <div class="card-body">
                         <div id="otherFeesContainer">
+                            <?php foreach ($billingFees as $feeIndex => $fee): ?>
                             <div class="other-fee-item row g-2 mb-2">
                                 <div class="col-md-6">
-                                    <input type="text" name="other_fees_list[0][name]" class="form-control" placeholder="Fee Name" style="border-radius: 10px;">
+                                    <input type="text" name="other_fees_list[<?php echo $feeIndex; ?>][name]" value="<?php echo htmlspecialchars((string) ($fee['name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" maxlength="150" class="form-control" placeholder="Addition description" style="border-radius: 10px;">
                                 </div>
                                 <div class="col-md-4">
-                                    <input type="number" name="other_fees_list[0][cost]" class="form-control fee-cost" placeholder="Cost (PHP)" step="0.01" onchange="updateSummary()" style="border-radius: 10px;">
+                                    <input type="number" name="other_fees_list[<?php echo $feeIndex; ?>][cost]" value="<?php echo htmlspecialchars((string) ($fee['cost'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" min="0.01" class="form-control fee-cost" placeholder="Cost (PHP)" step="0.01" onchange="updateSummary()" style="border-radius: 10px;">
                                 </div>
                                 <div class="col-md-2">
                                     <button type="button" class="btn-danger-modern w-100" onclick="removeFee(this)">
@@ -1695,11 +1635,12 @@ include '../../includes/navbar.php';
                                     </button>
                                 </div>
                             </div>
+                            <?php endforeach; ?>
                         </div>
                         <button type="button" class="btn-secondary-modern mt-2" onclick="addFee()">
-                            <i class="fas fa-plus"></i> Add Another Fee
+                            <i class="fas fa-plus"></i> Add billable item
                         </button>
-                        <small class="text-muted d-block mt-2 other-fees-note"><i class="fas fa-info-circle"></i>Other fees will not appear on the receipt.</small>
+                        <small class="text-muted d-block mt-2 other-fees-note"><i class="fas fa-info-circle"></i>Add a description for new work. To increase an existing item, enter its same description and new total cost; only the increase is charged.</small>
                         </div>
                     </div>
                     </div>
@@ -1711,8 +1652,8 @@ include '../../includes/navbar.php';
                         <div class="report-summary-title">
                             <span class="report-summary-title__icon" aria-hidden="true"><i class="fas fa-calculator"></i></span>
                             <span>
-                                <strong>Monthly Cost Summary</strong>
-                                <small>Complete estimated project costs</small>
+                                <strong>New charges for this report</strong>
+                                <small>Previously billed amounts are excluded</small>
                             </span>
                         </div>
                         <div class="summary-wrap">
@@ -1730,11 +1671,11 @@ include '../../includes/navbar.php';
                                     <td class="text-end">&#8369;<span id="summaryResource"><?php echo number_format($techTotal, 2); ?></span></td>
                                 </tr>
                                 <tr id="otherFeesSummary" style="display: none;">
-                                    <td>Other Fees</td>
+                                    <td>New billable additions</td>
                                     <td class="text-end">&#8369;<span id="summaryOther">0.00</span></td>
                                 </tr>
                                 <tr class="total-row">
-                                    <td><strong>Total Monthly Cost</strong></td>
+                                    <td><strong>New receipt amount</strong></td>
                                     <td class="text-end"><strong>&#8369;<span id="summaryTotal"><?php echo number_format($techTotal + $devTotal + $techTotal, 2); ?></span></strong></td>
                                 </tr>
                             </table>
@@ -1743,7 +1684,8 @@ include '../../includes/navbar.php';
                 </div>
                 
                 <div class="report-actions">
-                    <button type="submit" name="save_report" class="btn-save">
+                    <p id="reportBillingNotice" class="text-muted mb-0" role="status"></p>
+                    <button type="submit" name="save_report" id="saveReportButton" class="btn-save">
                         <i class="fas fa-save"></i> Save Report & Generate Receipt
                     </button>
                 </div>
@@ -1767,17 +1709,18 @@ include '../../includes/navbar.php';
 </div>
 
 <script>
-let feeIndex = 1;
+let feeIndex = <?php echo count($billingFees); ?>;
+const billingBaseline = <?php echo json_encode($billingBaseline, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 
 function addFee() {
     const container = document.getElementById('otherFeesContainer');
     const newFee = `
         <div class="other-fee-item row g-2 mb-2">
             <div class="col-md-6">
-                <input type="text" name="other_fees_list[${feeIndex}][name]" class="form-control" placeholder="Fee Name" style="border-radius: 10px;">
+                <input type="text" name="other_fees_list[${feeIndex}][name]" maxlength="150" class="form-control" placeholder="Addition description" style="border-radius: 10px;">
             </div>
             <div class="col-md-4">
-                <input type="number" name="other_fees_list[${feeIndex}][cost]" class="form-control fee-cost" placeholder="Cost (PHP)" step="0.01" onchange="updateSummary()" style="border-radius: 10px;">
+                <input type="number" name="other_fees_list[${feeIndex}][cost]" min="0.01" class="form-control fee-cost" placeholder="Cost (PHP)" step="0.01" onchange="updateSummary()" style="border-radius: 10px;">
             </div>
             <div class="col-md-2">
                 <button type="button" class="btn-danger-modern w-100" onclick="removeFee(this)">
@@ -1796,17 +1739,35 @@ function removeFee(button) {
 }
 
 function updateSummary() {
-    const tech = parseFloat(document.querySelector('input[name="technology_cost"]')?.value) || 0;
-    const dev = parseFloat(document.querySelector('input[name="developer_cost"]')?.value) || 0;
-    const resource = parseFloat(document.querySelector('input[name="resource_cost"]')?.value) || 0;
+    const cents = value => {
+        const parts = String(value || '0').trim().match(/^(\d+)(?:\.(\d{0,2}))?$/);
+        return parts ? Number(parts[1]) * 100 + Number((parts[2] || '').padEnd(2, '0')) : 0;
+    };
+    const techCents = Math.max(0, cents(document.querySelector('input[name="technology_cost"]')?.value) - billingBaseline.base.technology_cost);
+    const devCents = Math.max(0, cents(document.querySelector('input[name="developer_cost"]')?.value) - billingBaseline.base.developer_cost);
+    const resourceCents = Math.max(0, cents(document.querySelector('input[name="resource_cost"]')?.value) - billingBaseline.base.resource_cost);
+    const tech = techCents / 100;
+    const dev = devCents / 100;
+    const resource = resourceCents / 100;
     
-    let otherTotal = 0;
+    let otherCents = 0;
     document.querySelectorAll('.fee-cost').forEach(input => {
-        otherTotal += parseFloat(input.value) || 0;
+        const name = input.closest('.other-fee-item')?.querySelector('input[type="text"]')?.value.trim().replace(/\s+/g, ' ').toLowerCase() || '';
+        const prior = Number(billingBaseline.additions[name]?.cents || 0);
+        otherCents += Math.max(0, cents(input.value) - prior);
     });
     
-    const total = tech + dev + resource + otherTotal;
+    const priorDirectCents = billingBaseline.base.technology_cost + billingBaseline.base.developer_cost;
+    const nextDirectCents = priorDirectCents + techCents + devCents;
+    const total = (Math.floor((nextDirectCents * 132 + 50) / 100) - Math.floor((priorDirectCents * 132 + 50) / 100)
+        + resourceCents + otherCents) / 100;
+    const otherTotal = otherCents / 100;
     
+    const saveButton = document.getElementById('saveReportButton');
+    if (saveButton) saveButton.disabled = total <= 0;
+    const notice = document.getElementById('reportBillingNotice');
+    if (notice) notice.textContent = total <= 0 ? 'No new charges. Add a billable item before creating another receipt.' : 'Only these new charges will appear on the receipt.';
+
     document.getElementById('summaryTech').textContent = tech.toFixed(2);
     document.getElementById('summaryDev').textContent = dev.toFixed(2);
     document.getElementById('summaryResource').textContent = resource.toFixed(2);
@@ -1820,8 +1781,9 @@ function updateSummary() {
     }
 }
 
-// Initialize
-setTimeout(updateSummary, 100);
+// Keep the preview in sync as Sales types, including changed addition descriptions.
+document.getElementById('reportForm')?.addEventListener('input', updateSummary);
+if (document.getElementById('reportForm')) updateSummary();
 </script>
 
 <?php include '../../includes/footer.php'; ?>

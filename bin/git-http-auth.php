@@ -2,7 +2,18 @@
 <?php
 declare(strict_types=1);
 
-require_once __DIR__ . '/../config/database.php';
+// stdout is a machine protocol consumed by the CGI wrapper. Included application
+// configuration must never shift the username/token lines with incidental output.
+ob_start();
+// Keep all incidental output out of the CGI protocol, including warnings from
+// database queries and hook installation after application startup.
+$protocolBufferLevel = ob_get_level();
+register_shutdown_function(static function () use ($protocolBufferLevel): void {
+    while (ob_get_level() >= $protocolBufferLevel) {
+        ob_end_clean();
+    }
+});
+require_once __DIR__ . '/../includes/version-control.php';
 
 function gitHttpNormalizeSlug(string $value): string
 {
@@ -56,7 +67,7 @@ if ($slug === '' || $credentials === null) {
 try {
     $conn = getConnection();
     $stmt = $conn->prepare(
-        'SELECT webhook_token, repository_status
+        'SELECT *
          FROM project_repositories
          WHERE slug = ?
          LIMIT 1'
@@ -72,28 +83,41 @@ try {
 
     $repositoryStatus = (string) ($repository['repository_status'] ?? '');
     $webhookToken = trim((string) ($repository['webhook_token'] ?? ''));
-    if ($repositoryStatus !== 'active' || $webhookToken === '' || !hash_equals($webhookToken, $password)) {
+    if ($repositoryStatus !== 'active' || $webhookToken === '') {
         exit(1);
     }
 
-    // The HTTP username must be a real, active PMS account. The repository
-    // token remains the per-repository password, while the username identifies
-    // the person performing the push for the post-receive audit record.
-    $userStmt = $conn->prepare(
-        "SELECT username
-         FROM users
-         WHERE LOWER(username) = LOWER(?) AND status = 'active'
-         LIMIT 1"
-    );
-    $userStmt->bind_param('s', $username);
+    // A personal credential identifies the PMS account that downloaded the
+    // repository. Git clients may supply a cached or generic HTTP username;
+    // never use that label (or commit authorship) as the account's authority.
+    $isPersonalCredential = preg_match('/^v1:([1-9][0-9]*):[a-f0-9]{64}$/D', $password, $tokenParts) === 1;
+    if ($isPersonalCredential) {
+        $userId = (int) $tokenParts[1];
+        $userStmt = $conn->prepare("SELECT * FROM users WHERE id = ? AND status = 'active' LIMIT 1");
+        $userStmt->bind_param('i', $userId);
+    } else {
+        $userStmt = $conn->prepare(
+            "SELECT *
+             FROM users
+             WHERE LOWER(username) = LOWER(?) AND status = 'active'
+             LIMIT 1"
+        );
+        $userStmt->bind_param('s', $username);
+    }
     $userStmt->execute();
     $pushUser = $userStmt->get_result()->fetch_assoc() ?: null;
     $userStmt->close();
-    if (!$pushUser) {
+    if (!$pushUser || !in_array($pushUser['role'], ['architect', 'developer', 'admin'], true)
+        || !vcCanAccessProject($conn, $pushUser, (int) $repository['project_id'])
+        || !($isPersonalCredential
+            ? vcValidPersonalPushToken($repository, $pushUser, $password)
+            : password_verify($password, $pushUser['password']))) {
         exit(1);
     }
-
-    fwrite(STDOUT, (string) $pushUser['username']);
+    vcInstallServerRepositoryHooks(vcGetRepositoryBarePath($slug), rtrim(BASE_URL, '/') . '/api/version-control/sync.php?token=' . urlencode($webhookToken));
+    $pushToken = vcPersonalPushToken($repository, $pushUser);
+    // STDOUT bypasses PHP's output buffer; emit only the validated protocol.
+    fwrite(STDOUT, (string) $pushUser['username'] . "\n" . $pushToken);
     exit(0);
 } catch (Throwable $e) {
     error_log('Git HTTP auth failed: ' . $e->getMessage());

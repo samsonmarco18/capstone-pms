@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/project-template.php';
+require_once __DIR__ . '/project-estimation.php';
 
 function workflowStatuses(): array
 {
@@ -237,52 +238,11 @@ function workflowProjectFinalCostSnapshot(mysqli|PgsqlMysqliCompatConnection $co
         return $snapshot;
     }
 
-    if (dbTableExists($conn, 'expert_project_estimations')) {
-        $estimationStmt = $conn->prepare(
-            "SELECT total_technology_stack_cost, total_developer_cost, additional_costs, overall_estimated_project_cost
-             FROM expert_project_estimations
-             WHERE project_id = ?
-             ORDER BY CASE WHEN status = 'sales_approved' THEN 0 ELSE 1 END, approved_at DESC, updated_at DESC, id DESC
-             LIMIT 1"
-        );
-        if ($estimationStmt !== false) {
-            $estimationStmt->bind_param('i', $projectId);
-            $estimationStmt->execute();
-            $estimation = $estimationStmt->get_result()->fetch_assoc();
-            $estimationStmt->close();
-
-            if ($estimation) {
-                $snapshot['technology_cost'] = (float) ($estimation['total_technology_stack_cost'] ?? 0);
-                $snapshot['developer_cost'] = (float) ($estimation['total_developer_cost'] ?? 0);
-                $snapshot['resource_cost'] = (float) ($estimation['additional_costs'] ?? 0);
-                if ($snapshot['resource_cost'] > 0) {
-                    $snapshot['other_fees'][] = [
-                        'name' => 'Approved additional project costs',
-                        'cost' => $snapshot['resource_cost'],
-                    ];
-                }
-                $snapshot['total_cost'] = (float) ($estimation['overall_estimated_project_cost'] ?? 0);
-                if ($snapshot['total_cost'] <= 0) {
-                    $snapshot['total_cost'] = $snapshot['technology_cost'] + $snapshot['developer_cost'] + $snapshot['resource_cost'];
-                }
-                $snapshot['source'] = 'expert_project_estimations';
-
-                return $snapshot;
-            }
-        }
-    }
-
-    $techResult = $conn->query("SELECT COALESCE(SUM(COALESCE(estimated_cost, 0)), 0) AS total FROM tech_recommendations WHERE project_id = {$projectId}");
-    if ($techResult) {
-        $snapshot['technology_cost'] = (float) (($techResult->fetch_assoc()['total'] ?? 0));
-    }
-
-    $allocationResult = $conn->query("SELECT COALESCE(SUM(COALESCE(required_count, 0) * 500 * 30), 0) AS total FROM developer_allocations WHERE project_id = {$projectId}");
-    if ($allocationResult) {
-        $snapshot['developer_cost'] = (float) (($allocationResult->fetch_assoc()['total'] ?? 0));
-    }
-
-    $snapshot['total_cost'] = $snapshot['technology_cost'] + $snapshot['developer_cost'];
+    $pricing = projectEstimationProjectPricing($conn, $projectId);
+    $snapshot['technology_cost'] = (float) $pricing['technology_cost'];
+    $snapshot['developer_cost'] = (float) $pricing['development_cost'];
+    $snapshot['total_cost'] = (float) $pricing['final_project_price'];
+    $snapshot['source'] = 'project_pricing';
 
     return $snapshot;
 }

@@ -1,6 +1,8 @@
 <?php
 require_once '../../includes/auth.php';
 require_once '../../includes/file-storage.php';
+require_once '../../includes/receipt-excel.php';
+require_once '../../includes/payment-proof.php';
 requireRole('sales');
 
 $conn = getConnection();
@@ -10,27 +12,6 @@ $reportId = (int) ($_GET['report_id'] ?? 0);
 $receiptId = (int) ($_GET['receipt_id'] ?? 0);
 $clientId = (int) ($_GET['client_id'] ?? 0);
 $contextClientId = $clientId;
-
-function salesReceiptEnsureSchema(mysqli|PgsqlMysqliCompatConnection $conn): void
-{
-    $textType = DB_DRIVER === 'pgsql' ? 'TEXT' : 'VARCHAR(500)';
-    $shortTextType = DB_DRIVER === 'pgsql' ? 'TEXT' : 'VARCHAR(255)';
-    $timestampType = DB_DRIVER === 'pgsql' ? 'TIMESTAMP' : 'DATETIME';
-    $intType = 'INT NULL';
-    $columns = [
-        'payment_proof_path' => "{$textType} NULL",
-        'payment_proof_name' => "{$shortTextType} NULL",
-        'payment_verified_by' => $intType,
-        'payment_verified_at' => "{$timestampType} NULL",
-        'email_sent_at' => "{$timestampType} NULL",
-    ];
-
-    foreach ($columns as $column => $definition) {
-        if (!dbColumnExists($conn, 'receipts', $column)) {
-            $conn->query("ALTER TABLE receipts ADD COLUMN {$column} {$definition}");
-        }
-    }
-}
 
 function salesReceiptStatusLabel(string $status): string
 {
@@ -75,33 +56,6 @@ function salesReceiptFetchForDelivery(mysqli|PgsqlMysqliCompatConnection $conn, 
     return $receipt ?: null;
 }
 
-function salesReceiptRenderHtml(array $receipt, bool $official = false): string
-{
-    $clientName = (string) (($receipt['client_name'] ?? '') ?: ($receipt['fallback_client_name'] ?? 'Client'));
-    $clientEmail = (string) (($receipt['client_email'] ?? '') ?: ($receipt['fallback_client_email'] ?? ''));
-    $amountDue = (float) (($receipt['amount_due'] ?? null) ?: ($receipt['total_cost'] ?? 0));
-    $dueDate = !empty($receipt['due_date']) ? date('M d, Y', strtotime((string) $receipt['due_date'])) : 'Not set';
-    $title = $official ? 'Official Paid Receipt' : 'Billing Receipt for Payment Review';
-
-    $html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Receipt #' . htmlspecialchars((string) $receipt['receipt_number']) . '</title>';
-    $html .= '<style>body{font-family:Arial,sans-serif;color:#1f2937;padding:40px}.wrap{max-width:760px;margin:auto}.head{border-bottom:3px solid #1f6392;padding-bottom:20px;margin-bottom:28px}.brand{font-size:24px;font-weight:700;color:#1f6392}.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px}.box{border:1px solid #d1d5db;border-radius:8px;padding:16px}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{border:1px solid #d1d5db;padding:12px;text-align:left}th{background:#f3f4f6}.total{font-size:20px;font-weight:700;color:#1f6392}.notice{padding:12px 14px;background:#eef6ff;border:1px solid #bfdbfe;border-radius:8px;margin:18px 0}</style>';
-    $html .= '</head><body><div class="wrap"><div class="head"><div class="brand">EVORTIX</div><h1>' . htmlspecialchars($title) . '</h1><p>Receipt # ' . htmlspecialchars((string) $receipt['receipt_number']) . '</p><p>Status: ' . htmlspecialchars(salesReceiptStatusLabel((string) $receipt['status'])) . '</p></div>';
-    if (!$official) {
-        $html .= '<div class="notice">Please review this billing receipt and send your payment confirmation or proof of payment to Sales. The official paid receipt will be issued after Sales verifies the payment.</div>';
-    }
-    $html .= '<div class="grid"><div class="box"><strong>Bill To</strong><br>' . htmlspecialchars($clientName) . '<br>' . htmlspecialchars($clientEmail) . '</div><div class="box"><strong>Project</strong><br>' . htmlspecialchars((string) $receipt['project_name']) . '<br>Due: ' . htmlspecialchars($dueDate) . '</div></div>';
-    $html .= '<table><thead><tr><th>Description</th><th>Amount</th></tr></thead><tbody><tr><td>Final project delivery</td><td>$' . number_format($amountDue, 2) . '</td></tr><tr><td class="total">Total Amount Due</td><td class="total">$' . number_format($amountDue, 2) . '</td></tr></tbody></table>';
-    if (!empty($receipt['notes'])) {
-        $html .= '<p><strong>Notes:</strong> ' . htmlspecialchars((string) $receipt['notes']) . '</p>';
-    }
-    if ($official && !empty($receipt['payment_verified_at'])) {
-        $html .= '<p><strong>Payment verified:</strong> ' . htmlspecialchars(date('M d, Y h:i A', strtotime((string) $receipt['payment_verified_at']))) . '</p>';
-    }
-    $html .= '</div></body></html>';
-
-    return $html;
-}
-
 function salesReceiptDownload(mysqli|PgsqlMysqliCompatConnection $conn, int $receiptId): void
 {
     $receipt = salesReceiptFetchForDelivery($conn, $receiptId);
@@ -111,10 +65,10 @@ function salesReceiptDownload(mysqli|PgsqlMysqliCompatConnection $conn, int $rec
     }
 
     $receiptNumber = preg_replace('/[^A-Za-z0-9_-]/', '_', (string) ($receipt['receipt_number'] ?? 'receipt'));
-    header('Content-Type: text/html; charset=utf-8');
-    header('Content-Disposition: attachment; filename="receipt_' . $receiptNumber . '.html"');
+    header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    header('Content-Disposition: attachment; filename="receipt_' . $receiptNumber . '.xlsx"');
     header('Cache-Control: no-store, no-cache, must-revalidate');
-    echo salesReceiptRenderHtml($receipt, (string) ($receipt['status'] ?? '') === 'paid');
+    echo salesReceiptRenderExcel($receipt, (string) ($receipt['status'] ?? '') === 'paid');
     exit;
 }
 
@@ -130,59 +84,64 @@ function salesReceiptSendToClient(mysqli|PgsqlMysqliCompatConnection $conn, int 
         return ['success' => false, 'error' => 'Client email is missing or invalid.'];
     }
 
-    $receiptHtml = salesReceiptRenderHtml($receipt, false);
+    if (!in_array($receipt['status'], ['draft', 'sent', 'viewed', 'overdue'], true) || ($receipt['payment_proof_status'] ?? '') === 'pending') {
+        return ['success' => false, 'error' => 'This receipt is paid or already has payment proof awaiting review.'];
+    }
+    try {
+        $paymentLink = paymentProofCreateLink($conn, $receiptId);
+    } catch (Throwable $e) {
+        return ['success' => false, 'error' => $e->getMessage()];
+    }
+    $receiptExcel = salesReceiptRenderExcel($receipt, false);
     $receiptNumber = preg_replace('/[^A-Za-z0-9_-]/', '_', (string) ($receipt['receipt_number'] ?? 'receipt'));
-    $subject = 'EVORTIX PMS Billing Receipt #' . (string) ($receipt['receipt_number'] ?? '');
+    $subject = 'ERNI Development Center Philippines, Inc. Billing Receipt #' . (string) ($receipt['receipt_number'] ?? '');
     $body = '<div style="font-family:Arial,sans-serif;line-height:1.6;color:#1f2937;">'
         . '<h2 style="color:#1f6392;">Billing receipt for review</h2>'
         . '<p>Good day,</p>'
-        . '<p>Please review the attached billing receipt. Kindly reply to this email with your payment confirmation or proof of payment.</p>'
+        . '<p>Please review the attached billing receipt. Use the button below to submit your payment proof directly to Sales.</p>'
+        . '<p><a href="' . htmlspecialchars($paymentLink, ENT_QUOTES, 'UTF-8') . '" style="display:inline-block;padding:12px 20px;background:#1f6392;color:#fff;text-decoration:none;border-radius:8px;">Submit payment proof</a></p>'
+        . '<p>This private link is valid for 14 days. No account is required. Upload a PDF or image (maximum 5 MB) with the amount paid and transaction reference.</p>'
         . '<p>Sales will verify the payment first before issuing the official paid receipt.</p>'
-        . '<p>Thank you.</p>'
+        . '<p>Thank you.<br>ERNI Development Center Philippines, Inc.</p>'
         . '</div>';
-    $text = "Please review the attached billing receipt and reply with your payment confirmation or proof of payment. Sales will verify payment before issuing the official paid receipt.";
+    $text = "Please review the attached billing receipt. Submit your payment proof to Sales: {$paymentLink}\n\nThis private link expires in 14 days. Sales will verify the transaction before confirming payment.\n\nERNI Development Center Philippines, Inc.";
 
-    return sendSystemEmail(
+    $result = sendSystemEmail(
         $clientEmail,
         $subject,
         $body,
         $text,
         [[
-            'name' => 'billing_receipt_' . $receiptNumber . '.html',
-            'mime' => 'text/html',
-            'content' => $receiptHtml,
+            'name' => 'billing_receipt_' . $receiptNumber . '.xlsx',
+            'mime' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'content' => $receiptExcel,
         ]]
     );
-}
-
-function salesReceiptSavePaymentProof(array $file): ?array
-{
-    if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
-        return null;
+    if (!$result['success']) {
+        // A failed resend must not invalidate the link the client already has.
+        $newHash = hash('sha256', substr($paymentLink, strrpos($paymentLink, '=') + 1));
+        $oldHash = $receipt['payment_token_hash'] ?? null;
+        $oldExpiry = $receipt['payment_token_expires_at'] ?? null;
+        $restore = $conn->prepare('UPDATE receipts SET payment_token_hash = ?, payment_token_expires_at = ? WHERE id = ? AND payment_token_hash = ?');
+        if ($restore) {
+            $restore->bind_param('ssis', $oldHash, $oldExpiry, $receiptId, $newHash);
+            $restore->execute();
+            $restore->close();
+        }
     }
-
-    $originalName = basename((string) ($file['name'] ?? 'payment-proof'));
-    $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
-    $allowed = ['pdf', 'png', 'jpg', 'jpeg', 'webp'];
-    if (!in_array($extension, $allowed, true)) {
-        throw new RuntimeException('Payment proof must be a PDF or image file.');
-    }
-
-    $target = storageBuildUploadTarget('payment-proof.' . $extension, 'payment-proofs/' . date('Y/m/d'));
-    if (!move_uploaded_file((string) ($file['tmp_name'] ?? ''), $target['absolute_path'])) {
-        throw new RuntimeException('Unable to save payment proof attachment.');
-    }
-    storagePersistFile($target['relative_path'], $target['absolute_path'], $target['original_name'], (string) ($file['type'] ?? ''));
-
-    return [
-        'name' => $originalName,
-        'path' => $target['relative_path'],
-    ];
+    return $result;
 }
 
 salesReceiptEnsureSchema($conn);
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['save_receipt_review']) || isset($_POST['finalize_receipt']) || isset($_POST['verify_payment']))) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['save_receipt_review']) || isset($_POST['finalize_receipt']) || isset($_POST['verify_payment']) || isset($_POST['reject_payment']))) {
+    try {
+        paymentProofCheckCsrf($_POST['csrf_token'] ?? null);
+    } catch (RuntimeException $e) {
+        $_SESSION['error'] = $e->getMessage();
+        header('Location: receipt.php');
+        exit;
+    }
     $postedReceiptId = (int) ($_POST['receipt_id'] ?? 0);
 
     if ($postedReceiptId <= 0) {
@@ -208,7 +167,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['save_receipt_review'
             exit;
         }
 
-        $stmt = $conn->prepare("UPDATE receipts SET status = 'sent', email_sent_at = NOW() WHERE id = ?");
+        $stmt = $conn->prepare("UPDATE receipts SET status = CASE WHEN status = 'draft' THEN 'sent' ELSE status END, email_sent_at = NOW() WHERE id = ? AND status <> 'paid'");
         if ($stmt !== false) {
             $stmt->bind_param('i', $postedReceiptId);
             $stmt->execute();
@@ -227,48 +186,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['save_receipt_review'
         exit;
     }
 
-    if (isset($_POST['verify_payment'])) {
+    if (isset($_POST['verify_payment']) || isset($_POST['reject_payment'])) {
         try {
-            $proof = salesReceiptSavePaymentProof($_FILES['payment_proof'] ?? []);
-            if (!$proof) {
-                throw new RuntimeException('Please attach the client payment proof before marking the receipt as paid.');
+            $approved = isset($_POST['verify_payment']);
+            paymentProofReview($conn, $postedReceiptId, (int) $user['id'], $_POST, $_FILES['payment_proof'] ?? [], $approved);
+            $_SESSION['success'] = $approved
+                ? 'Payment verified against the payment record. The official paid receipt is available.'
+                : 'Payment proof rejected. The client can submit corrected proof using their billing email link.';
+            try {
+                $reviewedReceipt = salesReceiptFetchForDelivery($conn, $postedReceiptId);
+                $result = paymentProofEmailReview($reviewedReceipt, $approved, trim((string) ($_POST['review_notes'] ?? '')));
+                if (!$result['success']) $_SESSION['error'] = 'The review was saved, but the client email could not be delivered. Please contact the client.';
+            } catch (Throwable $e) {
+                error_log('Payment review email failed: ' . $e->getMessage());
+                $_SESSION['error'] = 'The review was saved, but the client email could not be delivered. Please contact the client.';
             }
-
-            $receiptData = salesReceiptFetchForDelivery($conn, $postedReceiptId);
-            if (!$receiptData) {
-                throw new RuntimeException('Receipt not found.');
-            }
-
-            $amountPaid = (float) (($receiptData['amount_due'] ?? null) ?: ($receiptData['total_cost'] ?? 0));
-            $proofName = (string) $proof['name'];
-            $proofPath = (string) $proof['path'];
-            $verifiedBy = (int) ($user['id'] ?? 0);
-            $stmt = $conn->prepare("
-                UPDATE receipts
-                SET status = 'paid',
-                    amount_paid = ?,
-                    payment_proof_path = ?,
-                    payment_proof_name = ?,
-                    payment_verified_by = ?,
-                    payment_verified_at = NOW()
-                WHERE id = ?
-            ");
-            if ($stmt !== false) {
-                $stmt->bind_param('dssii', $amountPaid, $proofPath, $proofName, $verifiedBy, $postedReceiptId);
-                $stmt->execute();
-                $stmt->close();
-            }
-
-            logActivity($verifiedBy, 'verify_payment_receipt', 'receipts', $postedReceiptId, null, [
-                'payment_proof_name' => $proofName,
-                'payment_proof_path' => $proofPath,
-            ]);
-
-            $_SESSION['success'] = 'Payment proof verified. The official paid receipt is now available.';
         } catch (Throwable $e) {
             $_SESSION['error'] = $e->getMessage();
         }
-
         header('Location: ' . salesReceiptRedirect($postedReceiptId, $clientId));
         exit;
     }
@@ -290,14 +225,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['save_receipt_review'
     $dueDate = $dueDateInput !== '' ? $dueDateInput : null;
     $stmt = $conn->prepare("
         UPDATE receipts
-        SET client_name = ?, client_email = ?, amount_due = ?, due_date = ?, status = ?
-        WHERE id = ?
-    ");
+        SET client_name = ?, client_email = ?, amount_due = ?, due_date = ?, status = ?,
+            payment_token_hash = NULL, payment_token_expires_at = NULL
+        WHERE id = ? AND status <> 'paid' AND payment_proof_status <> 'pending'
+    " );
     if ($stmt !== false) {
         $stmt->bind_param('ssdssi', $clientNameInput, $clientEmailInput, $amountDue, $dueDate, $statusInput, $postedReceiptId);
-        $stmt->execute();
+        if (!$stmt->execute() || $conn->affected_rows !== 1) {
+            $_SESSION['error'] = 'No changes saved. Paid receipts and receipts with pending payment proof cannot be edited.';
+        } else {
+            $_SESSION['success'] = 'Receipt review details saved. Send a new billing email so the client receives the updated receipt and submission link.';
+        }
         $stmt->close();
-        $_SESSION['success'] = 'Receipt review details saved.';
     }
 
     header('Location: ' . salesReceiptRedirect($postedReceiptId, $clientId));
@@ -316,6 +255,7 @@ if (!in_array($receiptPageSize, $allowedReceiptPageSizes, true)) {
 }
 $receiptCurrentPage = max(1, isset($_GET['page']) ? (int) $_GET['page'] : 1);
 $receiptWhereSql = '';
+$pendingOnly = ($_GET['payment_review'] ?? '') === 'pending';
 
 if ($receiptId) {
     $receiptWhereSql = " WHERE r.id = $receiptId";
@@ -323,6 +263,9 @@ if ($receiptId) {
     $receiptWhereSql = " WHERE (r.id = $reportId OR sr.id = $reportId)";
 } elseif ($clientId) {
     $receiptWhereSql = " WHERE c.id = $clientId";
+}
+if ($pendingOnly) {
+    $receiptWhereSql .= ($receiptWhereSql === '' ? ' WHERE ' : ' AND ') . "r.payment_proof_status = 'pending' AND r.status <> 'paid'";
 }
 
 $receiptCountResult = $conn->query("
@@ -347,15 +290,16 @@ $receipts = $conn->query("
     JOIN sales_reports sr ON r.report_id = sr.id
     JOIN clients c ON sr.client_id = c.id
     {$receiptWhereSql}
-    ORDER BY r.created_at DESC
+    ORDER BY CASE WHEN r.payment_proof_status = 'pending' THEN 0 ELSE 1 END, r.created_at DESC
     LIMIT {$receiptPageSize} OFFSET {$receiptPageOffset}
 ");
 $receiptRowsShown = $receipts ? (int) $receipts->num_rows : 0;
 $receiptPageStart = $totalFilteredReceipts > 0 ? $receiptPageOffset + 1 : 0;
 $receiptPageEnd = min($receiptPageOffset + $receiptRowsShown, $totalFilteredReceipts);
 
-$buildReceiptPageUrl = static function (int $page, ?int $pageSize = null) use ($receiptId, $reportId, $clientId, $receiptPageSize): string {
+$buildReceiptPageUrl = static function (int $page, ?int $pageSize = null) use ($receiptId, $reportId, $clientId, $receiptPageSize, $pendingOnly): string {
     $params = [];
+    if ($pendingOnly) $params['payment_review'] = 'pending';
     if ($receiptId > 0) {
         $params['receipt_id'] = $receiptId;
     } elseif ($reportId > 0) {
@@ -381,9 +325,10 @@ if ($receiptTotalPages <= 5) {
 
 // Get client name for header
 $clientName = '';
+$contextProjectId = 0;
 if ($contextClientId === 0 && ($receiptId || $reportId)) {
     $contextQuery = $conn->query("
-        SELECT sr.client_id, c.name
+        SELECT sr.client_id, sr.project_id, c.name
         FROM sales_reports sr
         JOIN clients c ON sr.client_id = c.id
         " . ($receiptId
@@ -392,6 +337,7 @@ if ($contextClientId === 0 && ($receiptId || $reportId)) {
         LIMIT 1
     ");
     $contextRow = $contextQuery ? $contextQuery->fetch_assoc() : null;
+    $contextProjectId = (int) ($contextRow['project_id'] ?? 0);
     $contextClientId = (int) ($contextRow['client_id'] ?? 0);
     $clientName = $contextRow['name'] ?? '';
 }
@@ -400,12 +346,14 @@ if ($contextClientId) {
     $clientName = $client['name'] ?? 'All Clients';
 }
 $reportCreateUrl = 'report.php' . ($contextClientId > 0 ? '?client_id=' . $contextClientId : '');
+if ($contextClientId > 0 && $contextProjectId > 0) $reportCreateUrl .= '&project_id=' . $contextProjectId;
 $clientReceiptsUrl = 'receipt.php' . ($contextClientId > 0 ? '?client_id=' . $contextClientId : '');
 
 // Get statistics
 $totalReceipts = $conn->query("SELECT COUNT(*) as count FROM receipts")->fetch_assoc()['count'];
 $totalAmount = $conn->query("SELECT SUM(amount_due) as total FROM receipts")->fetch_assoc()['total'];
 $paidReceipts = $conn->query("SELECT COUNT(*) as count FROM receipts WHERE status = 'paid'")->fetch_assoc()['count'];
+$pendingProofs = $conn->query("SELECT COUNT(*) AS count FROM receipts WHERE payment_proof_status = 'pending' AND status <> 'paid'")->fetch_assoc()['count'];
 
 include '../../includes/header.php';
 include '../../includes/sidebar.php';
@@ -558,6 +506,8 @@ include '../../includes/navbar.php';
 
 .card-header-modern .btn-group {
     display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
     gap: 0.5rem;
 }
 
@@ -573,11 +523,12 @@ include '../../includes/navbar.php';
 
 .receipt-list-card .table-container {
     overflow: visible;
-    min-height: 16rem;
+    min-height: 0;
     background: #fff;
 }
 
 .receipt-list-card .table-container.is-empty {
+    min-height: 16rem;
     display: grid;
     place-items: center;
     overflow: hidden;
@@ -593,7 +544,7 @@ include '../../includes/navbar.php';
 }
 
 .receipt-table th {
-    padding: 1rem 1.5rem;
+    padding: 0.9rem 0.85rem;
     text-align: left;
     font-size: 0.75rem;
     font-weight: 600;
@@ -604,7 +555,8 @@ include '../../includes/navbar.php';
 }
 
 .receipt-table td {
-    padding: 1rem 1.5rem;
+    height: 72px;
+    padding: 0.85rem;
     vertical-align: middle;
     border-bottom: 1px solid var(--gray-200);
 }
@@ -935,7 +887,18 @@ include '../../includes/navbar.php';
     font-weight: 700;
     color: var(--theme-primary);
     text-decoration: none;
+    max-width: 230px;
 }
+.proof-link span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.proof-link i { flex: none; }
+.receipt-proof-status { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 7px; font-size: 11px; font-weight: 600; line-height: 1.4; background: #fff5da; color: #865b06; }
+.receipt-proof-status.is-rejected { background: #fff0ef; color: #ac3934; }
+.receipt-proof-status.is-verified { background: #e0f6eb; color: #176742; }
+.receipt-review-empty { color: #748397; font-size: 12px; }
+.receipt-table .receipt-status-cell, .receipt-table .receipt-proof-cell { white-space: nowrap; }
+.receipt-table .receipt-proof-cell .proof-link { display: inline-flex; padding: 6px 9px; border: 1px solid #cbdde9; border-radius: 7px; font-size: 12px; white-space: nowrap; }
+.receipt-table td:nth-child(3), .receipt-table td:nth-child(4) { white-space: nowrap; }
+.receipt-table .proof-link { margin-top: 0; font-weight: 500; }
 
 /* Button Styles */
 .btn-secondary-modern {
@@ -979,7 +942,10 @@ include '../../includes/navbar.php';
 
 /* Verify Payment Modal */
 #verifyPaymentModal .modal-dialog {
-    max-width: 560px;
+    width: calc(100% - 40px);
+    max-width: 980px;
+    margin: 20px auto;
+    min-height: calc(100% - 40px);
 }
 
 #verifyPaymentModal .modal-content {
@@ -1007,14 +973,47 @@ include '../../includes/navbar.php';
 }
 
 #verifyPaymentModal .modal-body {
-    padding: 1.25rem;
+    padding: 20px;
+    max-height: none;
+    overflow: visible;
 }
 
 #verifyPaymentModal .receipt-payment-modal__intro {
     color: var(--gray-600);
     font-size: 0.88rem;
     line-height: 1.55;
-    margin: 0 0 1.15rem;
+    margin: 0 0 14px;
+}
+
+#verifyPaymentModal .payment-review-layout { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 24px; align-items: start; }
+#verifyPaymentModal .payment-proof-panel { min-width: 0; padding: 14px; border: 1px solid #dce7ef; border-radius: 12px; background: #f5f9fc; }
+#verifyPaymentModal .payment-proof-panel__heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; font-size: 13px; font-weight: 700; }
+#verifyPaymentModal .payment-proof-panel__heading small { color: #63778b; font-size: 11px; font-weight: 500; }
+#verifyPaymentModal .payment-proof-preview { display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); place-items: center; height: clamp(150px, 27vh, 220px); overflow: hidden; border: 1px solid #d7e3ed; border-radius: 8px; background: #e9f0f6; color: #42627b; text-decoration: none; }
+#verifyPaymentModal .payment-proof-preview img { width: 100%; height: 100%; min-height: 0; object-fit: contain; }
+#verifyPaymentModal .payment-proof-placeholder { padding: 16px; text-align: center; font-size: 12px; }
+#verifyPaymentModal .payment-proof-placeholder i { display: block; font-size: 28px; margin-bottom: 8px; }
+#verifyPaymentModal .payment-proof-preview [hidden], #verifyPaymentModal [hidden] { display: none !important; }
+#verifyPaymentModal #submittedProofLink { display: block; margin-top: 8px; color: #1f6392; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#verifyPaymentModal .payment-proof-meta { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 12px; margin: 12px 0 0; font-size: 12px; }
+#verifyPaymentModal .payment-proof-meta dt { color: #63778b; font-weight: 500; }
+#verifyPaymentModal .payment-proof-meta dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+#verifyPaymentModal .payment-review-fields { min-width: 0; display: grid; gap: 12px; }
+#verifyPaymentModal .payment-review-fields__pair { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 12px; }
+#verifyPaymentModal .form-label { display: block; color: #334c62; font-size: 12px; font-weight: 600; margin-bottom: 5px; }
+#verifyPaymentModal .form-control { min-height: 38px; padding: 8px 10px; font-size: 13px; border-radius: 8px; }
+#verifyPaymentModal textarea.form-control { height: 64px; min-height: 64px; resize: none; }
+#verifyPaymentModal .payment-bank-confirmation { display: flex; align-items: flex-start; gap: 9px; padding: 10px 12px; background: #edf5fb; border: 1px solid #d7e6f1; border-radius: 8px; }
+#verifyPaymentModal .payment-bank-confirmation input { flex: none; margin: 3px 0 0; }
+#verifyPaymentModal .payment-bank-confirmation label { color: #35546d; font-size: 12px; line-height: 1.5; }
+#verifyPaymentModal #manualPaymentProof { margin-top: 12px; }
+#verifyPaymentModal .form-text { font-size: 11px; margin-top: 5px; }
+@media (max-width: 700px) {
+    #verifyPaymentModal .modal-dialog { width: calc(100% - 24px); margin: 12px auto; min-height: calc(100% - 24px); }
+    #verifyPaymentModal .payment-review-layout { grid-template-columns: 1fr; gap: 16px; }
+    #verifyPaymentModal .payment-proof-preview { height: 150px; }
+    #verifyPaymentModal .modal-body { padding: 16px; }
+    #verifyPaymentModal .receipt-payment-modal__footer { flex-wrap: wrap; }
 }
 
 #verifyPaymentModal .receipt-payment-upload {
@@ -1253,6 +1252,20 @@ include '../../includes/navbar.php';
     border-color: rgba(138, 210, 255, 0.16);
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #verifyPaymentModal :is(.form-label, .payment-proof-panel__heading) { color: #d7e4f2 !important; }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #verifyPaymentModal :is(.payment-proof-panel, .payment-bank-confirmation) { background: #0c2032; border-color: #294359; }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #verifyPaymentModal .payment-proof-preview { background: #071321; border-color: #294359; color: #9db6cf; }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #verifyPaymentModal :is(.payment-proof-meta dt, .payment-proof-panel__heading small) { color: #9db6cf; }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #verifyPaymentModal :is(.payment-bank-confirmation label, .payment-proof-meta dd) { color: #d7e4f2; }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #verifyPaymentModal #submittedProofLink { color: #83cefa; }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #verifyPaymentModal .form-control { background: #0c2032 !important; border-color: #294359 !important; color: #e3edf7 !important; }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #verifyPaymentModal .form-control::placeholder { color: #8aa3ba; opacity: 1; }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .receipt-proof-status { background: #382e19; color: #f2cc7a; }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .receipt-proof-status.is-rejected { background: #39232c; color: #ffb3b3; }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .receipt-proof-status.is-verified { background: #143a30; color: #8de0bb; }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .receipt-review-empty { color: #9db0c6; }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .receipt-table .receipt-proof-cell .proof-link { border-color: #294359; background: #0c2032; }
+
 /* Responsive */
 @media (max-width: 768px) {
     .page-header-modern {
@@ -1356,9 +1369,9 @@ include '../../includes/navbar.php';
             <div class="stat-number"><?php echo $totalReceipts; ?></div>
         </div>
         <div class="stat-card-modern">
-            <i class="fas fa-dollar-sign stat-icon"></i>
+            <i class="fas fa-peso-sign stat-icon"></i>
             <div class="stat-label">Total Amount</div>
-            <div class="stat-number">$<?php echo number_format($totalAmount ?? 0, 0); ?></div>
+            <div class="stat-number">₱<?php echo number_format($totalAmount ?? 0, 0); ?></div>
         </div>
         <div class="stat-card-modern">
             <i class="fas fa-check-circle stat-icon"></i>
@@ -1376,6 +1389,7 @@ include '../../includes/navbar.php';
                 Generated Receipts
             </h5>
             <div class="btn-group">
+                <a href="receipt.php?payment_review=pending" class="btn-secondary-modern btn-receipt-nav">Awaiting Verification (<?php echo (int) $pendingProofs; ?>)</a>
                 <a href="receipt.php" class="btn-secondary-modern btn-receipt-nav">
                     <i class="fas fa-list"></i> All Receipts
                 </a>
@@ -1401,6 +1415,8 @@ include '../../includes/navbar.php';
                         <th>Date</th>
                         <th>Amount</th>
                         <th>Status</th>
+                        <th>Payment review</th>
+                        <th>Proof</th>
                         <th>Actions</th>
                     </thead>
                 <tbody>
@@ -1427,16 +1443,30 @@ include '../../includes/navbar.php';
                             <div class="client-name"><?php echo htmlspecialchars((string) ($receipt['display_client_name'] ?? $receipt['client_name'] ?? '')); ?></div>
                         </td>
                         <td><?php echo !empty($receipt['created_at']) ? date('M d, Y', strtotime((string) $receipt['created_at'])) : 'No date'; ?></td>
-                        <td class="fw-semibold">$<?php echo number_format($receipt['amount_due'], 2); ?></td>
-                        <td>
+                        <td class="fw-semibold">₱<?php echo number_format($receipt['amount_due'], 2); ?></td>
+                        <td class="receipt-status-cell">
                             <span class="badge-status <?php echo htmlspecialchars($receiptStatus); ?>">
                                 <?php echo htmlspecialchars(salesReceiptStatusLabel($receiptStatus)); ?>
                             </span>
+                        </td>
+                        <td class="receipt-status-cell">
+                            <?php if ($receiptStatus === 'paid'): ?>
+                                <span class="receipt-proof-status is-verified"><i class="fas fa-check" aria-hidden="true"></i>Verified</span>
+                            <?php elseif (($receipt['payment_proof_status'] ?? '') === 'pending'): ?>
+                                <span class="receipt-proof-status"><i class="fas fa-clock" aria-hidden="true"></i>Awaiting review</span>
+                            <?php elseif (($receipt['payment_proof_status'] ?? '') === 'rejected'): ?>
+                                <span class="receipt-proof-status is-rejected">Correction requested</span>
+                            <?php else: ?>
+                                <span class="receipt-review-empty">Not submitted</span>
+                            <?php endif; ?>
+                        </td>
+                        <td class="receipt-proof-cell">
                             <?php if ($proofPath !== ''): ?>
-                                <a class="proof-link" href="<?php echo htmlspecialchars(storagePublicUrl($proofPath)); ?>" target="_blank" rel="noopener">
-                                    <i class="fas fa-paperclip"></i>
-                                    <?php echo htmlspecialchars($proofName !== '' ? $proofName : 'Payment proof'); ?>
+                                <a class="proof-link" href="<?php echo htmlspecialchars(storagePublicUrl($proofPath)); ?>" target="_blank" rel="noopener" title="<?php echo htmlspecialchars($proofName, ENT_QUOTES, 'UTF-8'); ?>" data-image-title="<?php echo htmlspecialchars($proofName ?: 'Payment proof', ENT_QUOTES, 'UTF-8'); ?>">
+                                    <i class="fas fa-eye" aria-hidden="true"></i><span>View proof</span>
                                 </a>
+                            <?php else: ?>
+                                <span class="receipt-review-empty" aria-label="No proof attached">—</span>
                             <?php endif; ?>
                         </td>
                         <td>
@@ -1456,26 +1486,29 @@ include '../../includes/navbar.php';
                                             View Receipt
                                         </button>
                                     </li>
+                                    <?php if ($receiptStatus !== 'paid' && ($receipt['payment_proof_status'] ?? '') !== 'pending'): ?>
                                     <li>
                                         <button type="button" class="dropdown-item" onclick="editReceipt(<?php echo htmlspecialchars(json_encode($receiptPayload), ENT_QUOTES, 'UTF-8'); ?>)">
                                             <i class="fas fa-pen" aria-hidden="true"></i>
                                             Review and Edit
                                         </button>
                                     </li>
+                                    <?php endif; ?>
                                     <li>
                                         <a href="?download=1&receipt_id=<?php echo (int) $receipt['id']; ?>" class="dropdown-item" target="_blank">
                                             <i class="fas fa-download" aria-hidden="true"></i>
-                                            Download Receipt
+                                            Download Excel Receipt
                                         </a>
                                     </li>
-                                    <?php if ($receiptStatus === 'draft'): ?>
+                                    <?php if ($receiptStatus !== 'paid' && ($receipt['payment_proof_status'] ?? '') !== 'pending'): ?>
                                         <li><hr class="dropdown-divider"></li>
                                         <li>
-                                            <form method="POST" data-generic-draft-disabled="true">
+                                            <form method="POST" data-generic-draft-disabled="true" data-app-loading data-loading-title="Sending billing receipt" data-loading-text="Preparing the Excel receipt and sending the client email. Please wait.">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(paymentProofCsrfToken(), ENT_QUOTES, 'UTF-8'); ?>">
                                                 <input type="hidden" name="receipt_id" value="<?php echo (int) $receipt['id']; ?>">
                                                 <button type="submit" name="finalize_receipt" class="dropdown-item">
                                                     <i class="fas fa-paper-plane" aria-hidden="true"></i>
-                                                    Finalize Receipt
+                                                    <?php echo $receiptStatus === 'draft' ? 'Send Billing Email' : 'Resend Billing Email / Renew Link'; ?>
                                                 </button>
                                             </form>
                                         </li>
@@ -1483,7 +1516,7 @@ include '../../includes/navbar.php';
                                     <?php if (in_array($receiptStatus, ['sent', 'viewed', 'overdue'], true)): ?>
                                         <li><hr class="dropdown-divider"></li>
                                         <li>
-                                            <button type="button" class="dropdown-item" onclick="verifyPayment(<?php echo (int) $receipt['id']; ?>, <?php echo htmlspecialchars(json_encode((string) $receipt['receipt_number']), ENT_QUOTES, 'UTF-8'); ?>)">
+                                            <button type="button" class="dropdown-item" onclick="verifyPayment(<?php echo (int) $receipt['id']; ?>, <?php echo htmlspecialchars(json_encode((string) $receipt['receipt_number']), ENT_QUOTES, 'UTF-8'); ?>, <?php echo htmlspecialchars(json_encode(['path' => $proofPath, 'url' => $proofPath !== '' ? storagePublicUrl($proofPath) : '', 'name' => $proofName, 'status' => $receipt['payment_proof_status'] ?? 'none', 'reference' => $receipt['payment_proof_reference'] ?? '', 'amount' => $receipt['payment_proof_amount'] ?? $receipt['amount_due'], 'notes' => $receipt['payment_review_notes'] ?? '']), ENT_QUOTES, 'UTF-8'); ?>)">
                                                 <i class="fas fa-file-circle-check" aria-hidden="true"></i>
                                                 Verify Payment
                                             </button>
@@ -1499,8 +1532,8 @@ include '../../includes/navbar.php';
             <?php else: ?>
             <div class="empty-state-modern">
                 <i class="fas fa-receipt"></i>
-                <h4>No Receipts Generated Yet</h4>
-                <p>Create a sales report to generate receipts for your clients</p>
+                <h4><?php echo $pendingOnly ? 'No Payment Proof Awaiting Verification' : 'No Receipts Generated Yet'; ?></h4>
+                <p><?php echo $pendingOnly ? 'New client submissions will appear here for Sales to review.' : 'Create a sales report to generate receipts for your clients'; ?></p>
                 
             </div>
             <?php endif; ?>
@@ -1550,6 +1583,7 @@ include '../../includes/navbar.php';
 <div class="modal fade" id="editReceiptModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <form method="POST" class="modal-content">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(paymentProofCsrfToken(), ENT_QUOTES, 'UTF-8'); ?>">
             <div class="modal-header">
                 <h5 class="modal-title"><i class="fas fa-receipt me-2 text-primary"></i>Review Receipt</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -1570,7 +1604,7 @@ include '../../includes/navbar.php';
                 </div>
                 <div class="row g-3">
                     <div class="col-md-6">
-                        <label class="form-label">Amount Due</label>
+                        <label class="form-label">Amount Due (PHP)</label>
                         <input type="number" name="amount_due" id="edit_receipt_amount_due" class="form-control" min="0" step="0.01" required>
                     </div>
                     <div class="col-md-6">
@@ -1599,39 +1633,61 @@ include '../../includes/navbar.php';
     </div>
 </div>
 
-<div class="modal fade" id="verifyPaymentModal" tabindex="-1" aria-hidden="true">
+<div class="modal fade" id="verifyPaymentModal" tabindex="-1" aria-hidden="true" aria-labelledby="verifyPaymentTitle">
     <div class="modal-dialog modal-dialog-centered">
-        <form method="POST" enctype="multipart/form-data" class="modal-content">
+        <form method="POST" enctype="multipart/form-data" class="modal-content" data-app-loading data-loading-title="Verifying payment" data-loading-text="Saving your review and preparing the client confirmation. Please wait.">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(paymentProofCsrfToken(), ENT_QUOTES, 'UTF-8'); ?>">
             <div class="modal-header receipt-payment-modal__header">
-                <h5 class="modal-title"><i class="fas fa-file-circle-check me-2"></i>Verify Payment</h5>
+                <h5 class="modal-title" id="verifyPaymentTitle"><i class="fas fa-file-circle-check me-2"></i>Verify Payment</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <input type="hidden" name="receipt_id" id="verify_receipt_id">
-                <p class="receipt-payment-modal__intro">
-                    Attach the client email screenshot, payment slip, bank confirmation, or other proof before issuing the official paid receipt.
-                </p>
-                <div class="mb-3">
-                    <label class="form-label">Receipt #</label>
-                    <input type="text" id="verify_receipt_number" class="form-control" readonly>
-                </div>
-                <div>
-                    <label class="form-label" for="verifyPaymentProof">Payment Proof</label>
-                    <div class="receipt-payment-upload">
-                        <label class="receipt-payment-upload__button" for="verifyPaymentProof">
-                            <i class="fas fa-paperclip" aria-hidden="true"></i>
-                            <span>Choose File</span>
-                        </label>
-                        <span class="receipt-payment-upload__summary" id="verifyPaymentProofSummary">No file chosen</span>
-                        <input id="verifyPaymentProof" type="file" name="payment_proof" class="receipt-payment-upload__input" accept=".pdf,.png,.jpg,.jpeg,.webp" required>
+                <input type="hidden" name="review_proof_path" id="review_proof_path">
+                <div class="payment-review-layout">
+                    <section class="payment-proof-panel" aria-label="Payment proof preview">
+                        <div class="payment-proof-panel__heading"><span>Payment proof</span><small id="proofPreviewHint">Click image to enlarge</small></div>
+                        <a id="paymentProofPreview" class="payment-proof-preview" aria-label="Enlarge payment proof">
+                            <img id="paymentProofThumbnail" alt="Payment proof" hidden>
+                            <span id="paymentProofPlaceholder" class="payment-proof-placeholder"><i class="fas fa-image" aria-hidden="true"></i><span id="paymentProofPlaceholderText">Choose a file to preview</span></span>
+                        </a>
+                        <div id="submittedProofDetails" hidden>
+                            <a id="submittedProofLink" target="_blank" rel="noopener">View submitted proof</a>
+                            <dl class="payment-proof-meta">
+                                <dt>Status</dt><dd id="submittedProofStatus"></dd>
+                                <dt>Submitted amount</dt><dd id="submittedProofAmount"></dd>
+                                <dt>Reference</dt><dd id="submittedProofReference"></dd>
+                            </dl>
+                        </div>
+                        <div id="manualPaymentProof">
+                            <label class="form-label" for="verifyPaymentProof">Attach payment proof</label>
+                            <div class="receipt-payment-upload">
+                                <label class="receipt-payment-upload__button" for="verifyPaymentProof"><i class="fas fa-paperclip" aria-hidden="true"></i><span>Choose File</span></label>
+                                <span class="receipt-payment-upload__summary" id="verifyPaymentProofSummary">No file chosen</span>
+                                <input id="verifyPaymentProof" type="file" name="payment_proof" class="receipt-payment-upload__input" accept=".pdf,.png,.jpg,.jpeg,.webp" required>
+                            </div>
+                            <div class="form-text">PDF, PNG, JPG or WEBP · Up to 5 MB</div>
+                        </div>
+                    </section>
+                    <div>
+                        <p class="receipt-payment-modal__intro">Match the proof with the actual bank or payment provider record before confirming payment.</p>
+                        <div class="payment-review-fields">
+                            <div><label class="form-label" for="verify_receipt_number">Receipt number</label><input type="text" id="verify_receipt_number" class="form-control" readonly></div>
+                            <div class="payment-review-fields__pair" id="manualPaymentFields">
+                                <div><label for="verifiedAmount" class="form-label">Amount received (PHP)</label><input class="form-control" type="number" id="verifiedAmount" name="verified_amount" min="0.01" step="0.01" placeholder="0.00" required></div>
+                                <div><label for="verifiedReference" class="form-label">Verified transaction reference</label><input class="form-control" id="verifiedReference" name="verified_reference" maxlength="150" placeholder="Reference from payment record" required></div>
+                            </div>
+                            <div id="paymentRejectionNotes" hidden><label for="paymentReviewNotes" class="form-label">Reason for rejection</label><textarea class="form-control" id="paymentReviewNotes" name="review_notes" maxlength="2000" rows="2" placeholder="Explain why the proof needs correction"></textarea></div>
+                            <div class="payment-bank-confirmation"><input class="form-check-input" type="checkbox" id="bankConfirmed" name="bank_confirmed" value="1" required><label for="bankConfirmed">I checked the actual payment record and confirmed this payment was received.</label></div>
+                        </div>
                     </div>
-                    <div class="form-text">Accepted files: PDF, PNG, JPG, JPEG, WEBP.</div>
                 </div>
             </div>
             <div class="modal-footer receipt-payment-modal__footer">
                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" name="reject_payment" id="rejectPaymentButton" class="btn btn-outline-danger" data-loading-title="Saving payment review" data-loading-text="Recording the rejection and notifying the client. Please wait." formnovalidate hidden onclick="if (document.getElementById('paymentRejectionNotes').hidden) { document.getElementById('paymentRejectionNotes').hidden = false; document.getElementById('paymentReviewNotes').focus(); return false; }">Reject proof</button>
                 <button type="submit" name="verify_payment" class="btn btn-primary">
-                    <i class="fas fa-check me-1"></i> Verify and Mark Paid
+                    <i class="fas fa-check me-1"></i> Confirm
                 </button>
             </div>
         </form>
@@ -1666,13 +1722,83 @@ function editReceipt(receipt) {
     showReceiptModal('editReceiptModal');
 }
 
-function verifyPayment(id, receiptNumber) {
+let paymentProofObjectUrl = null;
+let currentPaymentProof = {};
+
+function updatePaymentProofPreview(url, name, isImage) {
+    const preview = document.getElementById('paymentProofPreview');
+    const thumbnail = document.getElementById('paymentProofThumbnail');
+    const placeholder = document.getElementById('paymentProofPlaceholder');
+    const placeholderText = document.getElementById('paymentProofPlaceholderText');
+    const hint = document.getElementById('proofPreviewHint');
+    thumbnail.onload = null;
+    thumbnail.onerror = null;
+    thumbnail.hidden = true;
+    thumbnail.removeAttribute('src');
+    placeholder.hidden = false;
+    preview.removeAttribute('href');
+    preview.removeAttribute('data-image-preview');
+    preview.removeAttribute('target');
+    preview.dataset.imageTitle = name || 'Payment proof';
+    if (!url) {
+        placeholderText.textContent = 'Choose a file to preview';
+        hint.textContent = 'No file selected';
+        return;
+    }
+    preview.href = url;
+    preview.setAttribute('aria-label', isImage ? 'Enlarge payment proof' : 'Open payment proof PDF');
+    if (isImage) {
+        preview.setAttribute('data-image-preview', '');
+        placeholderText.textContent = 'Loading preview…';
+        hint.textContent = 'Click image to enlarge';
+        thumbnail.onload = () => { thumbnail.hidden = false; placeholder.hidden = true; };
+        thumbnail.onerror = () => { placeholderText.textContent = 'Preview unavailable. Click to open.'; };
+        thumbnail.alt = name || 'Payment proof';
+        thumbnail.src = url;
+    } else {
+        preview.target = '_blank';
+        preview.rel = 'noopener';
+        placeholderText.textContent = 'PDF document · Click to open';
+        hint.textContent = 'PDF attachment';
+    }
+}
+
+function receiptProofIsImage(proof) {
+    return /\.(png|jpe?g|webp|gif|avif)$/i.test(proof.name || proof.path || '');
+}
+
+function verifyPayment(id, receiptNumber, proof = {}) {
+    if (paymentProofObjectUrl) URL.revokeObjectURL(paymentProofObjectUrl);
+    paymentProofObjectUrl = null;
+    currentPaymentProof = proof;
     document.getElementById('verify_receipt_id').value = id || '';
     document.getElementById('verify_receipt_number').value = receiptNumber || '';
     const proofInput = document.getElementById('verifyPaymentProof');
     const proofSummary = document.getElementById('verifyPaymentProofSummary');
     if (proofInput) proofInput.value = '';
     if (proofSummary) proofSummary.textContent = 'No file chosen';
+    const pending = proof.status === 'pending';
+    document.getElementById('review_proof_path').value = proof.path || '';
+    document.getElementById('submittedProofDetails').hidden = !proof.path;
+    const link = document.getElementById('submittedProofLink');
+    link.href = proof.url || '#';
+    link.textContent = proof.name || 'View submitted proof';
+    link.title = proof.name || 'View submitted proof';
+    document.getElementById('submittedProofStatus').textContent = { pending: 'Awaiting verification', rejected: 'Correction requested', verified: 'Verified' }[proof.status] || 'Attached by Sales';
+    document.getElementById('submittedProofAmount').textContent = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(Number(proof.amount || 0));
+    document.getElementById('submittedProofReference').textContent = proof.reference || 'Not supplied';
+    updatePaymentProofPreview(proof.url, proof.name, receiptProofIsImage(proof));
+    document.getElementById('manualPaymentProof').hidden = pending;
+    document.getElementById('manualPaymentFields').hidden = pending;
+    document.getElementById('verifiedAmount').required = !pending;
+    document.getElementById('verifiedReference').required = !pending;
+    document.getElementById('paymentRejectionNotes').hidden = true;
+    proofInput.required = !pending;
+    document.getElementById('verifiedAmount').value = '';
+    document.getElementById('verifiedReference').value = '';
+    document.getElementById('paymentReviewNotes').value = '';
+    document.getElementById('bankConfirmed').checked = false;
+    document.getElementById('rejectPaymentButton').hidden = !pending;
     showReceiptModal('verifyPaymentModal');
 }
 
@@ -1680,6 +1806,21 @@ document.getElementById('verifyPaymentProof')?.addEventListener('change', functi
     const summary = document.getElementById('verifyPaymentProofSummary');
     if (!summary) return;
     summary.textContent = this.files?.[0]?.name || 'No file chosen';
+    if (paymentProofObjectUrl) URL.revokeObjectURL(paymentProofObjectUrl);
+    paymentProofObjectUrl = null;
+    const file = this.files?.[0];
+    if (file) {
+        paymentProofObjectUrl = URL.createObjectURL(file);
+        updatePaymentProofPreview(paymentProofObjectUrl, file.name, file.type.startsWith('image/'));
+    } else {
+        updatePaymentProofPreview(currentPaymentProof.url, currentPaymentProof.name, receiptProofIsImage(currentPaymentProof));
+    }
+});
+
+document.getElementById('verifyPaymentModal')?.addEventListener('hidden.bs.modal', () => {
+    if (paymentProofObjectUrl) URL.revokeObjectURL(paymentProofObjectUrl);
+    paymentProofObjectUrl = null;
+    updatePaymentProofPreview('', '', false);
 });
 
 document.getElementById('receiptPageSize')?.addEventListener('change', function () {

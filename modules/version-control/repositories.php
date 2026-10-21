@@ -207,6 +207,12 @@ $selectedRepositoryExternalRemoteUrl = '';
 $selectedBranch = null;
 
 if ($selectedRepository) {
+    try {
+        vcReconcileManagedMain($conn, $selectedRepository);
+    } catch (Throwable $e) {
+        error_log('Repository reconciliation failed: ' . $e->getMessage());
+        $flashError = 'The repository could not be synchronized. Please retry before merging.';
+    }
     $branchStmt = $conn->prepare(
         "SELECT rb.*, source_branch.name AS source_branch_name,
                 COALESCE(commit_counts.commit_count, 0) AS commit_count
@@ -305,7 +311,7 @@ if ($selectedRepository) {
     $selectedRepositoryDisplayRemoteUrl = vcResolveRepositoryDisplayRemote(
         $selectedRepositoryExternalRemoteUrl,
         (string) $selectedRepository['slug'],
-        (string) ($selectedRepository['webhook_token'] ?? ''),
+        vcPersonalPushToken($selectedRepository, $user),
         (string) ($user['username'] ?? '')
     );
     $selectedRepositoryDisplayRemoteKind = vcGetRepositoryDisplayRemoteKind($selectedRepositoryExternalRemoteUrl);
@@ -1291,7 +1297,7 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                                 <input class="form-control" readonly value="<?php echo htmlspecialchars((string) $selectedRepository['webhook_token']); ?>">
                             </div>
                             <div class="setup-note">
-                                On Render, the copy button uses the managed Git username and this repository token so `git push` can authenticate over HTTPS.
+                                This token is for activity synchronization. Git push uses your personal download credential or PMS account password; only an Architect may update main.
                                 <br>
                                 The URLs above are generated from the current host, so they keep working after deployment as long as your web server is reachable from the client machine.
                             </div>
@@ -1452,11 +1458,11 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                         </div>
                         <?php endif; ?>
 
-                        <?php if (in_array($user['role'], ['admin', 'architect'], true)): ?>
+                        <?php if ($user['role'] === 'architect'): ?>
                         <div class="accordion-item">
                             <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#mergeAction">Merge</button></h2>
                             <div id="mergeAction" class="accordion-collapse collapse" data-bs-parent="#vcAccordion"><div class="accordion-body">
-                                <form method="POST">
+                                <form method="POST" data-app-loading data-loading-title="Merging branches" data-loading-text="Git is checking changes and merging the branches. Please wait; do not submit again.">
                                     <input type="hidden" name="action" value="merge_branches">
                                     <input type="hidden" name="project_id" value="<?php echo $selectedProjectId; ?>">
                                     <input type="hidden" name="repository_id" value="<?php echo $selectedRepositoryId; ?>">

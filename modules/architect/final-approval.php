@@ -1188,6 +1188,9 @@ body.reopen-drawer-open {
                     <form
                         method="POST"
                         class="merge-task-card"
+                        data-app-loading
+                        data-loading-title="Merging to main"
+                        data-loading-text="Please wait while the feature is merged and Sales and the developer are notified."
                         data-generic-draft-disabled="1"
                         data-confirm-skip="1"
                         data-merge-title="<?php echo htmlspecialchars((string) $task['title']); ?>"

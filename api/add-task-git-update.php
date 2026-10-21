@@ -42,7 +42,7 @@ if (!in_array($gitAction, $allowedActions, true) || !in_array($status, $allowedS
     exit();
 }
 
-if ($user['role'] === 'developer' && (in_array($gitAction, ['merged', 'deployed'], true) || $status === 'merged')) {
+if ($user['role'] !== 'architect' && (in_array($gitAction, ['merged', 'deployed'], true) || $status === 'merged')) {
     http_response_code(403);
     echo json_encode(['error' => 'Only Architect can perform final merge/release workflow actions']);
     exit();

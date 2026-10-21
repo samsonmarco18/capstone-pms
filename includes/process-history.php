@@ -41,6 +41,8 @@ function processHistoryActions(): array
         'auto_finalize_sales_report' => ['label' => 'Final sales report prepared', 'category' => 'Release', 'tone' => 'release'],
         'auto_finalize_receipt' => ['label' => 'Final receipt prepared', 'category' => 'Release', 'tone' => 'release'],
         'verify_payment_receipt' => ['label' => 'Payment receipt verified', 'category' => 'Release', 'tone' => 'approval'],
+        'submit_payment_proof' => ['label' => 'Client submitted payment proof', 'category' => 'Release', 'tone' => 'release'],
+        'reject_payment_proof' => ['label' => 'Payment proof rejected', 'category' => 'Release', 'tone' => 'revision'],
     ];
 }
 

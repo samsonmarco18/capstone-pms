@@ -297,6 +297,7 @@ CREATE TABLE methodology_phases (
     end_date DATE NOT NULL,
     developer_count INT DEFAULT 0,
     sequence_no INT DEFAULT 0,
+    is_final_phase TINYINT(1) NOT NULL DEFAULT 0,
     status ENUM('planned', 'in_progress', 'completed', 'on_hold') DEFAULT 'planned',
     created_by INT NULL,
     updated_by INT NULL,
@@ -656,6 +657,8 @@ CREATE TABLE sales_reports (
     other_fees JSON,
     total_cost DECIMAL(12, 2) DEFAULT 0,
     currency VARCHAR(10) DEFAULT 'PHP',
+    billing_snapshot TEXT NULL,
+    billing_request_key VARCHAR(64) NULL,
     status ENUM('draft', 'submitted', 'approved', 'invoiced') DEFAULT 'draft',
     notes TEXT,
     created_by INT NOT NULL,
@@ -688,6 +691,13 @@ CREATE TABLE receipts (
     payment_verified_by INT,
     payment_verified_at DATETIME,
     email_sent_at DATETIME,
+    payment_token_hash VARCHAR(64),
+    payment_token_expires_at DATETIME,
+    payment_proof_status VARCHAR(20) NOT NULL DEFAULT 'none',
+    payment_proof_reference VARCHAR(150),
+    payment_proof_amount DECIMAL(12, 2),
+    payment_proof_submitted_at DATETIME,
+    payment_review_notes TEXT,
     generated_by INT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -794,6 +804,20 @@ CREATE TABLE files (
     FOREIGN KEY (uploaded_by) REFERENCES users(id) ON DELETE RESTRICT,
     INDEX idx_folder_id (folder_id),
     INDEX idx_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
+-- UPLOAD BLOBS TABLE (FILE CONTENT STORAGE)
+-- =====================================================
+CREATE TABLE upload_blobs (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    relative_path VARCHAR(500) NOT NULL UNIQUE,
+    original_name VARCHAR(255),
+    mime_type VARCHAR(100),
+    file_size BIGINT NOT NULL DEFAULT 0,
+    content_base64 LONGTEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =====================================================
@@ -1279,15 +1303,15 @@ Role-Based Clinical Dashboard', '["Expert Department","Frontend Developer","Back
 -- Six-month project history for the Sales dashboard trend chart.
 -- Relative dates keep every chart bucket populated whenever the database is imported.
 INSERT INTO clients (
-    name, contact_person, email, phone, address, company_type, industry,
+    name, contact_person, email, phone, address,
     status, deadline, created_by, created_at
 ) VALUES
-('Northstar Retail Group', 'Ava Reyes', 'ava.reyes@northstar.example', '+63 917 555 0101', 'Makati, Philippines', 'Corporation', 'Retail', 'active', DATE_ADD(CURDATE(), INTERVAL 4 MONTH), 1, DATE_SUB(NOW(), INTERVAL 5 MONTH)),
-('BrightCare Clinics', 'Miguel Santos', 'miguel.santos@brightcare.example', '+63 917 555 0102', 'Quezon City, Philippines', 'Company', 'Healthcare', 'active', DATE_ADD(CURDATE(), INTERVAL 4 MONTH), 1, DATE_SUB(NOW(), INTERVAL 4 MONTH)),
-('Summit Logistics', 'Leah Cruz', 'leah.cruz@summitlogistics.example', '+63 917 555 0103', 'Taguig, Philippines', 'Corporation', 'Logistics', 'active', DATE_ADD(CURDATE(), INTERVAL 5 MONTH), 1, DATE_SUB(NOW(), INTERVAL 3 MONTH)),
-('Harbor Hospitality', 'Noah Garcia', 'noah.garcia@harborhospitality.example', '+63 917 555 0104', 'Pasay, Philippines', 'Corporation', 'Hospitality', 'active', DATE_ADD(CURDATE(), INTERVAL 5 MONTH), 1, DATE_SUB(NOW(), INTERVAL 2 MONTH)),
-('Verde Services', 'Isla Mendoza', 'isla.mendoza@verdeservices.example', '+63 917 555 0105', 'Cebu City, Philippines', 'Company', 'Professional Services', 'active', DATE_ADD(CURDATE(), INTERVAL 6 MONTH), 1, DATE_SUB(NOW(), INTERVAL 1 MONTH)),
-('Atlas Field Operations', 'Ethan Lim', 'ethan.lim@atlasfield.example', '+63 917 555 0106', 'Davao City, Philippines', 'Corporation', 'Field Services', 'active', DATE_ADD(CURDATE(), INTERVAL 6 MONTH), 1, DATE_SUB(NOW(), INTERVAL 12 DAY));
+('Northstar Retail Group', 'Ava Reyes', 'ava.reyes@northstar.example', '+63 917 555 0101', 'Makati, Philippines', 'active', DATE_ADD(CURDATE(), INTERVAL 4 MONTH), 1, DATE_SUB(NOW(), INTERVAL 5 MONTH)),
+('BrightCare Clinics', 'Miguel Santos', 'miguel.santos@brightcare.example', '+63 917 555 0102', 'Quezon City, Philippines', 'active', DATE_ADD(CURDATE(), INTERVAL 4 MONTH), 1, DATE_SUB(NOW(), INTERVAL 4 MONTH)),
+('Summit Logistics', 'Leah Cruz', 'leah.cruz@summitlogistics.example', '+63 917 555 0103', 'Taguig, Philippines', 'active', DATE_ADD(CURDATE(), INTERVAL 5 MONTH), 1, DATE_SUB(NOW(), INTERVAL 3 MONTH)),
+('Harbor Hospitality', 'Noah Garcia', 'noah.garcia@harborhospitality.example', '+63 917 555 0104', 'Pasay, Philippines', 'active', DATE_ADD(CURDATE(), INTERVAL 5 MONTH), 1, DATE_SUB(NOW(), INTERVAL 2 MONTH)),
+('Verde Services', 'Isla Mendoza', 'isla.mendoza@verdeservices.example', '+63 917 555 0105', 'Cebu City, Philippines', 'active', DATE_ADD(CURDATE(), INTERVAL 6 MONTH), 1, DATE_SUB(NOW(), INTERVAL 1 MONTH)),
+('Atlas Field Operations', 'Ethan Lim', 'ethan.lim@atlasfield.example', '+63 917 555 0106', 'Davao City, Philippines', 'active', DATE_ADD(CURDATE(), INTERVAL 6 MONTH), 1, DATE_SUB(NOW(), INTERVAL 12 DAY));
 
 INSERT INTO projects (
     client_id, name, description, status, timeline_start, timeline_end,
