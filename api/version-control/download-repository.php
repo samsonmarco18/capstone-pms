@@ -53,7 +53,7 @@ if ($repositoryId <= 0) {
         'project_id' => $projectId,
         'project_name' => (string) $project['name'],
         'export_type' => 'stored_branch_history',
-        'notice' => 'Managed Git files were unavailable or no repository record was registered. This export contains the Git history stored by ERNI PMS.',
+        'notice' => 'Managed Git files were unavailable or no repository record was registered. This export contains the Git history stored by Evortix.',
         'exported_at' => date(DATE_ATOM),
         'updates' => $history,
     ];
@@ -168,7 +168,7 @@ try {
         'repository_name' => (string) $repository['name'],
         'branch' => $archiveRef,
         'export_type' => 'stored_branch_history',
-        'notice' => 'The managed Git files were unavailable. This download contains the repository history retained by ERNI PMS.',
+        'notice' => 'The managed Git files were unavailable. This download contains the repository history retained by Evortix.',
         'exported_at' => date(DATE_ATOM),
         'commits' => $history,
     ];

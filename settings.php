@@ -1480,7 +1480,7 @@ include 'includes/navbar.php';
                         <div class="settings-section-body">
                             <?php
                             $notificationSettings = [
-                                'in_app_notifications' => ['In-app notifications', 'Show notification updates inside ERNI PMS.'],
+                                'in_app_notifications' => ['In-app notifications', 'Show notification updates inside Evortix.'],
                                 'email_notifications' => ['Email notifications', 'Receive enabled alerts through email.'],
                                 'task_reminders' => ['Task reminders', 'Receive task assignment and deadline reminders.'],
                                 'project_updates' => ['Project updates', 'Receive project handoff and status updates.'],

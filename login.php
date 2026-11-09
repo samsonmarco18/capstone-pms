@@ -142,7 +142,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$loginLogoPath = __DIR__ . '/assets/img/erniLogo_white.png';
+$loginLogoPath = __DIR__ . '/assets/img/evortix-logo.svg';
 $loginLogoVersion = file_exists($loginLogoPath) ? (string) filemtime($loginLogoPath) : '1';
 $faviconPath = __DIR__ . '/assets/img/logoInside.png';
 $faviconVersion = file_exists($faviconPath) ? (string) filemtime($faviconPath) : '1';
@@ -152,7 +152,7 @@ $faviconVersion = file_exists($faviconPath) ? (string) filemtime($faviconPath) :
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sign In | ERNI PMS</title>
+    <title>Sign In | Evortix</title>
     <link rel="icon" type="image/png" href="assets/img/logoInside.png?v=<?php echo $faviconVersion; ?>">
     <link rel="shortcut icon" type="image/png" href="assets/img/logoInside.png?v=<?php echo $faviconVersion; ?>">
     <link rel="apple-touch-icon" href="assets/img/logoInside.png?v=<?php echo $faviconVersion; ?>">
@@ -714,10 +714,10 @@ $faviconVersion = file_exists($faviconPath) ? (string) filemtime($faviconPath) :
     <div class="login-shell">
         <section class="login-brand">
             <div class="brand-panel">
-                <img class="brand-logo" src="assets/img/erniLogo_white.png?v=<?php echo rawurlencode($loginLogoVersion); ?>" alt="ERNI logo">
+                <img class="brand-logo" src="assets/img/evortix-logo.svg?v=<?php echo rawurlencode($loginLogoVersion); ?>" alt="Evortix logo">
                 <div class="brand-lockup">
-                    <div class="brand-name"><strong>ERNI</strong></div>
-                    <div class="brand-subtitle">Development<br>Center Philippines, Inc.</div>
+                    <div class="brand-name"><strong>EVORTIX</strong></div>
+
 
                 </div>
                 <div class="brand-system">Decision-Driven Project Management Support System</div>

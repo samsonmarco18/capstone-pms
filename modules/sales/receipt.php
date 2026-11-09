@@ -94,7 +94,7 @@ function salesReceiptSendToClient(mysqli|PgsqlMysqliCompatConnection $conn, int 
     }
     $receiptExcel = salesReceiptRenderExcel($receipt, false);
     $receiptNumber = preg_replace('/[^A-Za-z0-9_-]/', '_', (string) ($receipt['receipt_number'] ?? 'receipt'));
-    $subject = 'ERNI Development Center Philippines, Inc. Billing Receipt #' . (string) ($receipt['receipt_number'] ?? '');
+    $subject = 'Evortix Billing Receipt #' . (string) ($receipt['receipt_number'] ?? '');
     $body = '<div style="font-family:Arial,sans-serif;line-height:1.6;color:#1f2937;">'
         . '<h2 style="color:#1f6392;">Billing receipt for review</h2>'
         . '<p>Good day,</p>'
@@ -102,9 +102,9 @@ function salesReceiptSendToClient(mysqli|PgsqlMysqliCompatConnection $conn, int 
         . '<p><a href="' . htmlspecialchars($paymentLink, ENT_QUOTES, 'UTF-8') . '" style="display:inline-block;padding:12px 20px;background:#1f6392;color:#fff;text-decoration:none;border-radius:8px;">Submit payment proof</a></p>'
         . '<p>This private link is valid for 14 days. No account is required. Upload a PDF or image (maximum 5 MB) with the amount paid and transaction reference.</p>'
         . '<p>Sales will verify the payment first before issuing the official paid receipt.</p>'
-        . '<p>Thank you.<br>ERNI Development Center Philippines, Inc.</p>'
+        . '<p>Thank you.<br>Evortix</p>'
         . '</div>';
-    $text = "Please review the attached billing receipt. Submit your payment proof to Sales: {$paymentLink}\n\nThis private link expires in 14 days. Sales will verify the transaction before confirming payment.\n\nERNI Development Center Philippines, Inc.";
+    $text = "Please review the attached billing receipt. Submit your payment proof to Sales: {$paymentLink}\n\nThis private link expires in 14 days. Sales will verify the transaction before confirming payment.\n\nEvortix";
 
     $result = sendSystemEmail(
         $clientEmail,

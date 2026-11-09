@@ -27,11 +27,11 @@ if (!$receipt) http_response_code(404);
 $escape = static fn ($value): string => htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
 ?>
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Submit payment proof | ERNI</title>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Submit payment proof | Evortix</title>
 <style>
 *{box-sizing:border-box}body{margin:0;background:#eef3f8;color:#173047;font:16px/1.6 Arial,sans-serif}main{max-width:660px;margin:40px auto;padding:30px;background:#fff;border:1px solid #d5e1eb;border-radius:16px}h1{font-size:26px;line-height:1.3}h2{font-size:17px;color:#1f6392}label{display:block;margin:18px 0 5px;font-weight:bold}input,button{font:inherit;width:100%;padding:12px;border:1px solid #a8bbc9;border-radius:8px}button{margin-top:24px;background:#1f6392;color:white;cursor:pointer;font-weight:bold}.notice{padding:14px;background:#edf6ff;border-left:4px solid #1f6392;overflow-wrap:anywhere}.error{background:#fff0ee;border-color:#b52d26}.muted{font-size:14px;color:#506276}dl{display:grid;grid-template-columns:1fr 1fr;gap:8px}dd{margin:0;overflow-wrap:anywhere}@media(max-width:700px){main{margin:16px;padding:22px}}
 </style></head><body><main>
-<h2>ERNI Development Center Philippines, Inc.</h2><h1>Submit payment proof</h1>
+<h2>Evortix</h2><h1>Submit payment proof</h1>
 <?php if ($error !== ''): ?><p class="notice error" role="alert"><?= $escape($error) ?></p><?php endif; ?>
 <?php if (!$receipt): ?>
 <p class="notice error">This link is invalid or expired. Please ask Sales to send a new billing email.</p>

@@ -26,7 +26,7 @@ function vcAssertPushAllowed(array $user, string $ref, string $defaultBranch, bo
     }
     $isMain = strtolower($ref) === 'refs/heads/main' || strtolower($ref) === 'refs/heads/' . strtolower($defaultBranch) || $protected;
     if ($isMain && ($user['role'] ?? '') !== 'architect') {
-        throw new RuntimeException('Only an Architect can update main or protected branches. Push a feature branch and submit a pull request in ERNI PMS.');
+        throw new RuntimeException('Only an Architect can update main or protected branches. Push a feature branch and submit a pull request in Evortix.');
     }
 }
 
@@ -35,7 +35,7 @@ function vcClientProtectionHook(string $role, string $defaultBranch, bool $prePu
     $branch = "'" . str_replace("'", "'\\''", $defaultBranch) . "'";
     $prefix = "#!/bin/sh\nDEFAULT_BRANCH={$branch}\n";
     if ($role === 'architect') return $prefix . "exit 0\n";
-    $message = "Only an Architect can merge or push to main. Use a feature branch and submit a pull request in ERNI PMS.";
+    $message = "Only an Architect can merge or push to main. Use a feature branch and submit a pull request in Evortix.";
     if (!$prePush) {
         return $prefix . 'BRANCH=$(git symbolic-ref --quiet --short HEAD || true)' . "\n" .
             'if [ "$BRANCH" = main ] || [ "$BRANCH" = "$DEFAULT_BRANCH" ]; then' . "\n  echo '{$message}' >&2\n  exit 1\nfi\n";

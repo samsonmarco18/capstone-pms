@@ -251,7 +251,7 @@ function paymentProofReview(mysqli|PgsqlMysqliCompatConnection $conn, int $id, i
 function paymentProofEmailReview(array $receipt, bool $approved, string $notes): array
 {
     $email = (string) (($receipt['client_email'] ?? '') ?: ($receipt['fallback_client_email'] ?? ''));
-    $company = 'ERNI Development Center Philippines, Inc.';
+    $company = 'Evortix';
     $message = $approved
         ? 'Sales has verified your payment. Your official paid receipt is attached as an Excel file.'
         : 'Sales could not verify your payment proof. Reason: ' . $notes . "\nPlease use the submission link in your billing email to upload corrected proof. If it has expired, contact Sales for a new link.";

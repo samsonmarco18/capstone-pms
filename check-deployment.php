@@ -7,7 +7,7 @@ header('Content-Type: text/html; charset=utf-8');
 
 echo '<!DOCTYPE html>';
 echo '<html>';
-echo '<head><title>ERNI PMS - Deployment Check</title>';
+echo '<head><title>Evortix - Deployment Check</title>';
 echo '<style>';
 echo 'body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }';
 echo '.check { margin: 10px 0; padding: 10px; border-radius: 5px; }';
@@ -21,7 +21,7 @@ echo 'th { background: #f8f9fa; font-weight: bold; }';
 echo '</style></head>';
 echo '<body>';
 
-echo '<h1>ERNI PMS Deployment Check</h1>';
+echo '<h1>Evortix Deployment Check</h1>';
 
 $checks = [];
 $checks['PHP Version'] = [

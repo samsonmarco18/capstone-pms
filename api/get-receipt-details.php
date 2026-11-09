@@ -102,7 +102,7 @@ echo '
 <body>
     <div class="receipt-container">
         <div class="header">
-            <div class="company">ERNI Development Center Philippines, Inc.</div>
+            <div class="company">Evortix</div>
             <div style="font-size: 18px; margin: 10px 0;">' . htmlspecialchars($receiptTitle) . '</div>
             <div style="font-size: 16px; margin-bottom: 10px;">Receipt # ' . htmlspecialchars($receipt['receipt_number']) . '</div>
             <div>Date: ' . date('F d, Y') . ' | Time: ' . date('h:i A') . '</div>
@@ -144,7 +144,7 @@ echo '
         </table>
 
         <div class="footer">
-            <p>Thank you for choosing ERNI Development Center Philippines, Inc.</p>
+            <p>Thank you for choosing Evortix</p>
             <p>Payment Terms: Net 30 days | VAT inclusive</p>
             <p>Questions? Contact billing@erni-pms.com</p>
             <button onclick="printReceipt()" class="no-print btn btn-primary">Print Receipt</button>

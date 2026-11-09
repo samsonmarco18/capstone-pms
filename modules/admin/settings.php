@@ -132,7 +132,7 @@ function backupBuildMySqlCompleteDump(mysqli|PgsqlMysqliCompatConnection $conn):
     $timestamp = date('Y-m-d H:i:s P');
     $tables = backupGetTables($conn);
     $lines = [
-        '-- ERNI PMS complete MySQL/MariaDB backup',
+        '-- Evortix complete MySQL/MariaDB backup',
         '-- Includes the live schema and data.',
         '-- Generated at: ' . $timestamp,
         '',
@@ -170,7 +170,7 @@ function backupBuildDataDump(mysqli|PgsqlMysqliCompatConnection $conn, string $t
     $timestamp = date('Y-m-d H:i:s P');
     $tables = backupGetTables($conn);
     $lines = [
-        '-- ERNI PMS database data backup',
+        '-- Evortix database data backup',
         '-- Source driver: ' . DB_DRIVER,
         '-- Target format: ' . ($targetDriver === 'pgsql' ? 'PostgreSQL' : 'MySQL'),
         '-- Generated at: ' . $timestamp,
@@ -405,7 +405,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         
         $_SESSION['site_name'] = $siteName;
         
-        $siteName = trim((string) ($_POST['site_name'] ?? 'ERNI PMS'));
+        $siteName = trim((string) ($_POST['site_name'] ?? 'Evortix'));
         $siteEmail = trim((string) ($_POST['site_email'] ?? ''));
         $timezone = trim((string) ($_POST['timezone'] ?? 'Asia/Manila'));
         
@@ -464,7 +464,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $mailUsername = trim((string) ($_POST['mail_username'] ?? ''));
         $mailPassword = trim((string) ($_POST['mail_password'] ?? ''));
         $mailFromEmail = trim((string) ($_POST['mail_from_email'] ?? $mailUsername));
-        $mailFromName = trim((string) ($_POST['mail_from_name'] ?? 'ERNI Development Center Philippines, Inc.'));
+        $mailFromName = trim((string) ($_POST['mail_from_name'] ?? 'Evortix'));
         $gmailClientId = trim((string) ($_POST['gmail_client_id'] ?? ''));
         $gmailClientSecret = trim((string) ($_POST['gmail_client_secret'] ?? ''));
         $gmailRefreshToken = trim((string) ($_POST['gmail_refresh_token'] ?? ''));
@@ -532,9 +532,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $testEmail = trim((string) ($_POST['test_email'] ?? (string) ($user['email'] ?? '')));
         $result = sendSystemEmail(
             $testEmail,
-            'ERNI Development Center Philippines, Inc. Gmail Integration Test',
-            '<div style="font-family:Arial,sans-serif;padding:24px;"><h2 style="color:#1f6392;">ERNI Development Center Philippines, Inc. Gmail Test</h2><p>Your Gmail SMTP integration is working.</p><p>This message confirms the system can now send email through your configured Google account.</p></div>',
-            "ERNI Development Center Philippines, Inc. Gmail Test\n\nYour Gmail SMTP integration is working."
+            'Evortix Gmail Integration Test',
+            '<div style="font-family:Arial,sans-serif;padding:24px;"><h2 style="color:#1f6392;">Evortix Gmail Test</h2><p>Your Gmail SMTP integration is working.</p><p>This message confirms the system can now send email through your configured Google account.</p></div>',
+            "Evortix Gmail Test\n\nYour Gmail SMTP integration is working."
         );
         $errorDetail = trim((string) ($result['error'] ?? ''));
         if (!$result['success'] && $errorDetail === '') {
@@ -571,7 +571,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 }
 
 // Get current settings
-$siteName = getSettingValue($conn, 'company_name', 'ERNI PMS');
+$siteName = getSettingValue($conn, 'company_name', 'Evortix');
 $currentTimezone = getSettingValue($conn, 'timezone', date_default_timezone_get());
 $sessionTimeout = getSettingValue($conn, 'session_timeout', '30');
 $passwordExpiry = getSettingValue($conn, 'password_expiry', '90');
@@ -1588,7 +1588,7 @@ input:checked + .switch-slider:before {
                     </div>
                     <div class="form-group">
                         <label class="form-label">From Name</label>
-                        <input type="text" name="mail_from_name" class="form-control-modern" value="<?php echo htmlspecialchars($activeMailConfig['from_name'] ?? 'ERNI Development Center Philippines, Inc.'); ?>" required>
+                        <input type="text" name="mail_from_name" class="form-control-modern" value="<?php echo htmlspecialchars($activeMailConfig['from_name'] ?? 'Evortix'); ?>" required>
                     </div>
                     <div class="form-group full-span">
                         <hr style="margin: 0.25rem 0;">

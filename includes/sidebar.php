@@ -98,7 +98,7 @@ $menuItems = [
 ];
 
 $currentMenu = $menuItems[$role] ?? [];
-$sidebarLogoPath = __DIR__ . '/../assets/img/logoInside.png';
+$sidebarLogoPath = __DIR__ . '/../assets/img/evortix-logo.svg';
 $sidebarLogoVersion = file_exists($sidebarLogoPath) ? (string) filemtime($sidebarLogoPath) : '1';
 $projectInsightsAttentionCount = 0;
 $projectInsightsAttentionTitle = '';
@@ -195,11 +195,11 @@ function isSidebarItemActive(array $item, string $currentPage, string $currentPa
 <aside class="sidebar-wrapper" id="sidebar-wrapper">
     <div class="sidebar-brand">
         <div class="brand-mark">
-            <img src="<?php echo BASE_URL; ?>assets/img/logoInside.png?v=<?php echo rawurlencode($sidebarLogoVersion); ?>" alt="ERNI logo">
+            <img src="<?php echo BASE_URL; ?>assets/img/evortix-logo.svg?v=<?php echo rawurlencode($sidebarLogoVersion); ?>" alt="Evortix logo">
         </div>
         <div class="brand-copy sidebar-label">
-            <div class="brand-title">ERNI</div>
-            <small>Development Center<br>Philippines, Inc.</small>
+            <div class="brand-title">EVORTIX</div>
+            <small>Project Management System</small>
 
         </div>
     </div>

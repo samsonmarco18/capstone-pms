@@ -1,6 +1,6 @@
 <?php
 /**
- * ERNI PMS - Environment Configuration
+ * Evortix - Environment Configuration
  * Supports: Local development, InfinityFree, Render, and other platforms
  */
 
@@ -196,7 +196,7 @@ define('GIT_WORKSPACES_PATH', APP_ROOT_PATH . '/git-workspaces/');
 // ==============================================
 
 define('GIT_BINARY', getEnvOrDefault('GIT_BINARY', 'git'));
-define('GIT_USER_NAME', getEnvOrDefault('GIT_USER_NAME', 'ERNI PMS'));
+define('GIT_USER_NAME', getEnvOrDefault('GIT_USER_NAME', 'Evortix'));
 define('GIT_USER_EMAIL', getEnvOrDefault('GIT_USER_EMAIL', 'noreply@erni-pms.local'));
 
 // ==============================================

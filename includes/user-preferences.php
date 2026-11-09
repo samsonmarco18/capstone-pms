@@ -93,7 +93,7 @@ function userPreferenceAccentOptions(): array
 {
     return [
         'blue' => [
-            'label' => 'ERNI Blue',
+            'label' => 'Evortix Blue',
             'primary' => '#0d556b',
             'light' => '#4da8da',
             'dark' => '#0a4454',

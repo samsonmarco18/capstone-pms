@@ -1500,7 +1500,7 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                             <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#deleteRepositoryAction">Delete Repository</button></h2>
                             <div id="deleteRepositoryAction" class="accordion-collapse collapse" data-bs-parent="#vcAccordion"><div class="accordion-body">
                                 <div class="setup-note mb-3">
-                                    This removes the repository from ERNI PMS and deletes its managed storage and working folder. Existing downloaded copies on your machine are not deleted.
+                                    This removes the repository from Evortix and deletes its managed storage and working folder. Existing downloaded copies on your machine are not deleted.
                                 </div>
                                 <form method="POST" class="js-delete-repository-form" data-confirm-skip="1" data-repository-name="<?php echo htmlspecialchars((string) $selectedRepository['name']); ?>">
                                     <input type="hidden" name="action" value="delete_repository">
@@ -1528,7 +1528,7 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                             <i class="fas fa-download me-2"></i>Download Stored Git History
                         </a>
                         <div class="setup-note mt-3">
-                            This downloads the branch, commit, pull-request, and merge records retained by ERNI PMS.
+                            This downloads the branch, commit, pull-request, and merge records retained by Evortix.
                             A source-code ZIP becomes available after an Architect or Admin registers the managed repository.
                         </div>
                     </div>

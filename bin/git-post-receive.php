@@ -77,6 +77,6 @@ try {
     exit(0);
 } catch (Throwable $e) {
     error_log('Git task merge sync failed: ' . $e->getMessage());
-    fwrite(STDERR, "ERNI PMS: push accepted, but Final Approval sync failed. Check server logs.\n");
+    fwrite(STDERR, "Evortix: push accepted, but Final Approval sync failed. Check server logs.\n");
     exit(1);
 }

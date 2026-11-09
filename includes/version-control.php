@@ -324,10 +324,10 @@ function vcGetManagedRepositoryPortablePushHint(): string
 function vcGetManagedRepositoryCreateHint(): string
 {
     if (vcIsRenderEnvironment()) {
-        return 'ERNI PMS will create the managed repository and a ready-to-use working folder. Use your PMS account password or the personal credential in a fresh repository download to push.';
+        return 'Evortix will create the managed repository and a ready-to-use working folder. Use your PMS account password or the personal credential in a fresh repository download to push.';
     }
 
-    return 'ERNI PMS will create the managed repository and a ready-to-use working folder. Local downloads can push back to this PMS instance on the same machine.';
+    return 'Evortix will create the managed repository and a ready-to-use working folder. Local downloads can push back to this PMS instance on the same machine.';
 }
 
 function vcGetRepositoryManagedCloneLabel(): string
@@ -752,7 +752,7 @@ function vcMergeManagedBranches(
     $workingPath = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'erni-pms-merge-' . bin2hex(random_bytes(6));
     try {
         vcRunGitCommand(['clone', $bareRepositoryPath, $workingPath], APP_ROOT_PATH);
-        vcRunGitCommand(['config', 'user.name', 'ERNI PMS Architect'], $workingPath);
+        vcRunGitCommand(['config', 'user.name', 'Evortix Architect'], $workingPath);
         vcRunGitCommand(['config', 'user.email', 'noreply@erni-pms.local'], $workingPath);
         vcRunGitCommand(['checkout', $targetBranch], $workingPath);
 
@@ -884,7 +884,7 @@ function vcInstallServerRepositoryPolicy(string $bareRepositoryPath): void
     $preReceive = "#!/bin/sh\nRESULT=$(" . $shellQuote($php) . ' '
         . $shellQuote(dirname(__DIR__) . '/bin/git-pre-receive.php') . ' '
         . $shellQuote(basename($bareRepositoryPath, '.git')) . ") || exit 1\n"
-        . '[ "$RESULT" = "ERNI_PMS_PUSH_OK" ] || { echo "ERNI PMS could not authorize this push." >&2; exit 1; }' . "\n";
+        . '[ "$RESULT" = "ERNI_PMS_PUSH_OK" ] || { echo "Evortix could not authorize this push." >&2; exit 1; }' . "\n";
     vcWriteTextFile($hooksPath . DIRECTORY_SEPARATOR . 'pre-receive', $preReceive);
     @chmod($hooksPath . DIRECTORY_SEPARATOR . 'pre-receive', 0755);
     vcRunGitCommand(['--git-dir=' . $bareRepositoryPath, 'config', 'receive.advertisePushOptions', 'true'], APP_ROOT_PATH);
@@ -1036,9 +1036,9 @@ function vcBuildRepositoryReadme(
 ): string
 {
     return "# " . $repositoryName . "\n\n" .
-        "Repository created by ERNI PMS for project `" . $projectName . "`.\n\n" .
+        "Repository created by Evortix for project `" . $projectName . "`.\n\n" .
         "## Ready-To-Use Folder\n\n" .
-        "ERNI PMS can create a working folder for you automatically at:\n\n" .
+        "Evortix can create a working folder for you automatically at:\n\n" .
         "```text\n" .
         str_replace('\\', '/', $workspacePath) . "\n" .
         "```\n\n" .
@@ -1056,7 +1056,7 @@ function vcBuildRepositoryReadme(
         "Use your PMS account password or the personal credential from a fresh repository download to push. Only an Architect may update main.\n\n" .
         "## PMS Sync\n\n" .
         "A sample hook is included in `.erni-pms/post-commit.example.sh`.\n" .
-        "Copy it into `.git/hooks/post-commit` inside your cloned repository to sync commits back to ERNI PMS automatically.\n";
+        "Copy it into `.git/hooks/post-commit` inside your cloned repository to sync commits back to Evortix automatically.\n";
 }
 
 function vcBuildRepositoryGitignore(): string
@@ -1124,10 +1124,10 @@ function vcCreateManagedRepository(
         @chmod($tempWorkingPath . DIRECTORY_SEPARATOR . '.erni-pms' . DIRECTORY_SEPARATOR . 'post-commit.example.sh', 0755);
         vcWriteTextFile(
             $tempWorkingPath . DIRECTORY_SEPARATOR . '.erni-pms' . DIRECTORY_SEPARATOR . 'README.md',
-            "Copy `post-commit.example.sh` to `.git/hooks/post-commit` after cloning this repository to sync commits back to ERNI PMS.\n"
+            "Copy `post-commit.example.sh` to `.git/hooks/post-commit` after cloning this repository to sync commits back to Evortix.\n"
         );
 
-        vcRunGitCommand(['--git-dir=' . $bareRepositoryPath, 'config', 'user.name', 'ERNI PMS'], APP_ROOT_PATH);
+        vcRunGitCommand(['--git-dir=' . $bareRepositoryPath, 'config', 'user.name', 'Evortix'], APP_ROOT_PATH);
         vcRunGitCommand(['--git-dir=' . $bareRepositoryPath, 'config', 'user.email', 'noreply@erni-pms.local'], APP_ROOT_PATH);
         vcRunGitCommand(['--git-dir=' . $bareRepositoryPath, 'config', 'http.receivepack', 'true'], APP_ROOT_PATH);
         vcRunGitCommand(['--git-dir=' . $bareRepositoryPath, 'config', 'http.uploadpack', 'true'], APP_ROOT_PATH);
@@ -1293,9 +1293,9 @@ function vcCreateRepositoryArchive(
         vcEnsureDirectory($erniPmsDir);
         vcWriteTextFile($erniPmsDir . DIRECTORY_SEPARATOR . 'BRANCH_POLICY.md',
             "# Branch and merge policy\n\nOnly an Architect may update main, the default branch, or protected branches.\n\n"
-            . "Developers: create a feature branch (`git switch -c feature/your-change`), commit and push it, then submit a pull request from the task in ERNI PMS. The Architect performs the final merge.\n\n"
+            . "Developers: create a feature branch (`git switch -c feature/your-change`), commit and push it, then submit a pull request from the task in Evortix. The Architect performs the final merge.\n\n"
             . "This download includes pre-merge and pre-push checks, plus post-commit, post-merge and post-rewrite reporting. Local hooks provide guidance; the PMS-managed server enforces role and project access.\n\n"
-            . "The push remote points to ERNI PMS. Your personal Git credential is stored in .git/config; do not share this download. Download again after a password or role change.\n\n"
+            . "The push remote points to Evortix. Your personal Git credential is stored in .git/config; do not share this download. Download again after a password or role change.\n\n"
             . "Unpushed local merges can be reported to the Architect but do not change the shared main branch. Push authorized changes to publish them.\n\n"
             . "External Git providers require their own branch protection rules if you push to them directly. Local administrators with direct write access to server Git storage must be restricted through operating-system permissions.\n");
 
@@ -1305,15 +1305,15 @@ function vcCreateRepositoryArchive(
         @chmod($hookExamplePath, 0755);
 
         // Create README for hooks
-        $hooksReadme = "# ERNI PMS Git Hooks\n\n" .
+        $hooksReadme = "# Evortix Git Hooks\n\n" .
             "This directory contains configuration and example files for Git hooks.\n\n" .
             "## post-commit.example.sh\n\n" .
-            "This is an example hook that automatically syncs your commits back to ERNI PMS.\n\n" .
+            "This is an example hook that automatically syncs your commits back to Evortix.\n\n" .
             "### Installation:\n" .
             "The hook is already installed at `.git/hooks/post-commit` and will run automatically after each commit.\n\n" .
             "### What it does:\n" .
             "- Captures commit information (hash, message, files changed)\n" .
-            "- Sends it to the ERNI PMS system for tracking\n" .
+            "- Sends it to the Evortix system for tracking\n" .
             "- Enables real-time collaboration tracking\n\n" .
             "### Sync Endpoint:\n" .
             "Configured URL: " . $syncUrl . "\n\n" .

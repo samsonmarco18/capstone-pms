@@ -17,7 +17,7 @@ try {
         if (str_starts_with($option, 'erni-pms-token=')) $token = substr($option, 15);
     }
     if (!preg_match('/^v1:([1-9][0-9]*):[a-f0-9]{64}$/D', $token, $parts)) {
-        throw new RuntimeException('Git authentication required. Download a fresh repository from ERNI PMS.');
+        throw new RuntimeException('Git authentication required. Download a fresh repository from Evortix.');
     }
     $userId = (int) $parts[1];
     $stmt = $conn->prepare('SELECT * FROM users WHERE id = ?');
@@ -42,6 +42,6 @@ try {
     fwrite(STDOUT, 'ERNI_PMS_PUSH_OK');
     exit(0);
 } catch (Throwable $e) {
-    fwrite(STDERR, 'ERNI PMS: ' . $e->getMessage() . "\n");
+    fwrite(STDERR, 'Evortix: ' . $e->getMessage() . "\n");
     exit(1);
 }
