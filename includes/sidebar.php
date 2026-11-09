@@ -199,7 +199,6 @@ function isSidebarItemActive(array $item, string $currentPage, string $currentPa
         </div>
         <div class="brand-copy sidebar-label">
             <div class="brand-title">EVORTIX</div>
-            <small>Development Center<br>Philippines, Inc.</small>
 
         </div>
     </div>
